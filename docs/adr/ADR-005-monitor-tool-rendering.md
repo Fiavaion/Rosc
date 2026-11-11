@@ -58,6 +58,16 @@ the pass may draw in.
   prompt to re-measure.
 - ❌ The pass needs Shader Model 5 and a plugin shader directory, so `UEcineMonitor` loads
   before the engine compiles its global shaders (`PostConfigInit`).
-- ❌ Lines and text (frame lines, safe areas, scope labels, the false colour legend) cannot be
-  drawn by this pass; they are drawn over the viewport by the editor module.
+- ✅ Lines and words (frame lines, safe areas, centre mark, data readout, scope titles, the
+  false colour legend) are drawn by the same pass with the engine's canvas
+  (`AddDrawCanvasPass`), straight after the picture tools. They are therefore in the picture
+  the viewport shows and a test reads back, in game view and while piloting, and are kept out
+  of renders by the same rule as the rest. An editor overlay (debug canvas or Slate) was
+  rejected: it is not in the pixels read back, so it could not be checked headlessly.
+- Frame lines and the data readout belong to a camera, not to the view settings. The pass is
+  told per view (keyed by what the view renders to) which camera it looks through;
+  `UUEcineMonitorSubsystem` works that out every editor tick from each level viewport's
+  locked camera, so piloting and Sequencer camera cuts both count.
+- ❌ The words use the engine's small stats font, scaled with the viewport's DPI scale. Its
+  size is not ours to choose; whether it reads well on a 4K display is a hand check.
 - Not handled: HDR display output. The signal scale assumes a standard-range display.
