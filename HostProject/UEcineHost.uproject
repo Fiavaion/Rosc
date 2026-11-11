@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "Host project used to build, run and test the UEcine plugin.",
+	"Modules": [
+		{
+			"Name": "UEcineHost",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "UEcine",
+			"Enabled": true
+		}
+	]
+}

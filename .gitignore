@@ -1,0 +1,27 @@
+# Unreal build output
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+*.sln
+.vs/
+.vscode/
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+
+# Packaged plugin output and scratch work
+.scratch/
+Packaged/
+
+# AI model weights are downloaded by the user, never committed
+*.onnx
+*.onnx_data
+*.safetensors
+*.pt
+*.pth
+
+# Claude Code local setup
+.claude/
+CLAUDE.local.md
