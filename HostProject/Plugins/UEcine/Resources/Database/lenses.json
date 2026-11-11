@@ -5,7 +5,7 @@
 			"id": "cooke-s4i",
 			"manufacturer": "Cooke",
 			"name": "S4/i",
-			"imageCircleMm": 33.0,
+			"imageCircleMm": 30.0,
 			"minApertureTStop": 22,
 			"irisBlades": 8,
 			"lenses": [
@@ -16,14 +16,17 @@
 				{ "focalMm": 21, "tStop": 2.0, "closeFocusM": 0.25 },
 				{ "focalMm": 25, "tStop": 2.0, "closeFocusM": 0.25 },
 				{ "focalMm": 27, "tStop": 2.0, "closeFocusM": 0.25 },
-				{ "focalMm": 32, "tStop": 2.0, "closeFocusM": 0.3 },
+				{ "focalMm": 32, "tStop": 2.0, "closeFocusM": 0.325 },
 				{ "focalMm": 35, "tStop": 2.0, "closeFocusM": 0.35 },
-				{ "focalMm": 40, "tStop": 2.0, "closeFocusM": 0.4 },
-				{ "focalMm": 50, "tStop": 2.0, "closeFocusM": 0.5 },
+				{ "focalMm": 40, "tStop": 2.0, "closeFocusM": 0.45 },
+				{ "focalMm": 50, "tStop": 2.0, "closeFocusM": 0.55 },
 				{ "focalMm": 65, "tStop": 2.0, "closeFocusM": 0.7 },
-				{ "focalMm": 75, "tStop": 2.0, "closeFocusM": 0.75 },
-				{ "focalMm": 100, "tStop": 2.0, "closeFocusM": 0.9 },
-				{ "focalMm": 135, "tStop": 2.0, "closeFocusM": 0.85 }
+				{ "focalMm": 75, "tStop": 2.0, "closeFocusM": 0.8 },
+				{ "focalMm": 100, "tStop": 2.0, "closeFocusM": 0.95 },
+				{ "focalMm": 135, "tStop": 2.0, "closeFocusM": 0.85 },
+				{ "focalMm": 150, "tStop": 2.0, "closeFocusM": 1.05 },
+				{ "focalMm": 180, "tStop": 2.0, "closeFocusM": 1.3 },
+				{ "focalMm": 300, "tStop": 2.8, "closeFocusM": 2.1 }
 			]
 		},
 		{
@@ -31,41 +34,40 @@
 			"manufacturer": "Cooke",
 			"name": "Anamorphic/i",
 			"squeeze": 2.0,
-			"imageCircleMm": 33.54,
+			"imageCircleMm": 31.1,
 			"minApertureTStop": 22,
 			"irisBlades": 11,
 			"lenses": [
-				{ "focalMm": 25, "tStop": 2.3, "closeFocusM": 0.84 },
+				{ "focalMm": 25, "tStop": 2.3, "closeFocusM": 1.0 },
 				{ "focalMm": 32, "tStop": 2.3, "closeFocusM": 0.84 },
 				{ "focalMm": 40, "tStop": 2.3, "closeFocusM": 0.84 },
 				{ "focalMm": 50, "tStop": 2.3, "closeFocusM": 0.84 },
+				{ "focalMm": 65, "tStop": 2.6, "closeFocusM": 0.44 },
 				{ "focalMm": 75, "tStop": 2.3, "closeFocusM": 0.99 },
-				{ "focalMm": 100, "tStop": 2.3, "closeFocusM": 1.12 },
-				{ "focalMm": 135, "tStop": 2.3, "closeFocusM": 1.42 }
+				{ "focalMm": 100, "tStop": 2.3, "closeFocusM": 1.2 },
+				{ "focalMm": 135, "tStop": 2.3, "closeFocusM": 1.42 },
+				{ "focalMm": 180, "tStop": 2.8, "closeFocusM": 2.0 },
+				{ "focalMm": 300, "tStop": 3.5, "closeFocusM": 3.0 }
 			]
 		},
 		{
 			"id": "zeiss-supreme-prime",
 			"manufacturer": "ZEISS",
 			"name": "Supreme Prime",
-			"imageCircleMm": 46.3,
+			"imageCircleMm": 46.2,
 			"minApertureTStop": 22,
 			"irisBlades": 16,
 			"lenses": [
-				{ "focalMm": 15, "tStop": 1.8, "closeFocusM": 0.36 },
-				{ "focalMm": 18, "tStop": 1.5, "closeFocusM": 0.35 },
 				{ "focalMm": 21, "tStop": 1.5, "closeFocusM": 0.35 },
 				{ "focalMm": 25, "tStop": 1.5, "closeFocusM": 0.26 },
 				{ "focalMm": 29, "tStop": 1.5, "closeFocusM": 0.33 },
 				{ "focalMm": 35, "tStop": 1.5, "closeFocusM": 0.32 },
-				{ "focalMm": 40, "tStop": 1.5, "closeFocusM": 0.42 },
 				{ "focalMm": 50, "tStop": 1.5, "closeFocusM": 0.45 },
 				{ "focalMm": 65, "tStop": 1.5, "closeFocusM": 0.6 },
 				{ "focalMm": 85, "tStop": 1.5, "closeFocusM": 0.84 },
 				{ "focalMm": 100, "tStop": 1.5, "closeFocusM": 1.1 },
 				{ "focalMm": 135, "tStop": 1.5, "closeFocusM": 1.35 },
-				{ "focalMm": 150, "tStop": 1.8, "closeFocusM": 1.5 },
-				{ "focalMm": 200, "tStop": 2.2, "closeFocusM": 2.0 }
+				{ "focalMm": 150, "tStop": 1.8, "closeFocusM": 1.5 }
 			]
 		},
 		{
@@ -74,7 +76,6 @@
 			"name": "CP.3",
 			"imageCircleMm": 43.3,
 			"minApertureTStop": 22,
-			"irisBlades": 14,
 			"lenses": [
 				{ "focalMm": 15, "tStop": 2.9, "closeFocusM": 0.3 },
 				{ "focalMm": 18, "tStop": 2.9, "closeFocusM": 0.3 },
@@ -89,55 +90,25 @@
 			]
 		},
 		{
-			"id": "sigma-cine-ff-high-speed",
-			"manufacturer": "Sigma",
-			"name": "Cine FF High Speed",
-			"imageCircleMm": 43.3,
-			"minApertureTStop": 16,
-			"irisBlades": 9,
-			"lenses": [
-				{ "focalMm": 14, "tStop": 2.0, "closeFocusM": 0.27 },
-				{ "focalMm": 20, "tStop": 1.5, "closeFocusM": 0.276 },
-				{ "focalMm": 24, "tStop": 1.5, "closeFocusM": 0.25 },
-				{ "focalMm": 28, "tStop": 1.5, "closeFocusM": 0.28 },
-				{ "focalMm": 35, "tStop": 1.5, "closeFocusM": 0.3 },
-				{ "focalMm": 40, "tStop": 1.5, "closeFocusM": 0.4 },
-				{ "focalMm": 50, "tStop": 1.5, "closeFocusM": 0.4 },
-				{ "focalMm": 85, "tStop": 1.5, "closeFocusM": 0.85 },
-				{ "focalMm": 105, "tStop": 1.5, "closeFocusM": 1.0 },
-				{ "focalMm": 135, "tStop": 2.0, "closeFocusM": 0.875 }
-			]
-		},
-		{
-			"id": "angenieux-optimo",
+			"id": "angenieux-optimo-lightweight",
 			"manufacturer": "Angénieux",
-			"name": "Optimo zooms",
+			"name": "Optimo lightweight zooms",
 			"imageCircleMm": 31.4,
 			"minApertureTStop": 22,
-			"irisBlades": 9,
 			"lenses": [
 				{ "focalMm": 15, "zoomToMm": 40, "tStop": 2.6, "closeFocusM": 0.61 },
 				{ "focalMm": 28, "zoomToMm": 76, "tStop": 2.6, "closeFocusM": 0.61 },
-				{ "focalMm": 45, "zoomToMm": 120, "tStop": 2.8, "closeFocusM": 0.94 },
-				{ "focalMm": 24, "zoomToMm": 290, "tStop": 2.8, "closeFocusM": 1.22 }
+				{ "focalMm": 45, "zoomToMm": 120, "tStop": 2.8, "closeFocusM": 0.94 }
 			]
 		},
 		{
-			"id": "atlas-orion",
-			"manufacturer": "Atlas Lens Co.",
-			"name": "Orion",
-			"squeeze": 2.0,
-			"imageCircleMm": 31.0,
-			"minApertureTStop": 16,
-			"irisBlades": 16,
+			"id": "angenieux-optimo-24-290",
+			"manufacturer": "Angénieux",
+			"name": "Optimo 24-290",
+			"imageCircleMm": 30.0,
+			"minApertureTStop": 22,
 			"lenses": [
-				{ "focalMm": 25, "tStop": 2.0, "closeFocusM": 0.45 },
-				{ "focalMm": 32, "tStop": 2.0, "closeFocusM": 0.53 },
-				{ "focalMm": 40, "tStop": 2.0, "closeFocusM": 0.56 },
-				{ "focalMm": 50, "tStop": 2.0, "closeFocusM": 0.76 },
-				{ "focalMm": 65, "tStop": 2.0, "closeFocusM": 0.84 },
-				{ "focalMm": 80, "tStop": 2.0, "closeFocusM": 0.91 },
-				{ "focalMm": 100, "tStop": 2.0, "closeFocusM": 1.14 }
+				{ "focalMm": 24, "zoomToMm": 290, "tStop": 2.8, "closeFocusM": 1.22 }
 			]
 		}
 	]

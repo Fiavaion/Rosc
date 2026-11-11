@@ -9,12 +9,15 @@
 			"baseIso": [800, 3200],
 			"formats": [
 				{ "id": "8.6k-3x2", "name": "8.6K 3:2 Full Frame", "sensorMm": [35.9, 24.0], "resolution": [8640, 5760] },
-				{ "id": "8.6k-17x9", "name": "8.6K 17:9", "sensorMm": [35.9, 18.9], "resolution": [8640, 4556] },
+				{ "id": "8.6k-17x9", "name": "8.6K 17:9", "sensorMm": [35.9, 19.0], "resolution": [8640, 4556] },
+				{ "id": "8.1k-16x9", "name": "8.1K 16:9", "sensorMm": [33.7, 19.0], "resolution": [8100, 4556] },
 				{ "id": "8.2k-17x9", "name": "8.2K 17:9", "sensorMm": [34.1, 18.0], "resolution": [8192, 4320] },
 				{ "id": "8.2k-2.39x1", "name": "8.2K 2.39:1", "sensorMm": [34.1, 14.3], "resolution": [8192, 3432] },
+				{ "id": "7.6k-16x9", "name": "7.6K 16:9", "sensorMm": [31.9, 18.0], "resolution": [7680, 4320] },
 				{ "id": "5.8k-6x5", "name": "5.8K 6:5 S35 (2x anamorphic)", "sensorMm": [24.1, 20.2], "resolution": [5792, 4854] },
 				{ "id": "5.8k-4x3", "name": "5.8K 4:3 S35", "sensorMm": [24.1, 17.8], "resolution": [5792, 4276] },
-				{ "id": "5.8k-17x9", "name": "5.8K 17:9 S35", "sensorMm": [24.1, 12.7], "resolution": [5792, 3056] }
+				{ "id": "5.8k-17x9", "name": "5.8K 17:9 S35", "sensorMm": [24.1, 12.7], "resolution": [5792, 3056] },
+				{ "id": "5.4k-16x9", "name": "5.4K 16:9 S35", "sensorMm": [22.6, 12.7], "resolution": [5434, 3056] }
 			]
 		},
 		{

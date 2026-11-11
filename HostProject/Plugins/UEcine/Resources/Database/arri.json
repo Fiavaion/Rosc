@@ -13,9 +13,12 @@
 				{ "id": "4k-16x9", "name": "4K 16:9", "sensorMm": [24.88, 14.00], "resolution": [4096, 2304] },
 				{ "id": "4k-2x1", "name": "4K 2:1", "sensorMm": [24.88, 12.44], "resolution": [4096, 2048] },
 				{ "id": "3.8k-16x9", "name": "3.8K 16:9 UHD", "sensorMm": [23.33, 13.12], "resolution": [3840, 2160] },
+				{ "id": "3.8k-2.39x1", "name": "3.8K 2.39:1", "sensorMm": [23.33, 9.77], "resolution": [3840, 1608] },
 				{ "id": "3.3k-6x5", "name": "3.3K 6:5 (2x anamorphic)", "sensorMm": [20.22, 16.95], "resolution": [3328, 2790] },
 				{ "id": "3k-1x1", "name": "3K 1:1", "sensorMm": [18.66, 18.66], "resolution": [3072, 3072] },
-				{ "id": "2k-16x9-s16", "name": "2K 16:9 S16", "sensorMm": [12.44, 7.00], "resolution": [2048, 1152] }
+				{ "id": "2.7k-8x9", "name": "2.7K 8:9 (2x anamorphic)", "sensorMm": [16.70, 18.70], "resolution": [2743, 3086] },
+				{ "id": "2k-16x9-s16", "name": "2K 16:9 S16", "sensorMm": [12.44, 7.00], "resolution": [2048, 1152] },
+				{ "id": "hd-16x9-s16", "name": "HD 16:9 S16", "sensorMm": [11.66, 6.56], "resolution": [1920, 1080] }
 			]
 		},
 		{
@@ -27,8 +30,10 @@
 			"formats": [
 				{ "id": "4.5k-3x2-open-gate", "name": "4.5K 3:2 Open Gate", "sensorMm": [36.70, 25.54], "resolution": [4448, 3096] },
 				{ "id": "4.5k-2.39x1", "name": "4.5K 2.39:1", "sensorMm": [36.70, 15.31], "resolution": [4448, 1856] },
+				{ "id": "4.3k-16x9", "name": "4.3K 16:9", "sensorMm": [35.64, 20.05], "resolution": [4320, 2430] },
 				{ "id": "3.8k-16x9", "name": "3.8K 16:9 UHD", "sensorMm": [31.68, 17.82], "resolution": [3840, 2160] },
 				{ "id": "3.4k-3x2-s35", "name": "3.4K 3:2 S35", "sensorMm": [28.25, 18.17], "resolution": [3424, 2202] },
+				{ "id": "3.2k-16x9-s35", "name": "3.2K 16:9 S35", "sensorMm": [26.40, 14.85], "resolution": [3200, 1800] },
 				{ "id": "2.8k-1x1", "name": "2.8K 1:1", "sensorMm": [23.76, 23.76], "resolution": [2880, 2880] }
 			]
 		},
@@ -49,11 +54,12 @@
 			"id": "arri-alexa-65",
 			"manufacturer": "ARRI",
 			"model": "ALEXA 65",
-			"mount": "XPL",
+			"mount": "LPL",
 			"baseIso": [800],
 			"formats": [
 				{ "id": "6.5k-open-gate", "name": "6.5K Open Gate", "sensorMm": [54.12, 25.58], "resolution": [6560, 3100] },
 				{ "id": "5.1k-16x9", "name": "5.1K 16:9", "sensorMm": [42.24, 23.76], "resolution": [5120, 2880] },
+				{ "id": "4.5k-lf-open-gate", "name": "4.5K LF Open Gate", "sensorMm": [36.70, 25.54], "resolution": [4448, 3096] },
 				{ "id": "4.3k-3x2", "name": "4.3K 3:2", "sensorMm": [35.64, 23.76], "resolution": [4320, 2880] }
 			]
 		}
@@ -63,8 +69,7 @@
 			"id": "arri-signature-prime",
 			"manufacturer": "ARRI",
 			"name": "Signature Prime",
-			"imageCircleMm": 46.0,
-			"minApertureTStop": 22,
+			"imageCircleMm": 44.7,
 			"irisBlades": 11,
 			"lenses": [
 				{ "focalMm": 12, "tStop": 1.8, "closeFocusM": 0.35 },
@@ -90,11 +95,11 @@
 			"manufacturer": "ARRI",
 			"name": "Master Anamorphic",
 			"squeeze": 2.0,
-			"imageCircleMm": 31.5,
+			"imageCircleMm": 29.26,
 			"minApertureTStop": 22,
 			"irisBlades": 15,
 			"lenses": [
-				{ "focalMm": 28, "tStop": 1.9, "closeFocusM": 0.7 },
+				{ "focalMm": 28, "tStop": 1.9, "closeFocusM": 0.65 },
 				{ "focalMm": 35, "tStop": 1.9, "closeFocusM": 0.75 },
 				{ "focalMm": 40, "tStop": 1.9, "closeFocusM": 0.7 },
 				{ "focalMm": 50, "tStop": 1.9, "closeFocusM": 0.75 },

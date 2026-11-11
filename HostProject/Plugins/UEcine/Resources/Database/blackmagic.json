@@ -23,13 +23,15 @@
 			"formats": [
 				{ "id": "6k-3x2-open-gate", "name": "6K 3:2 Open Gate", "sensorMm": [36.00, 24.00], "resolution": [6048, 4032] },
 				{ "id": "6k-17x9", "name": "6K 17:9", "sensorMm": [36.00, 19.05], "resolution": [6048, 3200] },
-				{ "id": "6k-2.4x1", "name": "6K 2.4:1", "sensorMm": [36.00, 15.00], "resolution": [6048, 2520] }
+				{ "id": "6k-2.4x1", "name": "6K 2.4:1", "sensorMm": [36.00, 15.00], "resolution": [6048, 2520] },
+				{ "id": "4.8k-6x5", "name": "4.8K 6:5 (anamorphic)", "sensorMm": [28.76, 24.00], "resolution": [4832, 4032] },
+				{ "id": "4k-4x3-s35", "name": "4K 4:3 S35", "sensorMm": [24.38, 18.29], "resolution": [4096, 3072] }
 			]
 		},
 		{
 			"id": "blackmagic-pocket-6k",
 			"manufacturer": "Blackmagic Design",
-			"model": "Pocket Cinema Camera 6K",
+			"model": "Pocket Cinema Camera 6K G2",
 			"mount": "EF",
 			"baseIso": [400, 3200],
 			"formats": [
