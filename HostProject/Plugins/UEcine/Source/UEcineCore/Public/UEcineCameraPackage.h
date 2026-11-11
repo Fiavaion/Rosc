@@ -25,6 +25,13 @@ struct FUEcineCameraPackage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lens")
 	FString LensKitId;
 
+	/**
+	 * Width over height of the frame the shot is delivered in, such as 2.39. Zero delivers the
+	 * whole recording format.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = "0"))
+	float DeliveryAspect = 0.0f;
+
 	/** Which lens of the kit is on the camera. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lens")
 	int32 LensIndex = 0;
@@ -106,8 +113,22 @@ struct FUEcineResolvedCamera
 	TArray<FText> Warnings;
 };
 
+/** A frame shape a shot can be delivered in. */
+struct FUEcineDeliveryAspect
+{
+	/** Width over height. Zero is the whole recording format. */
+	float Aspect = 0.0f;
+	FText Name;
+};
+
 namespace UEcine
 {
+	/** The delivery frames offered, the whole recording format first. */
+	UECINECORE_API TConstArrayView<FUEcineDeliveryAspect> GetDeliveryAspects();
+
+	/** What a delivery aspect is called: the name of an offered one, or "2.2:1" for any other. */
+	UECINECORE_API FText GetDeliveryAspectName(float Aspect);
+
 	/**
 	 * Looks up the package's ids in the database and applies the lens limits.
 	 * @return false when an id cannot be found; OutError then says which one.

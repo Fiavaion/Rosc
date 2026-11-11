@@ -1,9 +1,10 @@
 #include "Misc/AutomationTest.h"
+#include "UEcineCameraPackage.h"
 #include "UEcineMonitorTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorTypesTest, "UEcine.Core.Monitor", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorTypesTest, "UEcine.Core.Monitor.Picture", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FUEcineMonitorTypesTest::RunTest(const FString& Parameters)
 {
@@ -71,6 +72,77 @@ bool FUEcineMonitorTypesTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Tiny picture: no scopes"), Tiny.Waveform.Area() == 0 && Tiny.Histogram.Area() == 0);
 	}
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorOverlayTypesTest, "UEcine.Core.Monitor.Overlay", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineMonitorOverlayTypesTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::Monitor;
+
+	// The delivery frame inside the picture.
+	TestTrue(TEXT("No delivery aspect: the frame is the whole picture"), GetDeliveryFrame(FIntPoint(1920, 1080), 0.0f) == FIntRect(0, 0, 1920, 1080));
+	TestTrue(TEXT("2.39:1 in a 16:9 picture: full width, bars above and below"), GetDeliveryFrame(FIntPoint(1920, 1080), 2.39f) == FIntRect(0, 138, 1920, 941));
+	TestTrue(TEXT("4:3 in a 16:9 picture: full height, bars at the sides"), GetDeliveryFrame(FIntPoint(1920, 1080), 4.0f / 3.0f) == FIntRect(240, 0, 1680, 1080));
+	TestTrue(TEXT("9:16 in a 16:9 picture: a tall frame in the middle"), GetDeliveryFrame(FIntPoint(1920, 1080), 9.0f / 16.0f) == FIntRect(656, 0, 1264, 1080));
+	TestTrue(TEXT("16:9 in a 16:9 picture: the whole picture"), GetDeliveryFrame(FIntPoint(1920, 1080), 16.0f / 9.0f) == FIntRect(0, 0, 1920, 1080));
+	const FIntRect OddFrame = GetDeliveryFrame(FIntPoint(1015, 551), 2.39f);
+	TestTrue(TEXT("An odd picture size keeps the frame inside it"), OddFrame.Min.X >= 0 && OddFrame.Min.Y >= 0 && OddFrame.Max.X <= 1015 && OddFrame.Max.Y <= 551);
+	TestTrue(TEXT("A picture with no size has an empty frame"), GetDeliveryFrame(FIntPoint(0, 0), 2.39f).Area() == 0);
+
+	// Safe areas sit in the middle of the frame.
+	const FIntRect Frame(0, 138, 1920, 941);
+	const FIntRect ActionSafe = GetSafeArea(Frame, ActionSafeFraction);
+	const FIntRect TitleSafe = GetSafeArea(Frame, TitleSafeFraction);
+	TestEqual(TEXT("Action safe is 93 % of the frame's width"), ActionSafe.Width(), 1786);
+	TestEqual(TEXT("Action safe is 93 % of the frame's height"), ActionSafe.Height(), 747);
+	TestEqual(TEXT("Action safe is centred across"), ActionSafe.Min.X, 67);
+	TestEqual(TEXT("Action safe is centred up and down"), ActionSafe.Min.Y - Frame.Min.Y, 28);
+	TestEqual(TEXT("Title safe is 90 % of the frame's width"), TitleSafe.Width(), 1728);
+	TestTrue(TEXT("Title safe is inside action safe"), TitleSafe.Min.X > ActionSafe.Min.X && TitleSafe.Min.Y > ActionSafe.Min.Y && TitleSafe.Max.X < ActionSafe.Max.X && TitleSafe.Max.Y < ActionSafe.Max.Y);
+
+	// The data readout.
+	FUEcineCameraData Data;
+	Data.CameraName = TEXT("A Cam");
+	Data.FocalLengthMm = 35.0;
+	Data.TStop = 2.8;
+	Data.FocusDistanceMm = 3050.0;
+	TestEqual(TEXT("A camera with no package shows its lens and focus"), FormatDataReadout(Data, EUEcineDistanceUnits::Metric).ToString(), FString(TEXT("A Cam   35 mm   T2.8   Focus 3.05 m")));
+	Data.bHasExposure = true;
+	Data.Iso = 800;
+	Data.ShutterAngleDeg = 180.0;
+	Data.FramesPerSecond = 23.976;
+	TestEqual(TEXT("A camera package adds ISO, shutter angle and frame rate"), FormatDataReadout(Data, EUEcineDistanceUnits::Metric).ToString(),
+		FString(TEXT("A Cam   35 mm   T2.8   ISO 800   180°   23.976 fps   Focus 3.05 m")));
+	Data.NdDensity = 0.6;
+	Data.ShutterAngleDeg = 172.8;
+	TestEqual(TEXT("An ND filter is shown when one is on, and distances follow the user's units"), FormatDataReadout(Data, EUEcineDistanceUnits::Imperial).ToString(),
+		FString(TEXT("A Cam   35 mm   T2.8   ISO 800   172.8°   23.976 fps   ND 0.6   Focus 10' 0\"")));
+
+	// Every line colour has a name, so the choice is not made by colour alone.
+	const UEnum* Colours = StaticEnum<EUEcineMonitorColour>();
+	TSet<FString> ColourNames;
+	for (int32 Index = 0; Index < Colours->NumEnums() - 1; ++Index)
+	{
+		ColourNames.Add(GetColourName(static_cast<EUEcineMonitorColour>(Colours->GetValueByIndex(Index))).ToString());
+	}
+	TestEqual(TEXT("Each colour has its own name"), ColourNames.Num(), Colours->NumEnums() - 1);
+
+	// Delivery aspects.
+	const TConstArrayView<FUEcineDeliveryAspect> Aspects = UEcine::GetDeliveryAspects();
+	TestEqual(TEXT("The first delivery frame offered is the whole recording format"), Aspects[0].Aspect, 0.0f);
+	TestEqual(TEXT("An offered aspect is called by its name"), UEcine::GetDeliveryAspectName(2.39f).ToString(), FString(TEXT("2.39:1 Scope")));
+	TestEqual(TEXT("16:9 is found from its ratio"), UEcine::GetDeliveryAspectName(1.7778f).ToString(), FString(TEXT("16:9")));
+	TestEqual(TEXT("Any other aspect is written as a ratio"), UEcine::GetDeliveryAspectName(2.2f).ToString(), FString(TEXT("2.2:1")));
+
+	// Something to draw only when a tool is on.
+	FUEcineMonitorSettings Settings;
+	TestEqual(TEXT("A legend gives the top false colour band as ending at 100 %"), GetFalseColourRange(GetFalseColourBands().Last()).ToString(), FString(TEXT("99-100 %")));
+	TestEqual(TEXT("A legend gives the bottom false colour band from 0 %"), GetFalseColourRange(GetFalseColourBands()[0]).ToString(), FString(TEXT("0-2 %")));
+	TestFalse(TEXT("With every tool off there is nothing to draw"), Settings.IsAnyToolOn());
+	Settings.bCentreMark = true;
+	TestTrue(TEXT("The centre mark alone is something to draw"), Settings.IsAnyToolOn());
 	return true;
 }
 

@@ -16,6 +16,66 @@ namespace UEcine::Monitor
 		}
 	}
 
+	FText GetColourName(EUEcineMonitorColour Colour)
+	{
+		switch (Colour)
+		{
+		case EUEcineMonitorColour::Red: return LOCTEXT("ColourRed", "Red");
+		case EUEcineMonitorColour::Green: return LOCTEXT("ColourGreen", "Green");
+		case EUEcineMonitorColour::Blue: return LOCTEXT("ColourBlue", "Blue");
+		case EUEcineMonitorColour::Yellow: return LOCTEXT("ColourYellow", "Yellow");
+		default: return LOCTEXT("ColourWhite", "White");
+		}
+	}
+
+	FIntRect GetDeliveryFrame(FIntPoint PictureSize, float DeliveryAspect)
+	{
+		FIntPoint FrameSize = PictureSize;
+		if (DeliveryAspect > 0.0f && PictureSize.X > 0 && PictureSize.Y > 0)
+		{
+			// Wider than the picture: bars above and below. Narrower: bars at the sides.
+			if (DeliveryAspect * PictureSize.Y > PictureSize.X)
+			{
+				FrameSize.Y = FMath::Min(PictureSize.Y, FMath::RoundToInt32(PictureSize.X / DeliveryAspect));
+			}
+			else
+			{
+				FrameSize.X = FMath::Min(PictureSize.X, FMath::RoundToInt32(PictureSize.Y * DeliveryAspect));
+			}
+		}
+		const FIntPoint Min = (PictureSize - FrameSize) / 2;
+		return FIntRect(Min, Min + FrameSize);
+	}
+
+	FIntRect GetSafeArea(const FIntRect& Frame, float Fraction)
+	{
+		const FIntPoint AreaSize(FMath::RoundToInt32(Frame.Width() * Fraction), FMath::RoundToInt32(Frame.Height() * Fraction));
+		const FIntPoint Min = Frame.Min + (Frame.Size() - AreaSize) / 2;
+		return FIntRect(Min, Min + AreaSize);
+	}
+
+	FText FormatDataReadout(const FUEcineCameraData& Data, EUEcineDistanceUnits Units)
+	{
+		using UEcine::Units::FormatNumber;
+
+		TArray<FText> Parts;
+		Parts.Add(FText::FromString(Data.CameraName));
+		Parts.Add(FText::Format(LOCTEXT("ReadoutFocalLength", "{0} mm"), FormatNumber(Data.FocalLengthMm, 0)));
+		Parts.Add(FText::Format(LOCTEXT("ReadoutTStop", "T{0}"), FormatNumber(Data.TStop, 1)));
+		if (Data.bHasExposure)
+		{
+			Parts.Add(FText::Format(LOCTEXT("ReadoutIso", "ISO {0}"), FormatNumber(Data.Iso, 0)));
+			Parts.Add(FText::Format(LOCTEXT("ReadoutShutter", "{0}°"), FormatNumber(Data.ShutterAngleDeg, 1)));
+			Parts.Add(FText::Format(LOCTEXT("ReadoutFrameRate", "{0} fps"), FormatNumber(Data.FramesPerSecond, 3)));
+			if (Data.NdDensity > 0.0)
+			{
+				Parts.Add(FText::Format(LOCTEXT("ReadoutNd", "ND {0}"), FormatNumber(Data.NdDensity, 1)));
+			}
+		}
+		Parts.Add(FText::Format(LOCTEXT("ReadoutFocus", "Focus {0}"), UEcine::Units::FormatDistance(Data.FocusDistanceMm, Units)));
+		return FText::Join(FText::FromString(TEXT("   ")), Parts);
+	}
+
 	float GetSignalPercent(const FColor& DisplayedColour)
 	{
 		// Rec. 709 luma weights on the displayed (gamma-encoded) values.
@@ -39,6 +99,13 @@ namespace UEcine::Monitor
 			{ 99.0f, 101.0f, FColor(228, 32, 32), LOCTEXT("BandClipped", "Clipped white") }
 		};
 		return Bands;
+	}
+
+	FText GetFalseColourRange(const FUEcineFalseColourBand& Band)
+	{
+		// The top band runs past 100 % so that it takes in 100 % itself; a legend stops where the signal does.
+		return FText::Format(LOCTEXT("FalseColourRange", "{0}-{1} %"),
+			FText::AsNumber(FMath::RoundToInt32(Band.FromPercent)), FText::AsNumber(FMath::Min(100, FMath::RoundToInt32(Band.ToPercent))));
 	}
 
 	const FUEcineFalseColourBand* FindFalseColourBand(float SignalPercent)

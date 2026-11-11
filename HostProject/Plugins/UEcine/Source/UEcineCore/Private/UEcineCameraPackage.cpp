@@ -3,6 +3,7 @@
 #include "UEcineCameraDatabase.h"
 #include "UEcineExposure.h"
 #include "UEcineOptics.h"
+#include "UEcineUnits.h"
 
 #define LOCTEXT_NAMESPACE "UEcineCore"
 
@@ -114,6 +115,36 @@ bool UEcine::ResolveCameraPackage(const FUEcineCameraDatabase& Database, const F
 
 	OutCamera = MoveTemp(Camera);
 	return true;
+}
+
+TConstArrayView<FUEcineDeliveryAspect> UEcine::GetDeliveryAspects()
+{
+	static const TArray<FUEcineDeliveryAspect> Aspects =
+	{
+		{ 0.0f, LOCTEXT("DeliverFullFormat", "Full recording format") },
+		{ 2.39f, LOCTEXT("Deliver239", "2.39:1 Scope") },
+		{ 2.0f, LOCTEXT("Deliver200", "2:1") },
+		{ 1.85f, LOCTEXT("Deliver185", "1.85:1 Flat") },
+		{ 16.0f / 9.0f, LOCTEXT("Deliver178", "16:9") },
+		{ 1.66f, LOCTEXT("Deliver166", "1.66:1") },
+		{ 4.0f / 3.0f, LOCTEXT("Deliver133", "4:3") },
+		{ 1.0f, LOCTEXT("Deliver100", "1:1 Square") },
+		{ 0.8f, LOCTEXT("Deliver080", "4:5 Portrait") },
+		{ 9.0f / 16.0f, LOCTEXT("Deliver056", "9:16 Vertical") }
+	};
+	return Aspects;
+}
+
+FText UEcine::GetDeliveryAspectName(float Aspect)
+{
+	for (const FUEcineDeliveryAspect& Offered : GetDeliveryAspects())
+	{
+		if (FMath::IsNearlyEqual(Offered.Aspect, Aspect, 0.005f))
+		{
+			return Offered.Name;
+		}
+	}
+	return FText::Format(LOCTEXT("DeliverOther", "{0}:1"), UEcine::Units::FormatNumber(Aspect, 2));
 }
 
 #undef LOCTEXT_NAMESPACE

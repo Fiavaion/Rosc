@@ -338,6 +338,182 @@ bool FUEcineMonitorPictureTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+/**
+ * The lines and words drawn over the picture: frame lines, safe areas, centre mark, data readout, false
+ * colour legend and scope titles, read back from real pictures.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorOverlayTest, "UEcine.Monitor.Overlay", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineMonitorOverlayTest::RunTest(const FString& Parameters)
+{
+	if (!FApp::CanEverRender())
+	{
+		AddInfo(TEXT("Skipped: reading pictures back needs a renderer (run tools/test.ps1 with -Rendering)."));
+		return true;
+	}
+	using namespace UEcine::Monitor;
+
+	const FMonitorTestStage Stage(false);
+	const TArray<FColor> Plain = Stage.Shoot(FUEcineMonitorSettings());
+
+	// The view is looking through a camera that delivers 2.39:1.
+	const FRenderTarget* StageTarget = Stage.Target->GameThread_GetRenderTargetResource();
+	FUEcineMonitorCameraOverlay Camera;
+	Camera.DeliveryAspect = 2.39f;
+	Camera.DataReadout = TEXT("A Cam   35 mm   T2.8   ISO 800   180\u00B0   24 fps   Focus 3.05 m");
+	const auto LookThroughCamera = [&Stage, StageTarget, &Camera](bool bLookThrough)
+	{
+		TMap<const FRenderTarget*, FUEcineMonitorCameraOverlay> Overlays;
+		if (bLookThrough)
+		{
+			Overlays.Add(StageTarget, Camera);
+		}
+		Stage.Extension->SetCameraOverlays(Overlays);
+	};
+	const FIntRect Frame = GetDeliveryFrame(PictureSize, Camera.DeliveryAspect);
+	const FColor Yellow = GetColour(EUEcineMonitorColour::Yellow);
+	const FColor Green = GetColour(EUEcineMonitorColour::Green);
+
+	// How much of an area is white text, and how bright the area is.
+	const auto CountPixels = [](const TArray<FColor>& Pixels, const FIntRect& Area, TFunctionRef<bool(const FColor&)> Matches)
+	{
+		int32 Count = 0;
+		for (int32 Y = Area.Min.Y; Y < Area.Max.Y; ++Y)
+		{
+			for (int32 X = Area.Min.X; X < Area.Max.X; ++X)
+			{
+				Count += Matches(PixelAt(Pixels, FIntPoint(X, Y))) ? 1 : 0;
+			}
+		}
+		return Count;
+	};
+	const auto IsWhite = [](const FColor& Pixel) { return Pixel.R >= 235 && Pixel.G >= 235 && Pixel.B >= 235; };
+	const FIntRect WordsArea(16, 16, 700, 240);
+
+	// Frame lines: two pixels of the chosen colour on the edge of the delivery frame, black either side.
+	{
+		FUEcineMonitorSettings Settings;
+		Settings.bFrameLines = true;
+		Settings.LineColour = EUEcineMonitorColour::Yellow;
+		LookThroughCamera(true);
+		const TArray<FColor> Picture = Stage.Shoot(Settings);
+		AddInfo(FString::Printf(TEXT("Frame line at the top of the 2.39:1 frame, rows %d to %d: %s, %s, %s, %s"), Frame.Min.Y - 1, Frame.Min.Y + 2,
+			*Describe(PixelAt(Picture, FIntPoint(500, Frame.Min.Y - 1))), *Describe(PixelAt(Picture, FIntPoint(500, Frame.Min.Y))),
+			*Describe(PixelAt(Picture, FIntPoint(500, Frame.Min.Y + 1))), *Describe(PixelAt(Picture, FIntPoint(500, Frame.Min.Y + 2)))));
+		TestTrue(TEXT("Frame lines: the top line is on the first row of the frame"), IsNear(PixelAt(Picture, FIntPoint(500, Frame.Min.Y)), Yellow));
+		TestTrue(TEXT("Frame lines: the top line is two pixels thick"), IsNear(PixelAt(Picture, FIntPoint(500, Frame.Min.Y + 1)), Yellow));
+		TestTrue(TEXT("Frame lines: black outside the top line"), IsNear(PixelAt(Picture, FIntPoint(500, Frame.Min.Y - 1)), FColor::Black));
+		TestTrue(TEXT("Frame lines: black inside the top line"), IsNear(PixelAt(Picture, FIntPoint(500, Frame.Min.Y + 2)), FColor::Black));
+		TestTrue(TEXT("Frame lines: the bottom line is on the last row of the frame"), IsNear(PixelAt(Picture, FIntPoint(500, Frame.Max.Y - 1)), Yellow));
+		TestTrue(TEXT("Frame lines: the left line is on the first column of the frame"), IsNear(PixelAt(Picture, FIntPoint(Frame.Min.X, 540)), Yellow));
+		TestTrue(TEXT("Frame lines: the right line is on the last column of the frame"), IsNear(PixelAt(Picture, FIntPoint(Frame.Max.X - 1, 540)), Yellow));
+		TestTrue(TEXT("Frame lines: the picture inside the frame is untouched"), IsNear(PixelAt(Picture, BackdropSample), PixelAt(Plain, BackdropSample)));
+		TestTrue(TEXT("Frame lines: the picture outside the frame is untouched"), IsNear(PixelAt(Picture, FIntPoint(500, 60)), PixelAt(Plain, FIntPoint(500, 60))));
+
+		// The user chooses the line colour.
+		Settings.LineColour = EUEcineMonitorColour::Green;
+		TestTrue(TEXT("Frame lines: drawn in the colour chosen"), IsNear(PixelAt(Stage.Shoot(Settings), FIntPoint(500, Frame.Min.Y)), Green));
+
+		// A view that is not looking through a camera has no delivery frame to outline.
+		LookThroughCamera(false);
+		const TArray<FColor> FreeView = Stage.Shoot(Settings);
+		TestTrue(TEXT("Frame lines: none in a view that is not looking through a camera"), IsNear(PixelAt(FreeView, FIntPoint(500, Frame.Min.Y)), PixelAt(Plain, FIntPoint(500, Frame.Min.Y))));
+
+		// A camera that delivers its whole recording format has no lines either: they would sit on the picture's edge.
+		TMap<const FRenderTarget*, FUEcineMonitorCameraOverlay> WholeFormat;
+		WholeFormat.Add(StageTarget, FUEcineMonitorCameraOverlay());
+		Stage.Extension->SetCameraOverlays(WholeFormat);
+		const TArray<FColor> WholePicture = Stage.Shoot(Settings);
+		TestTrue(TEXT("Frame lines: none when the delivery frame is the whole picture"), IsNear(PixelAt(WholePicture, FIntPoint(500, 0)), PixelAt(Plain, FIntPoint(500, 0))));
+	}
+
+	// Safe areas: action safe and title safe inside the delivery frame, one pixel each.
+	{
+		FUEcineMonitorSettings Settings;
+		Settings.bSafeAreas = true;
+		Settings.LineColour = EUEcineMonitorColour::Yellow;
+		LookThroughCamera(true);
+		const TArray<FColor> Picture = Stage.Shoot(Settings);
+		const FIntRect ActionSafe = GetSafeArea(Frame, ActionSafeFraction);
+		const FIntRect TitleSafe = GetSafeArea(Frame, TitleSafeFraction);
+		TestTrue(TEXT("Safe areas: the action safe line is where 93 % of the frame ends"), IsNear(PixelAt(Picture, FIntPoint(500, ActionSafe.Min.Y)), Yellow));
+		TestTrue(TEXT("Safe areas: black outside the action safe line"), IsNear(PixelAt(Picture, FIntPoint(500, ActionSafe.Min.Y - 1)), FColor::Black));
+		TestTrue(TEXT("Safe areas: black inside the action safe line"), IsNear(PixelAt(Picture, FIntPoint(500, ActionSafe.Min.Y + 1)), FColor::Black));
+		TestTrue(TEXT("Safe areas: the action safe line runs down the side too"), IsNear(PixelAt(Picture, FIntPoint(ActionSafe.Max.X - 1, 400)), Yellow));
+		TestTrue(TEXT("Safe areas: the title safe line is where 90 % of the frame ends"), IsNear(PixelAt(Picture, FIntPoint(500, TitleSafe.Min.Y)), Yellow));
+		TestTrue(TEXT("Safe areas: the title safe line runs along the bottom too"), IsNear(PixelAt(Picture, FIntPoint(500, TitleSafe.Max.Y - 1)), Yellow));
+		TestTrue(TEXT("Safe areas: no frame line is drawn with them"), IsNear(PixelAt(Picture, FIntPoint(500, Frame.Min.Y)), PixelAt(Plain, FIntPoint(500, Frame.Min.Y))));
+	}
+
+	// Centre mark: a cross in the middle of the delivery frame.
+	{
+		FUEcineMonitorSettings Settings;
+		Settings.bCentreMark = true;
+		Settings.LineColour = EUEcineMonitorColour::Yellow;
+		LookThroughCamera(true);
+		const TArray<FColor> Picture = Stage.Shoot(Settings);
+		const FIntPoint Centre = (Frame.Min + Frame.Max) / 2;
+		TestTrue(TEXT("Centre mark: the cross has an arm to the left"), IsNear(PixelAt(Picture, Centre + FIntPoint(-12, 0)), Yellow));
+		TestTrue(TEXT("Centre mark: the cross has an arm to the right"), IsNear(PixelAt(Picture, Centre + FIntPoint(12, -1)), Yellow));
+		TestTrue(TEXT("Centre mark: the cross has an arm upwards"), IsNear(PixelAt(Picture, Centre + FIntPoint(0, -12)), Yellow));
+		TestTrue(TEXT("Centre mark: the cross has an arm downwards"), IsNear(PixelAt(Picture, Centre + FIntPoint(-1, 12)), Yellow));
+		TestTrue(TEXT("Centre mark: black round the cross"), IsNear(PixelAt(Picture, Centre + FIntPoint(12, 1)), FColor::Black));
+		TestTrue(TEXT("Centre mark: the picture beside it is untouched"), IsNear(PixelAt(Picture, Centre + FIntPoint(40, 40)), PixelAt(Plain, Centre + FIntPoint(40, 40))));
+	}
+
+	// Data readout: white words on a dark backing in the top left corner, for a view looking through a camera.
+	{
+		FUEcineMonitorSettings Settings;
+		Settings.bDataReadout = true;
+		LookThroughCamera(true);
+		const TArray<FColor> Picture = Stage.Shoot(Settings);
+		const int32 WhitePixels = CountPixels(Picture, WordsArea, IsWhite);
+		const float BackingSignal = GetSignalPercent(PixelAt(Picture, FIntPoint(17, 17)));
+		const float PlainSignal = GetSignalPercent(PixelAt(Plain, FIntPoint(17, 17)));
+		AddInfo(FString::Printf(TEXT("Data readout: %d white pixels of text; the backing shows %.1f %% signal where the plain picture shows %.1f %%"), WhitePixels, BackingSignal, PlainSignal));
+		TestTrue(TEXT("Data readout: the words are drawn in white"), WhitePixels > 150);
+		TestTrue(TEXT("Data readout: the backing darkens the picture behind the words"), BackingSignal < 0.5f * PlainSignal);
+		TestTrue(TEXT("Data readout: the picture still shows through the backing"), BackingSignal > 0.0f);
+		TestEqual(TEXT("Data readout: the plain picture has no white there"), CountPixels(Plain, WordsArea, IsWhite), 0);
+
+		LookThroughCamera(false);
+		TestEqual(TEXT("Data readout: nothing to say in a view that is not looking through a camera"), CountPixels(Stage.Shoot(Settings), WordsArea, IsWhite), 0);
+	}
+
+	// False colour comes with its legend, and each scope with its name.
+	{
+		FUEcineMonitorSettings Settings;
+		Settings.bFalseColour = true;
+		Settings.bWaveform = true;
+		Settings.bHistogram = true;
+		LookThroughCamera(false);
+		const TArray<FColor> Picture = Stage.Shoot(Settings);
+		for (const FUEcineFalseColourBand& Band : GetFalseColourBands())
+		{
+			const int32 SwatchPixels = CountPixels(Picture, WordsArea, [&Band](const FColor& Pixel) { return IsNear(Pixel, Band.Colour); });
+			TestTrue(*FString::Printf(TEXT("Legend: there is a swatch for %s (%d pixels)"), *Band.Name.ToString(), SwatchPixels), SwatchPixels > 30);
+		}
+		TestTrue(TEXT("Legend: each band is named in words"), CountPixels(Picture, WordsArea, IsWhite) > 600);
+
+		const FUEcineScopeLayout Layout = GetScopeLayout(PictureSize, true, true);
+		TestTrue(TEXT("The waveform is named"), CountPixels(Picture, FIntRect(Layout.Waveform.Min, Layout.Waveform.Min + FIntPoint(120, 24)), IsWhite) > 40);
+		TestTrue(TEXT("The histogram is named"), CountPixels(Picture, FIntRect(Layout.Histogram.Min, Layout.Histogram.Min + FIntPoint(120, 24)), IsWhite) > 40);
+		SavePicture(Picture, TEXT("monitor-false-colour-legend.png"));
+	}
+
+	// Everything a camera operator frames with, for a person to look at.
+	{
+		FUEcineMonitorSettings Settings;
+		Settings.bFrameLines = true;
+		Settings.bSafeAreas = true;
+		Settings.bCentreMark = true;
+		Settings.bDataReadout = true;
+		LookThroughCamera(true);
+		SavePicture(Stage.Shoot(Settings), TEXT("monitor-framing.png"));
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorCostTest, "UEcine.Monitor.Cost", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FUEcineMonitorCostTest::RunTest(const FString& Parameters)
@@ -357,6 +533,13 @@ bool FUEcineMonitorCostTest::RunTest(const FString& Parameters)
 	Everything.bZebras = true;
 	Everything.bPeaking = true;
 	Everything.bHistogram = true;
+	Everything.bFrameLines = true;
+	Everything.bSafeAreas = true;
+	Everything.bCentreMark = true;
+	Everything.bDataReadout = true;
+	TMap<const FRenderTarget*, FUEcineMonitorCameraOverlay> Overlays;
+	Overlays.Add(Stage.Target->GameThread_GetRenderTargetResource(), FUEcineMonitorCameraOverlay{ 2.39f, TEXT("A Cam   35 mm   T2.8   ISO 800   24 fps   Focus 3.05 m") });
+	Stage.Extension->SetCameraOverlays(Overlays);
 
 	// Warm up, then time the three set-ups turn and turn about so that drift affects them alike.
 	for (int32 Frame = 0; Frame < 10; ++Frame)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UEcineUnits.h"
 #include "UEcineMonitorTypes.generated.h"
 
 /** Colours offered for lines and highlights drawn over the picture. */
@@ -54,10 +55,36 @@ struct UECINECORE_API FUEcineMonitorSettings
 	UPROPERTY()
 	bool bHistogram = false;
 
-	/** True when any tool that changes the picture's pixels is on. */
-	bool UsesPicturePass() const
+	/** Outline the frame the shot is delivered in, when that is not the whole picture. */
+	UPROPERTY()
+	bool bFrameLines = false;
+
+	/** Outline the action safe and title safe areas of the delivery frame. */
+	UPROPERTY()
+	bool bSafeAreas = false;
+
+	/** A cross at the centre of the frame. */
+	UPROPERTY()
+	bool bCentreMark = false;
+
+	/** The colour of the frame lines, safe areas and centre mark. */
+	UPROPERTY()
+	EUEcineMonitorColour LineColour = EUEcineMonitorColour::White;
+
+	/** A line of camera data over the picture: camera, lens, exposure and focus. */
+	UPROPERTY()
+	bool bDataReadout = false;
+
+	/** True when any tool is on, so there is something to draw over the picture. */
+	bool IsAnyToolOn() const
 	{
-		return bFalseColour || bZebras || bPeaking || bWaveform || bHistogram;
+		return bFalseColour || bZebras || bPeaking || bWaveform || bHistogram || bFrameLines || bSafeAreas || bCentreMark || bDataReadout;
+	}
+
+	/** True when a tool is on that draws the delivery frame or the data of the camera a view looks through. */
+	bool IsAnyCameraToolOn() const
+	{
+		return bFrameLines || bSafeAreas || bCentreMark || bDataReadout;
 	}
 };
 
@@ -78,10 +105,46 @@ struct FUEcineScopeLayout
 	FIntRect Histogram;
 };
 
+/** What the data readout says about the camera a view is looking through. */
+struct FUEcineCameraData
+{
+	FString CameraName;
+	double FocalLengthMm = 0.0;
+	double TStop = 0.0;
+	double FocusDistanceMm = 0.0;
+
+	/** False for a camera with no camera package, which has no ISO, shutter angle or frame rate to show. */
+	bool bHasExposure = false;
+	int32 Iso = 0;
+	double ShutterAngleDeg = 0.0;
+	double FramesPerSecond = 0.0;
+	/** Zero is no filter, which the readout leaves out. */
+	double NdDensity = 0.0;
+};
+
 namespace UEcine::Monitor
 {
+	/** Share of the delivery frame's width and height inside which the action is kept. */
+	inline constexpr float ActionSafeFraction = 0.93f;
+	/** Share of the delivery frame's width and height inside which titles are kept. */
+	inline constexpr float TitleSafeFraction = 0.9f;
+
 	/** The colour as it appears on screen. */
 	UECINECORE_API FColor GetColour(EUEcineMonitorColour Colour);
+
+	UECINECORE_API FText GetColourName(EUEcineMonitorColour Colour);
+
+	/**
+	 * Where the delivery frame sits in a picture, in pixels from its top left corner: the largest
+	 * rectangle of the delivery aspect that fits, centred. The whole picture when the aspect is zero.
+	 */
+	UECINECORE_API FIntRect GetDeliveryFrame(FIntPoint PictureSize, float DeliveryAspect);
+
+	/** The middle of a frame, taking the given share of its width and height. */
+	UECINECORE_API FIntRect GetSafeArea(const FIntRect& Frame, float Fraction);
+
+	/** One line of camera data, as a monitor shows it: "A Cam   35 mm   T2.8   ISO 800   180°   24 fps   ND 0.6   Focus 3.05 m". */
+	UECINECORE_API FText FormatDataReadout(const FUEcineCameraData& Data, EUEcineDistanceUnits Units);
 
 	/**
 	 * Signal level of a displayed pixel in percent: 0 is black, 100 is the brightest the display shows.
@@ -91,6 +154,9 @@ namespace UEcine::Monitor
 
 	/** The false colour bands from darkest to brightest. Levels between bands are shown in grey. */
 	UECINECORE_API TConstArrayView<FUEcineFalseColourBand> GetFalseColourBands();
+
+	/** The signal levels a band covers, as a legend gives them: "41-52 %". */
+	UECINECORE_API FText GetFalseColourRange(const FUEcineFalseColourBand& Band);
 
 	/** The band a signal level falls in, or null when it is shown in grey. */
 	UECINECORE_API const FUEcineFalseColourBand* FindFalseColourBand(float SignalPercent);
