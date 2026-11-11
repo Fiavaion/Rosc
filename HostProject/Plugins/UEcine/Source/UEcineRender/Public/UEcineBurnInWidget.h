@@ -16,6 +16,9 @@ class UMovieGraphPipeline;
  *
  * Everything it shows comes from the render itself: the "uecine/..." metadata of the shot's
  * graph and what the renderer says of the frame.
+ *
+ * The slate is why a shot has handle frames, and the widget is the part of a render that is
+ * told of each frame, so it also keeps the sequence playing through the last of them.
  */
 UCLASS()
 class UECINERENDER_API UUEcineBurnInWidget : public UMovieGraphBurnInWidget

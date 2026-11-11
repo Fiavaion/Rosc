@@ -3,9 +3,12 @@
 #include "Graph/MovieGraphBlueprintLibrary.h"
 #include "Graph/MovieGraphConfig.h"
 #include "Graph/MovieGraphPipeline.h"
+#include "Graph/MovieGraphSequenceDataSource.h"
 #include "Graph/Nodes/MovieGraphSetMetadataAttributesNode.h"
 #include "Misc/Timecode.h"
 #include "MoviePipelineQueue.h"
+#include "MovieSceneSequencePlayer.h"
+#include "MovieSceneTimeHelpers.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -27,6 +30,33 @@ namespace
 	const FLinearColor BurnInStripColour(0.0f, 0.0f, 0.0f, 0.65f);
 
 	/** A font whose letters are a part of the picture's height tall. */
+	/**
+	 * Keeps the sequence playing to the end of a shot's last handle frame. The renderer lengthens
+	 * a shot's sections for its handle frames, but not the range its sequence player plays in: a
+	 * shot that ends where the sequence ends would have its last handle frame played after the
+	 * sequence had stopped, seen from where the play session started and not through the camera.
+	 */
+	void PlayThroughHandleFrames(const UMovieGraphPipeline& Pipeline, const FMoviePipelineCameraCutInfo& Shot)
+	{
+		const UMovieGraphSequenceDataSource* Source = Cast<UMovieGraphSequenceDataSource>(Pipeline.GetDataSourceInstance());
+		UMovieSceneSequencePlayer* Player = Source != nullptr ? Source->GetSequencePlayer() : nullptr;
+		if (Player == nullptr || !Shot.TotalOutputRangeRoot.HasUpperBound())
+		{
+			return;
+		}
+
+		// The shot's range already takes in its handle frames.
+		const int32 ShotEnd = FFrameRate::TransformTime(FFrameTime(UE::MovieScene::DiscreteExclusiveUpper(Shot.TotalOutputRangeRoot)), Shot.CachedTickResolution, Shot.CachedFrameRate).CeilToFrame().Value;
+		const int32 PlayStart = Player->GetStartTime().Time.FrameNumber.Value;
+		if (ShotEnd > PlayStart + Player->GetFrameDuration())
+		{
+			// A player outside its new range is moved into it, and the frames played before a shot
+			// are before the range: the range starts no later than where the player is.
+			const int32 NewStart = FMath::Min(PlayStart, Player->GetCurrentTime().Time.FloorToFrame().Value);
+			Player->SetFrameRange(NewStart, ShotEnd - NewStart);
+		}
+	}
+
 	FSlateFontInfo MakeBurnInFont(const TCHAR* Weight, int32 PictureHeight, float PartOfHeight)
 	{
 		// A font size is in points at 96 to the inch: three quarters of its height in pixels.
@@ -194,6 +224,12 @@ void UUEcineBurnInWidget::UpdateForFrame(const UMovieGraphPipeline* Pipeline, co
 	// before that one too, so the frame is asked of the shot and not counted here.
 	const FFrameNumber RootFrame = UMovieGraphBlueprintLibrary::GetRootFrameNumber(Pipeline);
 	const UMoviePipelineExecutorShot* Shot = UMovieGraphBlueprintLibrary::GetCurrentExecutorShot(Pipeline);
+	if (Shot != nullptr)
+	{
+		// The slate is why a shot has handle frames, and this widget is the part of a render that
+		// is told of each of its frames.
+		PlayThroughHandleFrames(*Pipeline, Shot->ShotInfo);
+	}
 	const bool bFirstFrameKept = Shot != nullptr && Shot->ShotInfo.TotalOutputRangeRoot.HasLowerBound()
 		&& RootFrame == FFrameRate::TransformTime(FFrameTime(Shot->ShotInfo.TotalOutputRangeRoot.GetLowerBoundValue()), Shot->ShotInfo.CachedTickResolution, Shot->ShotInfo.CachedFrameRate).FloorToFrame();
 

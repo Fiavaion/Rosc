@@ -61,6 +61,9 @@ Render Graph in 5.8"):
 6. **The slate is the first frame of each review file**, drawn by the burn-in widget over a
    one-frame head handle. Because handles are symmetric, a slated review file also has one
    handle frame at its tail: frames = shot length + 2. With the slate off there are no handles.
+   The engine lengthens a shot's sections for its handles but not the range its sequence player
+   plays in, so the burn-in widget, which is told of every frame, also keeps that range open to
+   the end of the shot (LESSON-API-015).
 7. **Review** is Apple ProRes 422 LT, display-referred, burn-ins on. **VFX handoff** is one
    multilayer EXR per frame, scene-linear in the project's working colour space, with beauty,
    depth, normals, motion vectors and Object ID mattes, plus the sidecar file and an FBX camera
