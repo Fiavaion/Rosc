@@ -1,7 +1,8 @@
 # ADR-006: AI job interface and backends
 
 **Date:** 2026-11-11
-**Status:** Proposed — pending Spike #2 (run at the start of Phase 6)
+**Status:** Accepted 2026-11-11 after Spike #2: in-engine NNE is the default local backend for
+single-image depth
 **Deciders:** user (local and cloud both wanted, commercial distribution), Claude
 
 ## Context
@@ -34,5 +35,40 @@ open on the sample scene. In-engine NNE is the default if all hold:
 Otherwise the sidecar is the default and NNE is not shipped as a second path.
 Heavy models (segmentation, larger depth) use the sidecar regardless.
 
+## Spike #2 — result (2026-11-11)
+Depth Anything V2 Small (the `onnx-community/depth-anything-v2-small` ONNX file, 99 MB,
+Apache-2.0) run from a throwaway editor test on the RTX 5070 Ti, UE 5.8.3, through
+`NNERuntimeORTDml` (`INNERuntimeGPU`, CPU-bound tensors), on a 1920 x 1080 still rendered by
+the smoke test. End to end is: resize to 924 x 518, normalise, run, scale the depth back to
+1920 x 1080. The session is made and the model run on a worker thread. Two editor launches.
+
+| Rule | Measured | Holds |
+|---|---|---|
+| 1. Loads and runs through NNERuntimeORT with DirectML, no engine changes | Yes. The model's input and output are dynamic; the input shape is set per picture | Yes |
+| 2. One image in under 2 s end to end | 0.20 to 0.23 s once warm (18 of 20 runs). First run of a launch: 0.88 s, plus 0.29 s to make the session. First run ever on the machine: 2.23 s, plus 0.32 s | Yes, but for the first run ever on a machine |
+| 3. No game-thread hitch over 250 ms during inference | Worst tick 14 ms over about 500 ticks; making the model object on the game thread took 0.03 s | Yes |
+| 4. Ten runs without a crash or a leak over 200 MB | No crash. Process memory grew 4 to 6 MB from the first run to the tenth; loading the runtime and model costs about 360 to 400 MB once | Yes |
+
+Also measured: a picture of a new shape costs more the first time (518 x 518: 0.49 s, then
+0.05 s) and no more after; 45 MB more memory after three more shapes. The depth map was
+looked at: the subject, the floor and the horizon read correctly.
+
+Rule 2 was written without saying cold or warm. It is read here as the time a user waits for
+a picture in normal use, which it meets tenfold; the one run over 2 s was the first the
+runtime ever made on the machine. A sidecar process would start far slower than that. If the
+rule is to be read as "every run, including the first ever", it fails by 0.2 s and the user
+can overrule this acceptance.
+
+Not measured: a heavy scene drawing in a real viewport while the model runs. The game thread
+does not wait for the model, so the picture rate may dip but the editor should not hitch;
+this is a hand check.
+
 ## Consequences
-Recorded when the spike completes and this ADR is accepted.
+- `UEcineAI` depends on the engine plugin NNERuntimeORT (Beta) and its module `NNE`. The
+  in-engine backend makes the session and runs on a worker thread, one job at a time.
+- The model file is not in the plugin. The user downloads it (the AI tab says from where,
+  shows the licence, and checks the file) into the per-user UEcine models folder.
+- The first depth map of a session takes about a second longer than the rest; the job reports
+  "loading the model" as its first stage.
+- Heavy models (mattes, focal length, larger depth) run in the sidecar; the cloud backend is
+  for what the user chooses to send, behind the consent gate.
