@@ -20,7 +20,7 @@
 
 namespace
 {
-	const FIntPoint PictureSize(1920, 1080);
+	const FIntPoint StagePictureSize(1920, 1080);
 
 	// Where things appear in the picture. The camera sees 300 cm either side of centre at the cards, so 3.2 pixels per cm.
 	const FIntPoint BlackCardCentre(320, 540);
@@ -84,7 +84,7 @@ namespace
 			// Eight bits that hold the picture as displayed, like a viewport: the tone mapper encodes it and nothing re-encodes it.
 			Target->RenderTargetFormat = RTF_RGBA8;
 			Target->TargetGamma = 2.2f;
-			Target->InitAutoFormat(PictureSize.X, PictureSize.Y);
+			Target->InitAutoFormat(StagePictureSize.X, StagePictureSize.Y);
 			Target->UpdateResourceImmediate(true);
 
 			Capture = NewObject<USceneCaptureComponent2D>(GetTransientPackage());
@@ -150,7 +150,7 @@ namespace
 
 	const FColor& PixelAt(const TArray<FColor>& Pixels, FIntPoint Position)
 	{
-		return Pixels[Position.Y * PictureSize.X + Position.X];
+		return Pixels[Position.Y * StagePictureSize.X + Position.X];
 	}
 
 	// The tone mapper dithers the last bit, so a flat surface reads a level either side of its own.
@@ -172,7 +172,7 @@ namespace
 			Pixel.A = 255;
 		}
 		TArray64<uint8> Png;
-		FImageUtils::PNGCompressImageArray(PictureSize.X, PictureSize.Y, TArrayView64<const FColor>(Opaque.GetData(), Opaque.Num()), Png);
+		FImageUtils::PNGCompressImageArray(StagePictureSize.X, StagePictureSize.Y, TArrayView64<const FColor>(Opaque.GetData(), Opaque.Num()), Png);
 		FFileHelper::SaveArrayToFile(Png, *FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("UEcine"), TEXT("Screenshots"), Name));
 	}
 
@@ -210,7 +210,7 @@ bool FUEcineMonitorPictureTest::RunTest(const FString& Parameters)
 
 	// The plain picture, and where the engine's tone curve puts each card on the signal scale.
 	const TArray<FColor> Plain = Stage.Shoot(FUEcineMonitorSettings());
-	TestEqual(TEXT("The picture is 1920 x 1080"), Plain.Num(), PictureSize.X * PictureSize.Y);
+	TestEqual(TEXT("The picture is 1920 x 1080"), Plain.Num(), StagePictureSize.X * StagePictureSize.Y);
 	const FColor PlainBlack = PixelAt(Plain, BlackCardCentre);
 	const FColor PlainGrey = PixelAt(Plain, GreyCardCentre);
 	const FColor PlainBright = PixelAt(Plain, BrightCardCentre);
@@ -273,7 +273,7 @@ bool FUEcineMonitorPictureTest::RunTest(const FString& Parameters)
 		Settings.bWaveform = true;
 		Settings.bHistogram = true;
 		const TArray<FColor> Picture = Stage.Shoot(Settings);
-		const FUEcineScopeLayout Layout = GetScopeLayout(PictureSize, true, true);
+		const FUEcineScopeLayout Layout = GetScopeLayout(StagePictureSize, true, true);
 		const int32 GreyLevel = FMath::FloorToInt32(GetSignalPercent(PlainGrey) / 100.0f * FUEcineMonitorViewExtension::ScopeLevels);
 
 		// Waveform: the middle column of the picture holds the grey card, so the trace is lit at the card's level.
@@ -315,7 +315,7 @@ bool FUEcineMonitorPictureTest::RunTest(const FString& Parameters)
 		const TArray<FColor> Picture = Stage.Shoot(FUEcineMonitorSettings());
 		TestTrue(TEXT("A monitor that has not been told where to draw leaves the grey card alone"), IsNear(PixelAt(Picture, GreyCardCentre), PlainGrey));
 		TestTrue(TEXT("A monitor that has not been told where to draw leaves the bright card alone"), IsNear(PixelAt(Picture, BrightCardCentre), PlainBright));
-		const FUEcineScopeLayout Layout = GetScopeLayout(PictureSize, true, true);
+		const FUEcineScopeLayout Layout = GetScopeLayout(StagePictureSize, true, true);
 		TestTrue(TEXT("A monitor that has not been told where to draw draws no waveform"), IsNear(PixelAt(Picture, Layout.Waveform.Min + FIntPoint(40, 40)), PlainBackdrop, 4));
 	}
 
@@ -370,7 +370,7 @@ bool FUEcineMonitorOverlayTest::RunTest(const FString& Parameters)
 		}
 		Stage.Extension->SetCameraOverlays(Overlays);
 	};
-	const FIntRect Frame = GetDeliveryFrame(PictureSize, Camera.DeliveryAspect);
+	const FIntRect Frame = GetDeliveryFrame(StagePictureSize, Camera.DeliveryAspect);
 	const FColor Yellow = GetColour(EUEcineMonitorColour::Yellow);
 	const FColor Green = GetColour(EUEcineMonitorColour::Green);
 
@@ -495,7 +495,7 @@ bool FUEcineMonitorOverlayTest::RunTest(const FString& Parameters)
 		}
 		TestTrue(TEXT("Legend: each band is named in words"), CountPixels(Picture, WordsArea, IsWhite) > 600);
 
-		const FUEcineScopeLayout Layout = GetScopeLayout(PictureSize, true, true);
+		const FUEcineScopeLayout Layout = GetScopeLayout(StagePictureSize, true, true);
 		TestTrue(TEXT("The waveform is named"), CountPixels(Picture, FIntRect(Layout.Waveform.Min, Layout.Waveform.Min + FIntPoint(120, 24)), IsWhite) > 40);
 		TestTrue(TEXT("The histogram is named"), CountPixels(Picture, FIntRect(Layout.Histogram.Min, Layout.Histogram.Min + FIntPoint(120, 24)), IsWhite) > 40);
 		SavePicture(Picture, TEXT("monitor-false-colour-legend.png"));
