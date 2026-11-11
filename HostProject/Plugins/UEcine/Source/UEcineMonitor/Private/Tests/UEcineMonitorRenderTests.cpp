@@ -30,7 +30,9 @@ namespace
 	const int32 GreyCardLeftEdge = 800;
 
 	// A row of small cards along the top of the picture, each this many stops brighter than 18 % grey.
-	const float RampStops[] = { -0.25f, 0.25f, 0.75f, 1.0f, 1.25f, 2.0f, 4.0f };
+	// The tone mapper dithers the last bit, so each card is at least two levels of signal inside
+	// the band it is meant for (or outside every band), and not on a band's edge.
+	const float RampStops[] = { -0.2f, 0.2f, 0.8f, 1.0f, 1.2f, 2.0f, 4.0f };
 	FIntPoint GetRampCardCentre(int32 Index)
 	{
 		return FIntPoint(96 + 288 * Index, 156);
@@ -73,7 +75,7 @@ namespace
 			// The cubes are 100 cm; every card's front face is 300 cm from the camera.
 			AddCard(FVector(50.0, -200.0, 0.0), FVector::OneVector, 0.0f);
 			AddCard(FVector(50.0, 0.0, 0.0), FVector::OneVector, 0.18f);
-			AddCard(FVector(50.0, 200.0, 0.0), FVector::OneVector, 8.0f);
+			AddCard(FVector(50.0, 200.0, 0.0), FVector::OneVector, 16.0f);
 			AddCard(FVector(600.0, 0.0, 0.0), FVector(1.0, 40.0, 40.0), 0.08f);
 			for (int32 Index = 0; Index < UE_ARRAY_COUNT(RampStops); ++Index)
 			{
@@ -224,7 +226,7 @@ bool FUEcineMonitorPictureTest::RunTest(const FString& Parameters)
 		TestTrue(*FString::Printf(TEXT("A card %+.2f stops from grey, at %.1f %% signal, sits in the band meant for it"), RampStops[Index], Signal),
 			FindFalseColourBand(Signal) == ExpectedRampBands[Index]);
 	}
-	AddInfo(FString::Printf(TEXT("Signal through the engine's tone curve: black card %.1f %%; 18 %% grey card %.1f %%; card 5.5 stops over %.1f %%; backdrop %.1f %%;%s"),
+	AddInfo(FString::Printf(TEXT("Signal through the engine's tone curve: black card %.1f %%; 18 %% grey card %.1f %%; card 6.5 stops over %.1f %%; backdrop %.1f %%;%s"),
 		GetSignalPercent(PlainBlack), GetSignalPercent(PlainGrey), GetSignalPercent(PlainBright), GetSignalPercent(PlainBackdrop), *Ramp));
 	TestTrue(TEXT("The 18 % grey card sits in the middle grey band"), FindFalseColourBand(GetSignalPercent(PlainGrey)) == MiddleGrey);
 	TestTrue(TEXT("The black card sits in the crushed band"), FindFalseColourBand(GetSignalPercent(PlainBlack)) == Crushed);
