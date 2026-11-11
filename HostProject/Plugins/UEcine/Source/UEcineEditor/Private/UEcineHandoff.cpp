@@ -7,21 +7,26 @@
 #include "CineCameraComponent.h"
 #include "Editor.h"
 #include "Engine/World.h"
+#include "Exporters/FbxExportOption.h"
+#include "HAL/FileManager.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/PackageName.h"
 #include "Misc/ScopedSlowTask.h"
 #include "MovieScene.h"
+#include "MovieSceneBindingProxy.h"
 #include "MovieScenePossessable.h"
 #include "ObjectTools.h"
 #include "Sections/MovieScene3DTransformSection.h"
 #include "Sections/MovieSceneCameraCutSection.h"
 #include "Sections/MovieSceneCinematicShotSection.h"
 #include "Sections/MovieSceneFloatSection.h"
+#include "SequencerTools.h"
 #include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneCameraCutTrack.h"
 #include "Tracks/MovieSceneCinematicShotTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
+#include "UObject/GCObjectScopeGuard.h"
 #include "UEcineFocusEditing.h"
 #include "UEcineRig.h"
 #include "UEcineSequenceUtils.h"
@@ -226,14 +231,14 @@ namespace
 	/**
 	 * Turns the copy of a shot into one that needs no UEcine: its cameras become plain baked
 	 * cameras, and its rigs and shot list data are taken out.
+	 * @param OutBakedCameras The plain camera's binding in the copy for each camera's binding in the shot.
 	 */
-	bool MakeShotCopyPlain(ULevelSequence* ShotCopy, TConstArrayView<FHandoffCamera> Cameras)
+	bool MakeShotCopyPlain(ULevelSequence* ShotCopy, TConstArrayView<FHandoffCamera> Cameras, TMap<FGuid, FGuid>& OutBakedCameras)
 	{
 		UMovieScene* MovieScene = ShotCopy->GetMovieScene();
 		ShotCopy->RemoveMetaDataByClass(UUEcineShotMetaData::StaticClass());
 
 		TSet<FGuid> BindingsToRemove;
-		TMap<FGuid, FGuid> BakedCameras;
 		for (const FHandoffCamera& Baked : Cameras)
 		{
 			const FGuid BakedBinding = AddBakedCamera(ShotCopy, Baked);
@@ -241,7 +246,7 @@ namespace
 			{
 				return false;
 			}
-			BakedCameras.Add(Baked.Binding, BakedBinding);
+			OutBakedCameras.Add(Baked.Binding, BakedBinding);
 			BindingsToRemove.Add(Baked.Binding);
 		}
 
@@ -250,7 +255,7 @@ namespace
 			for (UMovieSceneSection* Section : CameraCuts->GetAllSections())
 			{
 				UMovieSceneCameraCutSection* Cut = CastChecked<UMovieSceneCameraCutSection>(Section);
-				if (const FGuid* BakedBinding = BakedCameras.Find(Cut->GetCameraBindingID().GetGuid()))
+				if (const FGuid* BakedBinding = OutBakedCameras.Find(Cut->GetCameraBindingID().GetGuid()))
 				{
 					Cut->SetCameraBindingID(UE::MovieScene::FRelativeObjectBindingID(*BakedBinding));
 				}
@@ -290,6 +295,32 @@ namespace
 		}
 		return true;
 	}
+
+	/** The camera a shot is seen through, of those sampled: the camera of its first camera cut, or failing that the first. */
+	const FHandoffCamera* FindCameraSeenThrough(const UEcine::ShotEditing::FShot& Shot, TConstArrayView<FHandoffCamera> Cameras)
+	{
+		const UMovieSceneCameraCutSection* FirstCut = nullptr;
+		if (const UMovieSceneTrack* CameraCuts = Shot.Sequence->GetMovieScene()->GetCameraCutTrack())
+		{
+			for (const UMovieSceneSection* Section : CameraCuts->GetAllSections())
+			{
+				const UMovieSceneCameraCutSection* Cut = Cast<UMovieSceneCameraCutSection>(Section);
+				if (Cut != nullptr && Cut->HasStartFrame() && (FirstCut == nullptr || Cut->GetInclusiveStartFrame() < FirstCut->GetInclusiveStartFrame()))
+				{
+					FirstCut = Cut;
+				}
+			}
+		}
+		if (FirstCut != nullptr)
+		{
+			const FGuid CutBinding = FirstCut->GetCameraBindingID().GetGuid();
+			if (const FHandoffCamera* Camera = Cameras.FindByPredicate([&CutBinding](const FHandoffCamera& Candidate) { return Candidate.Binding == CutBinding; }))
+			{
+				return Camera;
+			}
+		}
+		return Cameras.IsEmpty() ? nullptr : &Cameras[0];
+	}
 }
 
 FString UEcine::Handoff::GetHandoffPackageName(const ULevelSequence* Sequence)
@@ -302,7 +333,7 @@ bool UEcine::Handoff::IsHandoffCopy(const ULevelSequence* Sequence)
 	return Sequence != nullptr && Sequence->GetName().EndsWith(HandoffSuffix);
 }
 
-ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError)
+ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError, TArray<FBakedShot>* OutShots)
 {
 	ULevelSequence* OpenSequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
 	if (OpenSequence == nullptr)
@@ -318,6 +349,7 @@ ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError)
 
 	// What the cameras do is read from the sequences being worked on, before anything is copied.
 	const TArray<ShotEditing::FShot> Shots = ShotEditing::GetShots();
+	TArray<TArray<FHandoffCamera>> CamerasOfEachShot;
 	TMap<ULevelSequence*, TArray<FHandoffCamera>> CamerasOfShots;
 	{
 		FScopedSlowTask Progress(static_cast<float>(Shots.Num()), LOCTEXT("HandoffProgress", "Baking cameras for handoff"));
@@ -326,10 +358,11 @@ ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError)
 		for (const ShotEditing::FShot& Shot : Shots)
 		{
 			Progress.EnterProgressFrame();
+			const TArray<FHandoffCamera>& Cameras = CamerasOfEachShot.Add_GetRef(SampleShotCameras(OpenSequence, Shot));
 			// A shot's sequence used twice in the cut is baked as it plays the first time.
 			if (!CamerasOfShots.Contains(Shot.Sequence))
 			{
-				CamerasOfShots.Add(Shot.Sequence, SampleShotCameras(OpenSequence, Shot));
+				CamerasOfShots.Add(Shot.Sequence, Cameras);
 			}
 		}
 	}
@@ -349,6 +382,7 @@ ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError)
 	}
 	Copies.Add(OpenSequence, OpenCopy);
 
+	TMap<ULevelSequence*, TMap<FGuid, FGuid>> BakedCamerasOfShots;
 	for (const TPair<ULevelSequence*, TArray<FHandoffCamera>>& ShotCameras : CamerasOfShots)
 	{
 		ULevelSequence* ShotCopy = Copies.FindRef(ShotCameras.Key);
@@ -361,9 +395,37 @@ ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError)
 			}
 			Copies.Add(ShotCameras.Key, ShotCopy);
 		}
-		if (!MakeShotCopyPlain(ShotCopy, ShotCameras.Value))
+		if (!MakeShotCopyPlain(ShotCopy, ShotCameras.Value, BakedCamerasOfShots.Add(ShotCameras.Key)))
 		{
 			return FailToCopy(ShotCameras.Key);
+		}
+	}
+
+	if (OutShots != nullptr)
+	{
+		OutShots->Reset();
+		for (int32 ShotIndex = 0; ShotIndex < Shots.Num(); ++ShotIndex)
+		{
+			const ShotEditing::FShot& Shot = Shots[ShotIndex];
+			FBakedShot& Baked = OutShots->AddDefaulted_GetRef();
+			Baked.Name = Shot.Name;
+			Baked.Copy = Copies.FindRef(Shot.Sequence);
+			if (const FHandoffCamera* Camera = FindCameraSeenThrough(Shot, CamerasOfEachShot[ShotIndex]))
+			{
+				Baked.Camera = BakedCamerasOfShots.FindChecked(Shot.Sequence).FindRef(Camera->Binding);
+				// One sample to a frame; the sample after those is the shot's last moment, which is no frame of its own.
+				for (int32 FrameInShot = 0; FrameInShot < Shot.DurationFrames && FrameInShot < Camera->Samples.Num(); ++FrameInShot)
+				{
+					const FHandoffSample& Sample = Camera->Samples[FrameInShot];
+					FUEcineCameraSample& Frame = Baked.Samples.AddDefaulted_GetRef();
+					Frame.Frame = Shot.StartFrame.Value + FrameInShot;
+					Frame.Location = Sample.Location;
+					Frame.Rotation = Sample.Rotation;
+					Frame.FocalLengthMm = Sample.FocalLength;
+					Frame.TStop = Sample.Aperture;
+					Frame.FocusDistanceCm = Sample.FocusDistance;
+				}
+			}
 		}
 	}
 
@@ -380,6 +442,24 @@ ULevelSequence* UEcine::Handoff::BakeForHandoff(FText& OutError)
 		}
 	}
 	return OpenCopy;
+}
+
+bool UEcine::Handoff::ExportCameraFbx(ULevelSequence* CutCopy, const FBakedShot& Shot, const FString& Filename)
+{
+	if (CutCopy == nullptr || Shot.Copy == nullptr || !Shot.Camera.IsValid())
+	{
+		return false;
+	}
+
+	// The user's own FBX export choices, with the keys at the frames of the whole sequence.
+	UFbxExportOption* Options = NewObject<UFbxExportOption>();
+	const FGCObjectScopeGuard KeepOptions(Options);
+	Options->bExportLocalTime = false;
+
+	// The engine plays the copy in the level with a player of its own, so Sequencer is left alone.
+	const FSequencerExportFBXParams Export(GEditor->GetEditorWorldContext().World(), Shot.Copy, CutCopy,
+		{ FMovieSceneBindingProxy(Shot.Camera, Shot.Copy) }, {}, Options, Filename);
+	return USequencerToolsFunctionLibrary::ExportLevelSequenceFBX(Export) && IFileManager::Get().FileExists(*Filename);
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -8,11 +8,11 @@
 class SUEcineBurnIn;
 class UMovieGraphEvaluatedConfig;
 class UMovieGraphPipeline;
-class UMoviePipelineExecutorShot;
 
 /**
- * What Movie Render Graph draws over a UEcine render: the slate on a shot's first frame and
- * the camera and shot data over the others. A native widget, so the plugin ships no Blueprint.
+ * What Movie Render Graph draws over a UEcine render: the slate on the first frame kept of a
+ * shot and the camera and shot data over the others. A native widget, so the plugin ships no
+ * Blueprint.
  *
  * Everything it shows comes from the render itself: the "uecine/..." metadata of the shot's
  * graph and what the renderer says of the frame.
@@ -31,7 +31,10 @@ public:
 
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 
-	/** How many frames the renderer has told any burn-in widget about since the editor started. */
+	/**
+	 * How many frames the renderer has told any burn-in widget about since the editor started.
+	 * It tells of the frames it plays before the first one it keeps, too.
+	 */
 	static int32 GetUpdateCount();
 
 protected:
@@ -50,8 +53,4 @@ private:
 	FUEcineBurnIn BurnIn;
 	/** The picture's height in pixels; the text is sized from it. */
 	int32 PictureHeight = 1080;
-
-	/** The shot being rendered and the frame its render began on, to know the slate's frame. */
-	TWeakObjectPtr<const UMoviePipelineExecutorShot> CurrentShot;
-	FFrameNumber FirstFrameOfShot;
 };

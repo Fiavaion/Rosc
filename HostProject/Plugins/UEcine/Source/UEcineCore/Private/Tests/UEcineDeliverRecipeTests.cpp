@@ -261,6 +261,8 @@ bool FUEcineDeliverSidecarTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("It says what kind of file it is"), Root->GetStringField(TEXT("schema")), FString(TEXT("uecine.sidecar/1")));
 	TestEqual(TEXT("It names the files it goes with"), Root->GetStringField(TEXT("files")), FString(TEXT("Harbour_Night_shot0010_vfx_{version}.####.exr")));
+	TestTrue(TEXT("The sidecar goes beside the frames, named as they are without a frame number"),
+		UEcine::Deliver::GetCompanionFile(Spec, TEXT("json")).EndsWith(TEXT("/VFX/Harbour_Night_shot0010_vfx_{version}/Harbour_Night_shot0010_vfx_{version}.json")));
 	TestEqual(TEXT("It gives the picture's width"), Root->GetIntegerField(TEXT("width")), 4608);
 	TestEqual(TEXT("It gives the frame rate"), Root->GetNumberField(TEXT("framesPerSecond")), 24.0);
 	TestEqual(TEXT("It repeats the metadata"), Root->GetObjectField(TEXT("metadata"))->GetStringField(TEXT("uecine/camera/body")), FString(TEXT("ARRI ALEXA 35")));
@@ -342,6 +344,22 @@ bool FUEcineDeliverPreflightTest::RunTest(const FString& Parameters)
 	Findings = RunPreflight(Facts);
 	TestTrue(TEXT("A camera with no camera package is one finding, and its frame rate is not asked about"),
 		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::CameraWithoutPackage && !Findings[0].bStopsRender);
+
+	// A slate is the frame before its shot, and a shot on the first frame of the sequence has none before it.
+	Facts = MakeCleanPreflightFacts(EUEcineDeliverIntent::Review);
+	Facts.bSlate = true;
+	Facts.Shots[0].StartFrame = 0;
+	Findings = RunPreflight(Facts);
+	TestTrue(TEXT("A slated shot on the first frame of the sequence is found, and can still be delivered"),
+		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::SlateBeforeSequenceStart && !Findings[0].bStopsRender);
+	Facts.Shots[0].StartFrame = 1;
+	TestTrue(TEXT("A slated shot with a frame before it is not found"), RunPreflight(Facts).IsEmpty());
+	Facts.Shots[0].StartFrame = 0;
+	Facts.bSlate = false;
+	TestTrue(TEXT("With no slate there is nothing to fall before the sequence"), RunPreflight(Facts).IsEmpty());
+	Facts.bSlate = true;
+	Facts.Intent = EUEcineDeliverIntent::Master;
+	TestTrue(TEXT("Only review movies have slates"), RunPreflight(Facts).IsEmpty());
 
 	Facts = MakeCleanPreflightFacts(EUEcineDeliverIntent::Master);
 	Facts.Shots[0].CameraCutCount = 2;

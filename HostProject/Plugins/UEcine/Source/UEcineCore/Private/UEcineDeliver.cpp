@@ -360,6 +360,12 @@ FString UEcine::Deliver::PreviewFile(EUEcineDeliverIntent Intent, const FUEcineR
 	return WithVersion(File, 1);
 }
 
+FString UEcine::Deliver::GetCompanionFile(const FUEcineRenderSpec& Spec, const TCHAR* Extension)
+{
+	const FString Name = Spec.FileName.Replace(*(FString(TEXT(".")) + FrameToken), TEXT("")).Replace(FrameToken, TEXT(""));
+	return Spec.OutputDirectory / Name + TEXT(".") + Extension;
+}
+
 FUEcineSlate UEcine::Deliver::MakeSlate(const TMap<FString, FString>& Metadata)
 {
 	const auto Get = [&Metadata](const TCHAR* Name) { return Metadata.FindRef(Name); };
@@ -560,6 +566,20 @@ TArray<FUEcinePreflightFinding> UEcine::Deliver::RunPreflight(const FUEcinePrefl
 			LOCTEXT("PreflightColourSpace", "The project does not work in ACEScg"),
 			LOCTEXT("PreflightColourSpaceDetail", "Visual effects usually ask for ACEScg. The files will be scene-linear in the project's own colour space, and say so. Changing the project's working colour space needs the editor to be restarted, and changes how colours in the project are read."),
 			LOCTEXT("PreflightColourSpaceFix", "Work in ACEScg")));
+	}
+
+	if (Facts.Intent == EUEcineDeliverIntent::Review && Facts.bSlate)
+	{
+		for (const FUEcinePreflightShot& Shot : Facts.Shots)
+		{
+			// The slate is the frame before the shot's first.
+			if (Shot.StartFrame < 1)
+			{
+				Findings.Add(MakeFinding(EUEcinePreflightCheck::SlateBeforeSequenceStart, false, Shot.Name,
+					LOCTEXT("PreflightSlateBeforeStart", "The slate falls before the start of the sequence"),
+					LOCTEXT("PreflightSlateBeforeStartDetail", "The shot starts on the first frame of the sequence, so its slate has no timecode of its own and the timecode of its movie cannot be trusted. Start the sequence later in Sequencer (at one hour is usual), or deliver without a slate.")));
+			}
+		}
 	}
 
 	// The findings that stop the render first, each kind in the order found.

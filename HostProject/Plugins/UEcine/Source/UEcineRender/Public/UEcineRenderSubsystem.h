@@ -51,7 +51,11 @@ public:
 
 	bool IsRendering() const;
 
-	/** Stops the render that is running. It ends as a render that did not succeed. */
+	/**
+	 * Stops the render that is running. It ends as a render that did not succeed, over the
+	 * following editor frames like any other: see IsRendering and OnRenderFinished. What it had
+	 * written by then stays.
+	 */
 	void CancelRender();
 
 	/** From 0 to 1 while a render runs. */
@@ -66,8 +70,8 @@ public:
 private:
 	void HandleJobFinished(FMoviePipelineOutputData Output);
 	void HandleExecutorFinished(UMoviePipelineExecutorBase* FinishedExecutor, bool bSuccess);
-	/** Ends the render once the engine has let go of it. */
-	bool FinishWhenReleased(float DeltaTime);
+	/** Watches the render every editor frame: stops it when asked, and ends it once the engine has let go of it. */
+	bool WatchRender(float DeltaTime);
 
 	UPROPERTY()
 	TObjectPtr<UMoviePipelineQueue> Queue;
@@ -81,5 +85,11 @@ private:
 
 	FUEcineRenderResult LastResult;
 	FOnRenderFinished RenderFinished;
+	/** The engine has said the render is over. It says so as soon as a render fails, before it has let go of it. */
+	bool bExecutorEnded = false;
 	bool bExecutorFailed = false;
+	bool bStopRequested = false;
+	/** How the editor kept time before the render, which keeps its own. */
+	bool bFixedTimeStepBefore = false;
+	double FixedDeltaTimeBefore = 0.0;
 };

@@ -3,6 +3,7 @@
 #include "Framework/Docking/TabManager.h"
 #include "Modules/ModuleManager.h"
 #include "SUEcinePanel.h"
+#include "UEcineDeliverEditing.h"
 #include "UEcineStyle.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "WorkspaceMenuStructure.h"
@@ -15,6 +16,7 @@ const FName FUEcineEditorModule::PanelTabId(TEXT("UEcinePanel"));
 void FUEcineEditorModule::StartupModule()
 {
 	FUEcineStyle::Register();
+	UEcine::DeliverEditing::NoteColourSpaceAtStartup();
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(PanelTabId, FOnSpawnTab::CreateRaw(this, &FUEcineEditorModule::SpawnPanelTab))
 		.SetDisplayName(LOCTEXT("PanelTabTitle", "UEcine"))

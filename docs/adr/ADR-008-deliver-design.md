@@ -121,6 +121,28 @@ What the run added to the design:
 - The output frame must have the shape of the camera's frame, or the picture is boxed inside
   it: the recipes size each render from the recording format and delivery frame.
 
+## Decisions added while building the editor side (2026-11-11)
+- **A delivery has one version.** UEcine fills in `{version}` itself: the latest version of any
+  of the delivery's names already in the intent's folder, plus one, for every shot. The
+  engine's own version counting is per file and would number the shots of one delivery apart.
+- **Where files go.** `<delivery folder>/<sequence>/<Review|VFX|Master>/`. A VFX shot's frames
+  are in a folder of the shot's file name, with its sidecar (`.json`) and camera (`.fbx`)
+  beside them under the same name. The delivery folder defaults to `Saved/UEcine/Deliveries`.
+- **A VFX handoff bakes for handoff first**, replacing the sequence's `_Handoff` copies, and
+  each shot's FBX camera is exported from its copy at the time it has in the whole sequence.
+- **One camera per shot.** A shot that cuts between cameras stops the render in preflight: its
+  files could name only one camera package.
+- **The colour space named in the files is the one the editor started in.** "Work in ACEScg"
+  writes the project's setting and nothing else; it takes effect at the next start and is not
+  undone with the editor's undo.
+- **Preflight runs when asked**, not continuously: it plays to the start of each shot to find
+  the camera the shot spawns.
+- **Stop ends the play session the render runs in**, which is how the engine stops a render
+  itself. A render is over only when that session is gone (LESSON-API-014). What a stopped
+  render had written stays on disk.
+- **The slate is drawn on the first frame the renderer keeps**, asked of the shot: the renderer
+  also plays warm-up frames before it (LESSON-TEST-006).
+
 ## Consequences
 - ✅ One code path for the panel button and the acceptance test.
 - ✅ Graphs are standard data; nothing of UEcine is needed to load one.
@@ -130,6 +152,12 @@ What the run added to the design:
 - ❌ ACEScg depends on a project setting; without it VFX handoff files are scene-linear in
   Rec.709 primaries and say so.
 - ❌ The editor is busy while a render runs (the engine's own local render behaves the same).
+- ❌ The slate of a shot that starts on the first frame of the sequence is one frame before
+  it, so the movie's timecode starts a frame early. Preflight says so and how to avoid it.
+- ❌ A shot sequence used twice in a cut is baked as it plays the first time: the FBX camera of
+  its second use is that of the first (its sidecar is its own).
+- ❌ Exporting an FBX camera spawns the sequence's cameras in the editor level for a moment,
+  as the engine's own export does.
 
 ## Alternatives considered
 1. Saved graph assets in the plugin's content, adjusted by job variables — rejected: binary

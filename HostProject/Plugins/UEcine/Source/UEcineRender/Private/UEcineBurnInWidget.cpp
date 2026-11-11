@@ -190,19 +190,17 @@ void UUEcineBurnInWidget::UpdateForFrame(const UMovieGraphPipeline* Pipeline, co
 		}
 	}
 
-	// The slate takes the first frame rendered of each shot.
+	// The slate takes the first frame kept of each shot. The renderer tells of the frames it plays
+	// before that one too, so the frame is asked of the shot and not counted here.
 	const FFrameNumber RootFrame = UMovieGraphBlueprintLibrary::GetRootFrameNumber(Pipeline);
 	const UMoviePipelineExecutorShot* Shot = UMovieGraphBlueprintLibrary::GetCurrentExecutorShot(Pipeline);
-	if (Shot != CurrentShot.Get())
-	{
-		CurrentShot = Shot;
-		FirstFrameOfShot = RootFrame;
-	}
+	const bool bFirstFrameKept = Shot != nullptr && Shot->ShotInfo.TotalOutputRangeRoot.HasLowerBound()
+		&& RootFrame == FFrameRate::TransformTime(FFrameTime(Shot->ShotInfo.TotalOutputRangeRoot.GetLowerBoundValue()), Shot->ShotInfo.CachedTickResolution, Shot->ShotInfo.CachedFrameRate).FloorToFrame();
 
 	Slate = FUEcineSlate();
 	BurnIn = FUEcineBurnIn();
 	PictureHeight = UMovieGraphBlueprintLibrary::GetDesiredOutputResolution(const_cast<UMovieGraphEvaluatedConfig*>(Config)).Y;
-	if (Metadata.Contains(UEcine::Deliver::SlateMetadataName) && RootFrame == FirstFrameOfShot)
+	if (Metadata.Contains(UEcine::Deliver::SlateMetadataName) && bFirstFrameKept)
 	{
 		Slate = UEcine::Deliver::MakeSlate(Metadata);
 	}

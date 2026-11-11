@@ -4,6 +4,7 @@
 #include "Editor.h"
 #include "Graph/MovieGraphConfig.h"
 #include "LevelSequence.h"
+#include "Misc/App.h"
 #include "MoviePipelinePIEExecutor.h"
 #include "MoviePipelineQueue.h"
 #include "MoviePipelineQueueSubsystem.h"
@@ -37,7 +38,8 @@ bool UUEcineRenderSubsystem::StartRender(ULevelSequence* Sequence, TConstArrayVi
 	TArray<TObjectPtr<UMovieGraphConfig>> NewGraphs;
 	for (UMoviePipelineExecutorShot* JobShot : Job->ShotInfo)
 	{
-		const FUEcineRenderShot* Shot = Shots.FindByPredicate([JobShot](const FUEcineRenderShot& Candidate) { return Candidate.ShotName == JobShot->OuterName; });
+		// A sequence that is not cut into shots is one shot to the renderer too, under a name of the renderer's own.
+		const FUEcineRenderShot* Shot = Shots.FindByPredicate([JobShot](const FUEcineRenderShot& Candidate) { return Candidate.ShotName.IsEmpty() || Candidate.ShotName == JobShot->OuterName; });
 		UE_LOGF(LogUEcine, Verbose, "Render: the sequence has shot '%ls' (camera '%ls'): %ls", *JobShot->OuterName, *JobShot->InnerName, Shot != nullptr ? TEXT("rendered") : TEXT("left out"));
 		if (Shot == nullptr)
 		{
@@ -67,7 +69,9 @@ bool UUEcineRenderSubsystem::StartRender(ULevelSequence* Sequence, TConstArrayVi
 	Queue = NewQueue;
 	Graphs = MoveTemp(NewGraphs);
 	LastResult = FUEcineRenderResult();
-	bExecutorFailed = false;
+	bExecutorEnded = bExecutorFailed = bStopRequested = false;
+	bFixedTimeStepBefore = FApp::UseFixedTimeStep();
+	FixedDeltaTimeBefore = FApp::GetFixedDeltaTime();
 
 	Executor = NewObject<UMoviePipelinePIEExecutor>(this);
 	// The level is rendered as it stands in the editor, saved or not.
@@ -75,6 +79,7 @@ bool UUEcineRenderSubsystem::StartRender(ULevelSequence* Sequence, TConstArrayVi
 	Executor->OnIndividualJobWorkFinished().AddUObject(this, &UUEcineRenderSubsystem::HandleJobFinished);
 	Executor->OnExecutorFinished().AddUObject(this, &UUEcineRenderSubsystem::HandleExecutorFinished);
 	EngineQueue->RenderQueueInstanceWithExecutorInstance(Queue, Executor);
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UUEcineRenderSubsystem::WatchRender));
 	return true;
 }
 
@@ -85,10 +90,10 @@ bool UUEcineRenderSubsystem::IsRendering() const
 
 void UUEcineRenderSubsystem::CancelRender()
 {
-	if (Executor != nullptr)
-	{
-		Executor->CancelAllJobs();
-	}
+	// The render runs in a play session the editor starts a frame after the render does, and a
+	// render stopped before then would leave that session running. So the stop waits for it:
+	// see WatchRender.
+	bStopRequested |= Executor != nullptr;
 }
 
 float UUEcineRenderSubsystem::GetProgress() const
@@ -114,24 +119,47 @@ void UUEcineRenderSubsystem::HandleJobFinished(FMoviePipelineOutputData Output)
 
 void UUEcineRenderSubsystem::HandleExecutorFinished(UMoviePipelineExecutorBase* FinishedExecutor, bool bSuccess)
 {
-	// The engine reports a failure or a stop at once and may report the end again later, so the
-	// render is treated as over only when the engine's queue has let go of the executor.
+	// The engine reports a failure at once, while its play session still runs, and reports the
+	// end again when it has let go: WatchRender decides when the render is over (LESSON-API-014).
+	bExecutorEnded = true;
 	bExecutorFailed |= !bSuccess;
-	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UUEcineRenderSubsystem::FinishWhenReleased));
 }
 
-bool UUEcineRenderSubsystem::FinishWhenReleased(float DeltaTime)
+bool UUEcineRenderSubsystem::WatchRender(float DeltaTime)
 {
 	if (Executor == nullptr)
 	{
 		return false;
 	}
-	if (GEditor->GetEditorSubsystem<UMoviePipelineQueueSubsystem>()->IsRendering())
+
+	if (!bExecutorEnded && !Executor->IsRendering() && !GEditor->IsPlaySessionInProgress())
+	{
+		// The editor did not start the play session the render runs in, and the engine's executor
+		// would wait for it for good: it would take the next play session for its own. It is told
+		// to give up, which makes it report its end.
+		FEditorDelegates::PostPIEStarted.RemoveAll(Executor);
+		Executor->CancelAllJobs();
+	}
+
+	// Ending the play session is how the engine stops a render too (it is what Escape does): the
+	// render writes out what it has and the executor reports its end. A render that failed without
+	// ending its session is ended the same way.
+	if ((bStopRequested || bExecutorEnded) && GEditor->PlayWorld != nullptr && !GEditor->ShouldEndPlayMap())
+	{
+		GEditor->RequestEndPlayMap();
+	}
+
+	if (!bExecutorEnded || Executor->IsRendering() || GEditor->IsPlaySessionInProgress())
 	{
 		return true;
 	}
 
-	LastResult.bSuccess = !bExecutorFailed;
+	// The engine puts the editor's time keeping back as its play session ends, and not when the
+	// session never started.
+	FApp::SetUseFixedTimeStep(bFixedTimeStepBefore);
+	FApp::SetFixedDeltaTime(FixedDeltaTimeBefore);
+
+	LastResult.bSuccess = !bExecutorFailed && !bStopRequested;
 	Executor = nullptr;
 	Queue = nullptr;
 	Graphs.Reset();

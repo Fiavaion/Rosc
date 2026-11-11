@@ -32,7 +32,7 @@ struct FUEcineRenderSpec
 	FString OutputDirectory;
 	/**
 	 * The file's name without its extension; it may begin with folders. It may hold the
-	 * renderer's own tokens: {frame_number} for the frame and {version} for the version of the render.
+	 * renderer's own token for the frame, {frame_number}.
 	 */
 	FString FileName;
 	/** The picture's size in pixels. */
@@ -191,13 +191,17 @@ enum class EUEcinePreflightCheck : uint8
 	/** A camera's exposure is left to adapt by itself, so brightness drifts during the shot. */
 	AutoExposure,
 	/** A VFX handoff is asked for and the project does not work in ACEScg. */
-	WorkingColourSpace
+	WorkingColourSpace,
+	/** A review movie's slate falls before the first frame of the sequence, where there is no timecode for it. */
+	SlateBeforeSequenceStart
 };
 
 /** What preflight is told of one shot. */
 struct FUEcinePreflightShot
 {
 	FString Name;
+	/** The frame of the sequence the shot starts on. */
+	int32 StartFrame = 0;
 	bool bHasCamera = false;
 	/** How many camera cuts the shot is made of. */
 	int32 CameraCutCount = 0;
@@ -213,6 +217,8 @@ struct FUEcinePreflightFacts
 	EUEcineDeliverIntent Intent = EUEcineDeliverIntent::Review;
 	bool bHasSequence = false;
 	double SequenceFramesPerSecond = 0.0;
+	/** Review movies open with a slate. */
+	bool bSlate = false;
 	/** The colour space the editor is working in now. */
 	bool bWorkingSpaceIsAcesCg = false;
 	/** ACEScg has been chosen for the project and waits for the editor to be restarted. */
@@ -275,7 +281,8 @@ namespace UEcine::Deliver
 	/**
 	 * A shot's file name from a pattern, without folder or extension. Tokens are replaced by
 	 * the shot's own words, made safe for file names; a token with nothing to say leaves no
-	 * gap. {version} is left for the renderer, which counts the versions already in the folder.
+	 * gap. {version} is left in: one version is counted for the whole delivery, from the files
+	 * already in its folder (see ReadVersion), and written into every shot's name (see WithVersion).
 	 */
 	UECINECORE_API FString ResolveFileName(const FString& Pattern, EUEcineDeliverIntent Intent, const FUEcineDeliverSettings& Settings, const FUEcineDeliverShot& Shot);
 
@@ -300,6 +307,12 @@ namespace UEcine::Deliver
 	 * "Review/Cut_shot0010_review_v001.mov".
 	 */
 	UECINECORE_API FString PreviewFile(EUEcineDeliverIntent Intent, const FUEcineRenderSpec& Spec);
+
+	/**
+	 * The path of a file that goes with a spec's own and is named as they are, without a frame
+	 * number: the sidecar ("json") and the camera ("fbx") of a VFX handoff.
+	 */
+	UECINECORE_API FString GetCompanionFile(const FUEcineRenderSpec& Spec, const TCHAR* Extension);
 
 	/** The folder under a delivery's output folder that an intent's files go in. */
 	UECINECORE_API const TCHAR* GetIntentFolder(EUEcineDeliverIntent Intent);
