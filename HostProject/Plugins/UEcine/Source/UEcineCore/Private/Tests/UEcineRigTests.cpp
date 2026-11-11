@@ -184,6 +184,15 @@ bool FUEcineRigKinematicsTest::RunTest(const FString& Parameters)
 
 	TestEqual(TEXT("Distances are shown in the chosen units"), *FormatAxisValue(EUEcineRigAxis::Extension, 670.0, EUEcineDistanceUnits::Metric).ToString(), TEXT("6.7 m"));
 	TestEqual(TEXT("Angles are shown in degrees"), *FormatAxisValue(EUEcineRigAxis::Boom, 22.5, EUEcineDistanceUnits::Metric).ToString(), TEXT("22.5°"));
+
+	// What is shown can be typed back in.
+	TestEqual(TEXT("A typed distance is read in centimetres"), ParseAxisValue(EUEcineRigAxis::Extension, TEXT("6.7 m"), EUEcineDistanceUnits::Metric).Get(0.0), 670.0, 1.e-6);
+	TestEqual(TEXT("A typed imperial distance"), ParseAxisValue(EUEcineRigAxis::Extension, TEXT("22' 0\""), EUEcineDistanceUnits::Imperial).Get(0.0), 670.56, 1.e-6);
+	TestEqual(TEXT("A typed angle with its degree sign"), ParseAxisValue(EUEcineRigAxis::Boom, TEXT("22.5°"), EUEcineDistanceUnits::Metric).Get(0.0), 22.5, 1.e-6);
+	TestEqual(TEXT("A typed angle without it"), ParseAxisValue(EUEcineRigAxis::Boom, TEXT("-10"), EUEcineDistanceUnits::Metric).Get(0.0), -10.0, 1.e-6);
+	TestFalse(TEXT("Words are not an angle"), ParseAxisValue(EUEcineRigAxis::Boom, TEXT("up a bit"), EUEcineDistanceUnits::Metric).IsSet());
+	TestFalse(TEXT("Nothing is not an angle"), ParseAxisValue(EUEcineRigAxis::Boom, TEXT("°"), EUEcineDistanceUnits::Metric).IsSet());
+	TestFalse(TEXT("Words are not a distance"), ParseAxisValue(EUEcineRigAxis::Extension, TEXT("long"), EUEcineDistanceUnits::Metric).IsSet());
 	return true;
 }
 
@@ -304,6 +313,13 @@ bool FUEcineMoveLimitsTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("Acceleration the move asks for"), TooAbrupt->Value, 626.667, 0.01);
 			TestEqual(TEXT("Shortest duration that fixes the acceleration"), TooAbrupt->MinimumDurationSeconds, 3.5402, 0.001);
 		}
+
+		// More time fixes both, so only the one that needs the most time is worth showing.
+		const TArray<FUEcineMoveFinding> Shown = MostLimiting(Findings);
+		if (TestEqual(TEXT("One finding is shown for a move that is simply too quick"), Shown.Num(), 1))
+		{
+			TestTrue(TEXT("It is the one that needs the most time"), Shown[0].Problem == EUEcineMoveProblem::TooAbrupt);
+		}
 	}
 
 	// Taking the suggested time clears the findings.
@@ -327,6 +343,14 @@ bool FUEcineMoveLimitsTest::RunTest(const FString& Parameters)
 		const TArray<FUEcineMoveFinding> Findings = Check(Crane.Spec, Start, TooFar, MakeTiming(20.0, 0.25, 0.25));
 		const FUEcineMoveFinding* Above = FindFinding(Findings, EUEcineRigAxis::Extension, EUEcineMoveProblem::AboveRange);
 		TestEqual(TEXT("Only the reach is flagged"), Findings.Num(), 1);
+
+		// Out of reach and too quick: time cannot fix the reach, so both things are shown.
+		const TArray<FUEcineMoveFinding> Shown = MostLimiting(Check(Crane.Spec, Start, TooFar, MakeTiming(2.0, 0.25, 0.25)));
+		if (TestEqual(TEXT("A reach problem is shown beside the timing problem"), Shown.Num(), 2))
+		{
+			TestTrue(TEXT("The reach problem comes first"), Shown[0].Problem == EUEcineMoveProblem::AboveRange);
+			TestTrue(TEXT("The timing problem shown needs time"), Shown[1].MinimumDurationSeconds > 0.0);
+		}
 		if (TestNotNull(TEXT("Past full reach is flagged"), Above))
 		{
 			TestEqual(TEXT("The reach limit is reported"), Above->Limit, 670.0);

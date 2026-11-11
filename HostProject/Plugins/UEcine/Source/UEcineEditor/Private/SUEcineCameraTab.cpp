@@ -3,9 +3,7 @@
 #include "CineCameraActor.h"
 #include "Editor.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
-#include "Framework/Notifications/NotificationManager.h"
 #include "SUEcineStepper.h"
-#include "Styling/AppStyle.h"
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
@@ -15,110 +13,21 @@
 #include "UEcineOptics.h"
 #include "UEcineStyle.h"
 #include "UEcineUnits.h"
-#include "Widgets/Images/SImage.h"
-#include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboButton.h"
-#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SWrapBox.h"
-#include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
 #define LOCTEXT_NAMESPACE "UEcineEditor"
 
+using namespace UEcine::Widgets;
+
 namespace
 {
 	using UEcine::Units::FormatNumber;
-
-	const FTextBlockStyle& TextStyle(const FName StyleName)
-	{
-		return FUEcineStyle::Get().GetWidgetStyle<FTextBlockStyle>(StyleName);
-	}
-
-	TSharedRef<SWidget> MakeSectionHeader(const FText& Title)
-	{
-		return SNew(STextBlock)
-			.TextStyle(&TextStyle("UEcine.SectionHeader"))
-			.Text(Title)
-			.TransformPolicy(ETextTransformPolicy::ToUpper);
-	}
-
-	/** A label on the left and a control filling the rest of the row. */
-	TSharedRef<SWidget> MakeRow(const FText& Label, const FText& LabelToolTip, const TSharedRef<SWidget>& Control)
-	{
-		return SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			[
-				SNew(SBox)
-				.WidthOverride(FUEcineStyle::LabelColumnWidth)
-				[
-					SNew(STextBlock)
-					.TextStyle(&TextStyle("UEcine.Label"))
-					.Text(Label)
-					.ToolTipText(LabelToolTip)
-				]
-			]
-			+ SHorizontalBox::Slot()
-			.FillWidth(1.0f)
-			.VAlign(VAlign_Center)
-			[
-				Control
-			];
-	}
-
-	/** A derived number the user reads but does not edit. */
-	TSharedRef<SWidget> MakeReadoutRow(const FText& Label, const FText& ToolTip, TAttribute<FText> Value)
-	{
-		return SNew(SHorizontalBox)
-			.ToolTipText(ToolTip)
-			+ SHorizontalBox::Slot()
-			.FillWidth(1.0f)
-			.VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.TextStyle(&TextStyle("UEcine.Label"))
-				.Text(Label)
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			.VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.TextStyle(&TextStyle("UEcine.Readout"))
-				.Text(MoveTemp(Value))
-			];
-	}
-
-	/** A centred message with one action, shown when there is nothing to edit yet. */
-	TSharedRef<SWidget> MakeEmptyState(const FText& Message, const FText& ButtonLabel, const FText& ButtonToolTip, FOnClicked OnClicked)
-	{
-		return SNew(SVerticalBox)
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0.0f, 24.0f, 0.0f, 12.0f)
-			[
-				SNew(STextBlock)
-				.TextStyle(&TextStyle("UEcine.Body"))
-				.Text(Message)
-				.AutoWrapText(true)
-				.Justification(ETextJustify::Center)
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.HAlign(HAlign_Center)
-			[
-				SNew(SButton)
-				.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("PrimaryButton"))
-				.Text(ButtonLabel)
-				.ToolTipText(ButtonToolTip)
-				.OnClicked(MoveTemp(OnClicked))
-			];
-	}
 
 	FText FormatSensor(const FUEcineRecordingFormat& Format)
 	{
@@ -150,11 +59,6 @@ void SUEcineCameraTab::Construct(const FArguments& InArgs, const TSharedRef<FUEc
 	RebuildLayout();
 }
 
-SUEcineCameraTab::~SUEcineCameraTab()
-{
-	EndDrag();
-}
-
 void SUEcineCameraTab::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
 	const FLayoutKey NewKey = MakeLayoutKey();
@@ -180,23 +84,15 @@ SUEcineCameraTab::FLayoutKey SUEcineCameraTab::MakeLayoutKey() const
 
 void SUEcineCameraTab::RebuildLayout()
 {
-	EndDrag();
 	WarningsBox.Reset();
 	bResolvedValid = false;
 	bResolveCacheValid = false;
 
+	// With no camera at all the panel shows its own invitation to make one.
 	TSharedRef<SWidget> Content = SNullWidget::NullWidget;
-	if (!CurrentLayoutKey.Camera.IsValid())
+	if (CurrentLayoutKey.Camera.IsValid())
 	{
-		Content = BuildNoCameraState();
-	}
-	else if (!CurrentLayoutKey.bHasPackage)
-	{
-		Content = BuildNoPackageState();
-	}
-	else
-	{
-		Content = BuildPackageEditor();
+		Content = CurrentLayoutKey.bHasPackage ? BuildPackageEditor() : BuildNoPackageState();
 	}
 
 	ChildSlot
@@ -246,35 +142,10 @@ void SUEcineCameraTab::RefreshResolvedCamera()
 			.AutoHeight()
 			.Padding(0.0f, FUEcineStyle::SectionSpacing, 0.0f, 0.0f)
 			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Top)
-				.Padding(0.0f, 1.0f, 6.0f, 0.0f)
-				[
-					SNew(SImage)
-					.Image(FAppStyle::Get().GetBrush("Icons.WarningWithColor"))
-				]
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.0f)
-				[
-					SNew(STextBlock)
-					.TextStyle(&TextStyle("UEcine.Body"))
-					.Text(FText::Format(LOCTEXT("WarningPrefix", "Warning: {0}"), Message))
-					.AutoWrapText(true)
-				]
+				MakeWarning(FText::Format(LOCTEXT("WarningPrefix", "Warning: {0}"), Message))
 			];
 		}
 	}
-}
-
-TSharedRef<SWidget> SUEcineCameraTab::BuildNoCameraState()
-{
-	return MakeEmptyState(
-		LOCTEXT("NoCameraMessage", "There is no camera to work on yet. Create one at the current viewport position, or select a Cine Camera Actor in the level."),
-		LOCTEXT("NewCameraButton", "New Camera"),
-		LOCTEXT("NewCameraToolTip", "Create a Cine Camera Actor where the viewport is looking from, with a camera package ready to edit."),
-		FOnClicked::CreateSP(this, &SUEcineCameraTab::OnNewCameraClicked));
 }
 
 TSharedRef<SWidget> SUEcineCameraTab::BuildNoPackageState()
@@ -366,10 +237,22 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 	FrameRateControl->SetValue = [](FUEcineCameraPackage& Package, double Value) { Package.FramesPerSecond = static_cast<float>(Value); };
 	FrameRateControl->FormatValue = [](double Value) { return FText::Format(LOCTEXT("FrameRateValue", "{0} fps"), FormatNumber(Value, 3)); };
 
-	const FText ZoomToolTip = LOCTEXT("ZoomToolTip", "Focal length of the zoom lens, in millimetres.");
-	const FText ZoomTransaction = LOCTEXT("ZoomTransaction", "Zoom");
-	const FText CompensationToolTip = LOCTEXT("CompensationToolTip", "Brightens (positive) or darkens the image in stops, on top of the physical exposure. Use it when the scene is not lit at real-world levels.");
-	const FText CompensationTransaction = LOCTEXT("CompensationTransaction", "Change Exposure Offset");
+	FSpinBoxArgs Zoom;
+	Zoom.Name = LOCTEXT("ZoomLabel", "Zoom");
+	Zoom.ToolTip = LOCTEXT("ZoomToolTip", "Focal length of the zoom lens, in millimetres.");
+	Zoom.TransactionName = LOCTEXT("ZoomTransaction", "Zoom");
+	Zoom.MinValue = TAttribute<TOptional<float>>::CreateSPLambda(this, [this] { return TOptional<float>(static_cast<float>(Resolved.MinFocalLengthMm)); });
+	Zoom.MaxValue = TAttribute<TOptional<float>>::CreateSPLambda(this, [this] { return TOptional<float>(static_cast<float>(Resolved.MaxFocalLengthMm)); });
+
+	FSpinBoxArgs Compensation;
+	Compensation.Name = LOCTEXT("CompensationLabel", "Offset");
+	Compensation.ToolTip = LOCTEXT("CompensationToolTip", "Brightens (positive) or darkens the image in stops, on top of the physical exposure. Use it when the scene is not lit at real-world levels.");
+	Compensation.TransactionName = LOCTEXT("CompensationTransaction", "Change Exposure Offset");
+	Compensation.MinValue = TOptional<float>(-15.0f);
+	Compensation.MaxValue = TOptional<float>(15.0f);
+	Compensation.MinSliderValue = -6.0f;
+	Compensation.MaxSliderValue = 6.0f;
+	Compensation.Delta = 0.1f;
 
 	const FMargin RowPadding(0.0f, FUEcineStyle::RowSpacing, 0.0f, 0.0f);
 	const FMargin SectionPadding(0.0f, FUEcineStyle::SectionSpacing, 0.0f, 0.0f);
@@ -455,34 +338,9 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 			SNew(SBox)
 			.Visibility_Lambda([this] { return bResolvedValid && Resolved.MaxFocalLengthMm > Resolved.MinFocalLengthMm ? EVisibility::Visible : EVisibility::Collapsed; })
 			[
-				MakeRow(
-					LOCTEXT("ZoomLabel", "Zoom"),
-					ZoomToolTip,
-					SNew(SSpinBox<float>)
-					.ToolTipText(ZoomToolTip)
-					.MinValue_Lambda([this] { return TOptional<float>(static_cast<float>(Resolved.MinFocalLengthMm)); })
-					.MaxValue_Lambda([this] { return TOptional<float>(static_cast<float>(Resolved.MaxFocalLengthMm)); })
-					.MinSliderValue_Lambda([this] { return TOptional<float>(static_cast<float>(Resolved.MinFocalLengthMm)); })
-					.MaxSliderValue_Lambda([this] { return TOptional<float>(static_cast<float>(Resolved.MaxFocalLengthMm)); })
-					.Delta(1.0f)
-					.MaxFractionalDigits(1)
-					.Value_Lambda([this] { return GetPackage().FocalLengthMm; })
-					.OnBeginSliderMovement_Lambda([this, ZoomTransaction] { BeginDrag(ZoomTransaction); })
-					.OnValueChanged_Lambda([this](float NewValue)
-					{
-						if (bDragTransactionOpen)
-						{
-							DragEdit([NewValue](FUEcineCameraPackage& Package) { Package.FocalLengthMm = NewValue; });
-						}
-					})
-					.OnEndSliderMovement_Lambda([this](float) { EndDrag(); })
-					.OnValueCommitted_Lambda([this, ZoomTransaction](float NewValue, ETextCommit::Type)
-					{
-						if (!bDragTransactionOpen && !FMath::IsNearlyEqual(NewValue, GetPackage().FocalLengthMm))
-						{
-							Edit(ZoomTransaction, [NewValue](FUEcineCameraPackage& Package) { Package.FocalLengthMm = NewValue; });
-						}
-					}))
+				MakeRow(Zoom.Name, Zoom.ToolTip, MakePackageSpinBox(Zoom,
+					[](const FUEcineCameraPackage& Package) { return Package.FocalLengthMm; },
+					[](FUEcineCameraPackage& Package, float Value) { Package.FocalLengthMm = Value; }))
 			]
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
@@ -611,34 +469,9 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 			SNew(SBox)
 			.IsEnabled_Lambda([this] { return GetPackage().bPhysicalExposure; })
 			[
-				MakeRow(
-					LOCTEXT("CompensationLabel", "Offset"),
-					CompensationToolTip,
-					SNew(SSpinBox<float>)
-					.ToolTipText(CompensationToolTip)
-					.MinValue(-15.0f)
-					.MaxValue(15.0f)
-					.MinSliderValue(-6.0f)
-					.MaxSliderValue(6.0f)
-					.Delta(0.1f)
-					.MaxFractionalDigits(1)
-					.Value_Lambda([this] { return GetPackage().ExposureCompensationStops; })
-					.OnBeginSliderMovement_Lambda([this, CompensationTransaction] { BeginDrag(CompensationTransaction); })
-					.OnValueChanged_Lambda([this](float NewValue)
-					{
-						if (bDragTransactionOpen)
-						{
-							DragEdit([NewValue](FUEcineCameraPackage& Package) { Package.ExposureCompensationStops = NewValue; });
-						}
-					})
-					.OnEndSliderMovement_Lambda([this](float) { EndDrag(); })
-					.OnValueCommitted_Lambda([this, CompensationTransaction](float NewValue, ETextCommit::Type)
-					{
-						if (!bDragTransactionOpen && !FMath::IsNearlyEqual(NewValue, GetPackage().ExposureCompensationStops))
-						{
-							Edit(CompensationTransaction, [NewValue](FUEcineCameraPackage& Package) { Package.ExposureCompensationStops = NewValue; });
-						}
-					}))
+				MakeRow(Compensation.Name, Compensation.ToolTip, MakePackageSpinBox(Compensation,
+					[](const FUEcineCameraPackage& Package) { return Package.ExposureCompensationStops; },
+					[](FUEcineCameraPackage& Package, float Value) { Package.ExposureCompensationStops = Value; }))
 			]
 		]
 
@@ -670,27 +503,12 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildLensButtons()
 
 		Buttons->AddSlot()
 		[
-			SNew(SBox)
-			.MinDesiredWidth(36.0f)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SCheckBox)
-				.Style(&FAppStyle::Get().GetWidgetStyle<FCheckBoxStyle>("DetailsView.SectionButton"))
-				.HAlign(HAlign_Center)
-				.ToolTipText(ToolTip)
-				.AccessibleText(ToolTip)
-				.IsChecked_Lambda([this, LensIndex] { return GetPackage().LensIndex == LensIndex ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-				.OnCheckStateChanged_Lambda([this, Kit, LensIndex](ECheckBoxState)
+			MakeToggleButton(FormatLensButton(Lens), ToolTip,
+				TAttribute<bool>::CreateSPLambda(this, [this, LensIndex] { return GetPackage().LensIndex == LensIndex; }),
+				[this, Kit, LensIndex](bool)
 				{
 					Edit(LOCTEXT("ChangeLens", "Change Lens"), [Kit, LensIndex](FUEcineCameraPackage& Package) { Package.SelectLens(*Kit, LensIndex); });
 				})
-				[
-					SNew(STextBlock)
-					.TextStyle(&TextStyle("UEcine.Label"))
-					.ColorAndOpacity(FSlateColor::UseForeground())
-					.Text(FormatLensButton(Lens))
-				]
-			]
 		];
 	}
 	return Buttons;
@@ -867,24 +685,7 @@ void SUEcineCameraTab::Edit(const FText& Description, TFunctionRef<void(FUEcineC
 	FText Error;
 	if (!UEcine::CameraEditing::EditPackage(GetComponent(), Description, EditFunction, Error))
 	{
-		FNotificationInfo Info(Error);
-		Info.ExpireDuration = 6.0f;
-		const TSharedPtr<SNotificationItem> Notification = FSlateNotificationManager::Get().AddNotification(Info);
-		if (Notification.IsValid())
-		{
-			Notification->SetCompletionState(SNotificationItem::CS_Fail);
-		}
-	}
-}
-
-void SUEcineCameraTab::BeginDrag(const FText& Description)
-{
-	UUEcineCameraPackageComponent* Component = GetComponent();
-	if (!bDragTransactionOpen && Component != nullptr)
-	{
-		GEditor->BeginTransaction(Description);
-		Component->Modify();
-		bDragTransactionOpen = true;
+		Notify(Error, false);
 	}
 }
 
@@ -899,22 +700,25 @@ void SUEcineCameraTab::DragEdit(TFunctionRef<void(FUEcineCameraPackage&)> EditFu
 	}
 }
 
-void SUEcineCameraTab::EndDrag()
+TSharedRef<SWidget> SUEcineCameraTab::MakePackageSpinBox(FSpinBoxArgs Args, TFunction<float(const FUEcineCameraPackage&)> GetValue, TFunction<void(FUEcineCameraPackage&, float)> SetValue)
 {
-	if (bDragTransactionOpen)
+	Args.Value = TAttribute<float>::CreateSPLambda(this, [this, GetValue = MoveTemp(GetValue)] { return GetValue(GetPackage()); });
+	Args.SaveForUndo = [this]
 	{
-		GEditor->EndTransaction();
-		bDragTransactionOpen = false;
-	}
-}
-
-FReply SUEcineCameraTab::OnNewCameraClicked()
-{
-	if (ACineCameraActor* NewCamera = UEcine::CameraEditing::SpawnCameraAtViewport())
+		if (UUEcineCameraPackageComponent* Component = GetComponent())
+		{
+			Component->Modify();
+		}
+	};
+	Args.OnDrag = [this, SetValue](float NewValue)
 	{
-		Target->SetCamera(NewCamera);
-	}
-	return FReply::Handled();
+		DragEdit([&SetValue, NewValue](FUEcineCameraPackage& Package) { SetValue(Package, NewValue); });
+	};
+	Args.OnCommit = [this, SetValue, Description = Args.TransactionName](float NewValue)
+	{
+		Edit(Description, [&SetValue, NewValue](FUEcineCameraPackage& Package) { SetValue(Package, NewValue); });
+	};
+	return MakeSpinBox(MoveTemp(Args));
 }
 
 FReply SUEcineCameraTab::OnBuildPackageClicked()

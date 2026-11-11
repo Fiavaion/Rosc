@@ -36,9 +36,6 @@ struct UECINECORE_API FUEcineRigMark
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
-	FString Label;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
 	FUEcineRigPose Pose;
 
 	/** How the rig arrives here from the mark before. Not used by the first mark. */
@@ -112,6 +109,13 @@ namespace UEcine::Move
 
 	/** Everything about the move that the rig cannot do, in axis order. Empty when the move is within the rig's limits. */
 	UECINECORE_API TArray<FUEcineMoveFinding> Check(const FUEcineRigSpec& Spec, const FUEcineRigPose& Start, const FUEcineRigPose& End, const FUEcineMoveTiming& Timing);
+
+	/**
+	 * The findings worth showing for one move. A move that is too quick usually trips several
+	 * axes at once and one answer, more time, clears them all; of those only the finding that
+	 * needs the most time is kept, last. Findings that time cannot fix are all kept.
+	 */
+	UECINECORE_API TArray<FUEcineMoveFinding> MostLimiting(TConstArrayView<FUEcineMoveFinding> Findings);
 
 	/** A finding as a sentence that says what is wrong and what would fix it. */
 	UECINECORE_API FText Describe(const FUEcineMoveFinding& Finding, EUEcineRigType RigType, EUEcineDistanceUnits Units);

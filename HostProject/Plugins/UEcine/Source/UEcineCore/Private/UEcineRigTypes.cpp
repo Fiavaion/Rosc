@@ -336,4 +336,22 @@ FText UEcine::Rig::FormatAxisValue(EUEcineRigAxis Axis, double Value, EUEcineDis
 	return FText::Format(LOCTEXT("AngleValue", "{0}°"), UEcine::Units::FormatNumber(Value, 1));
 }
 
+TOptional<double> UEcine::Rig::ParseAxisValue(EUEcineRigAxis Axis, const FString& Text, EUEcineDistanceUnits Units)
+{
+	if (IsDistanceAxis(Axis))
+	{
+		const TOptional<double> Millimetres = UEcine::Units::ParseDistance(Text, Units);
+		return Millimetres.IsSet() ? TOptional<double>(Millimetres.GetValue() / 10.0) : TOptional<double>();
+	}
+
+	FString Number = Text.TrimStartAndEnd();
+	Number.RemoveFromEnd(TEXT("°"));
+	Number.TrimEndInline();
+	if (Number.IsEmpty() || !Number.IsNumeric())
+	{
+		return {};
+	}
+	return FCString::Atod(*Number);
+}
+
 #undef LOCTEXT_NAMESPACE

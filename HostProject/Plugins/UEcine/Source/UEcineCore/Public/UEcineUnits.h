@@ -21,6 +21,13 @@ namespace UEcine::Units
 	 */
 	UECINECORE_API FText FormatDistance(double Millimetres, EUEcineDistanceUnits Units);
 
+	/**
+	 * Reads a distance the way it is written: "3.2 m", "45 cm", 10' 6", 9", "10 ft 6 in". A bare
+	 * number is metres in metric and feet in imperial. Returns millimetres, or nothing when the
+	 * text is not a distance.
+	 */
+	UECINECORE_API TOptional<double> ParseDistance(const FString& Text, EUEcineDistanceUnits Units);
+
 	/** A number with at most the given count of decimals and no digit grouping: 2.8, 180, 23.976. */
 	UECINECORE_API FText FormatNumber(double Value, int32 MaxDecimals);
 }

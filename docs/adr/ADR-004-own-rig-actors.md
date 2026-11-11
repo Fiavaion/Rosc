@@ -26,3 +26,20 @@ plain camera transform keys.
 ## Alternatives considered
 1. Extend `ACineCameraRigRail` — rejected: Beta dependency and its known bugs become ours.
 2. Control Rig based rigs — rejected: heavier authoring, harder to express speed limits.
+
+## Addendum 2026-11-11: as built in Phase 2
+- **One actor class, not subclasses.** `AUEcineRig` carries a rig type and per-axis limits
+  (`FUEcineRigSpec`); the kinematics switch on the type in `UEcineCore`. Changing a camera from
+  a jib to a crane keeps the same actor, and saved levels reference one class name.
+- **Nine axis properties are the saved and keyed surface:** `Travel`, `Traverse`, `Lift`,
+  `Swing`, `Boom`, `Extension`, `Pan`, `Tilt`, `Roll`. Sequencer float tracks refer to them by
+  name, so they fall under the "never rename a shipped property" boundary. Preset ids are
+  saved too (see `docs/rig-presets.md`).
+- **Where the keys go.** The designed move is a few cubic keys per axis on the rig's float
+  tracks, exact to the solver. Operator movement is one linear key per frame on the camera's
+  own transform track, relative to the mount. The two can be rebaked independently.
+- **Setters are `CallInEditor`.** Sequencer sets an animated property through `Set<Property>`,
+  and the engine drops function calls on actors in an editor world without it
+  (LESSON-API-001).
+- **Bake to plain camera keys** (no rig, no plugin) is part of the Deliver phase's handoff, not
+  of Grip.

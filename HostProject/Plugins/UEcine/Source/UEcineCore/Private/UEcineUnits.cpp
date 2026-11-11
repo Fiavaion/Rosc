@@ -43,6 +43,91 @@ namespace UEcine::Units
 		const double Metres = Millimetres / 1000.0;
 		return FText::Format(LOCTEXT("Metres", "{0} m"), FormatNumber(Metres, Metres < 10.0 ? 2 : 1));
 	}
+
+	TOptional<double> ParseDistance(const FString& Text, EUEcineDistanceUnits Units)
+	{
+		FString Trimmed = Text.TrimStartAndEnd();
+		const bool bNegative = Trimmed.RemoveFromStart(TEXT("-"));
+		if (Trimmed.IsEmpty())
+		{
+			return {};
+		}
+
+		// One or more numbers, each followed by its unit: 10' 6", 3.2 m, 1 m 20 cm.
+		double Millimetres = 0.0;
+		bool bLastWasFeet = false;
+		const TCHAR* Cursor = *Trimmed;
+		while (*Cursor != 0)
+		{
+			const TCHAR* NumberStart = Cursor;
+			while (FChar::IsDigit(*Cursor) || *Cursor == TEXT('.'))
+			{
+				++Cursor;
+			}
+			const FString NumberText = FString::ConstructFromPtrSize(NumberStart, UE_PTRDIFF_TO_INT32(Cursor - NumberStart));
+			// IsNumeric alone accepts an empty string and a lone point.
+			if (!NumberText.IsNumeric() || NumberText.FindLastCharByPredicate([](TCHAR Character) { return FChar::IsDigit(Character); }) == INDEX_NONE)
+			{
+				return {};
+			}
+			const double Number = FCString::Atod(*NumberText);
+			while (FChar::IsWhitespace(*Cursor))
+			{
+				++Cursor;
+			}
+
+			const TCHAR* UnitStart = Cursor;
+			while (*Cursor != 0 && !FChar::IsDigit(*Cursor) && !FChar::IsWhitespace(*Cursor) && *Cursor != TEXT('.'))
+			{
+				++Cursor;
+			}
+			const FString Unit = FString::ConstructFromPtrSize(UnitStart, UE_PTRDIFF_TO_INT32(Cursor - UnitStart)).ToLower();
+			while (FChar::IsWhitespace(*Cursor))
+			{
+				++Cursor;
+			}
+			const bool bIsLast = *Cursor == 0;
+
+			double MillimetresPerUnit = 0.0;
+			if (Unit == TEXT("'") || Unit == TEXT("ft"))
+			{
+				MillimetresPerUnit = 304.8;
+			}
+			else if (Unit == TEXT("\"") || Unit == TEXT("in"))
+			{
+				MillimetresPerUnit = 25.4;
+			}
+			else if (Unit == TEXT("m"))
+			{
+				MillimetresPerUnit = 1000.0;
+			}
+			else if (Unit == TEXT("cm"))
+			{
+				MillimetresPerUnit = 10.0;
+			}
+			else if (Unit == TEXT("mm"))
+			{
+				MillimetresPerUnit = 1.0;
+			}
+			else if (Unit.IsEmpty() && bIsLast && bLastWasFeet)
+			{
+				// 4' 6 means four feet six inches.
+				MillimetresPerUnit = 25.4;
+			}
+			else if (Unit.IsEmpty() && bIsLast && Millimetres == 0.0)
+			{
+				MillimetresPerUnit = Units == EUEcineDistanceUnits::Imperial ? 304.8 : 1000.0;
+			}
+			else
+			{
+				return {};
+			}
+
+			Millimetres += Number * MillimetresPerUnit;
+			bLastWasFeet = MillimetresPerUnit == 304.8;
+		}
+		return bNegative ? -Millimetres : Millimetres;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

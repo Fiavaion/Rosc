@@ -56,4 +56,11 @@ namespace UEcine::GripEditing
 	 * @return false with the reason in OutError when there is nothing to bake.
 	 */
 	UECINEEDITOR_API bool BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError);
+
+	/**
+	 * Bakes the rig's move into the sequence open in Sequencer, starting at the playhead. With no
+	 * sequence open it makes one at the camera's frame rate, opens it and bakes from its first frame.
+	 * @return the sequence baked into, or null with the reason in OutError.
+	 */
+	UECINEEDITOR_API ULevelSequence* BakeMoveToSequencer(AUEcineRig* Rig, FText& OutError);
 }

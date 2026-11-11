@@ -10,12 +10,15 @@
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "MovieScene.h"
+#include "MovieSceneSequencePlayer.h"
+#include "ObjectTools.h"
 #include "ScopedTransaction.h"
 #include "Sections/MovieScene3DTransformSection.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Subsystems/EditorActorSubsystem.h"
 #include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
+#include "UEcineCameraPackageComponent.h"
 #include "UEcineMove.h"
 #include "UEcineOperator.h"
 #include "UEcineRig.h"
@@ -103,6 +106,21 @@ namespace
 		Track->SetPropertyNameAndPath(PropertyName, PropertyName.ToString());
 		Track->SetDisplayName(DisplayName);
 		return Track;
+	}
+
+	bool HasMoveToBake(const AUEcineRig* Rig, FText& OutError)
+	{
+		if (Rig == nullptr)
+		{
+			OutError = LOCTEXT("BakeNoRig", "There is no rig to bake a move from.");
+			return false;
+		}
+		if (Rig->Marks.Num() < 2)
+		{
+			OutError = LOCTEXT("BakeNeedsMarks", "Mark at least two positions before baking a move.");
+			return false;
+		}
+		return true;
 	}
 }
 
@@ -193,9 +211,7 @@ int32 UEcine::GripEditing::AddMark(AUEcineRig* Rig)
 	}
 	EditRig(Rig, LOCTEXT("AddMark", "Mark Position"), [](AUEcineRig& EditedRig)
 	{
-		FUEcineRigMark& Mark = EditedRig.Marks.AddDefaulted_GetRef();
-		Mark.Label = FString::FromInt(EditedRig.Marks.Num());
-		Mark.Pose = EditedRig.GetPose();
+		EditedRig.Marks.AddDefaulted_GetRef().Pose = EditedRig.GetPose();
 	});
 	return Rig->Marks.Num() - 1;
 }
@@ -258,14 +274,13 @@ ULevelSequence* UEcine::GripEditing::CreateSequence(const FString& BaseName, FFr
 
 bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError)
 {
-	if (Rig == nullptr || Sequence == nullptr || Sequence->GetMovieScene() == nullptr)
+	if (!HasMoveToBake(Rig, OutError))
 	{
-		OutError = LOCTEXT("BakeNothing", "There is no rig or no sequence to bake into.");
 		return false;
 	}
-	if (Rig->Marks.Num() < 2)
+	if (Sequence == nullptr || Sequence->GetMovieScene() == nullptr)
 	{
-		OutError = LOCTEXT("BakeNeedsMarks", "Mark at least two positions before baking a move.");
+		OutError = LOCTEXT("BakeNoSequence", "There is no sequence to bake the move into.");
 		return false;
 	}
 
@@ -365,6 +380,37 @@ bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FF
 
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;
+}
+
+ULevelSequence* UEcine::GripEditing::BakeMoveToSequencer(AUEcineRig* Rig, FText& OutError)
+{
+	// Checked first so that a refused bake does not leave a new, empty sequence behind.
+	if (!HasMoveToBake(Rig, OutError))
+	{
+		return nullptr;
+	}
+
+	ULevelSequence* Sequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
+	FFrameNumber StartFrame = 0;
+	if (Sequence != nullptr)
+	{
+		StartFrame = ULevelSequenceEditorBlueprintLibrary::GetGlobalPosition().Frame.FloorToFrame();
+	}
+	else
+	{
+		const ACineCameraActor* Camera = Rig->GetMountedCamera();
+		const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
+		const double FramesPerSecond = Package != nullptr ? Package->Package.FramesPerSecond : 24.0;
+		const AActor* NamedAfter = Camera != nullptr ? static_cast<const AActor*>(Camera) : Rig;
+
+		Sequence = CreateSequence(ObjectTools::SanitizeObjectName(NamedAfter->GetActorLabel() + TEXT("_Move")), GetFrameRate(FramesPerSecond));
+		if (Sequence == nullptr || !ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(Sequence))
+		{
+			OutError = LOCTEXT("BakeNoNewSequence", "A new sequence could not be made for the move.");
+			return nullptr;
+		}
+	}
+	return BakeMove(Rig, Sequence, StartFrame, OutError) ? Sequence : nullptr;
 }
 
 #undef LOCTEXT_NAMESPACE

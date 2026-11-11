@@ -180,4 +180,7 @@ namespace UEcine::Rig
 
 	/** An axis value as the crew would say it: "3.2 m" or 10' 6" for distances, "45°" for angles. */
 	UECINECORE_API FText FormatAxisValue(EUEcineRigAxis Axis, double Value, EUEcineDistanceUnits Units);
+
+	/** Reads an axis value written the way FormatAxisValue shows it. Centimetres or degrees; nothing when the text is not a value. */
+	UECINECORE_API TOptional<double> ParseAxisValue(EUEcineRigAxis Axis, const FString& Text, EUEcineDistanceUnits Units);
 }

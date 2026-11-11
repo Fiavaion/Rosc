@@ -1,14 +1,21 @@
 #pragma once
 
-#include "Styling/SlateTypes.h"
+#include "Input/Reply.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
 
 class FUEcineCameraTarget;
 
+/** The departments of the panel, in tab order. */
+enum class EUEcineDepartment : uint8
+{
+	Camera,
+	Grip
+};
+
 /**
  * Root widget of the dockable UEcine panel. The header says which camera the panel is working
- * on and lets the user look through it; the departments sit below.
+ * on and lets the user look through it; the departments sit below as tabs.
  */
 class SUEcinePanel : public SCompoundWidget
 {
@@ -18,14 +25,20 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
+	/** Brings a department's tab to the front. */
+	void ShowDepartment(EUEcineDepartment Department) { ActiveDepartment = Department; }
+
 private:
+	TSharedRef<SWidget> MakeDepartmentTab(EUEcineDepartment Department, const FText& Label, const FText& ToolTip);
+
 	TSharedRef<SWidget> MakeCameraMenu();
 	FText GetCameraName() const;
 
 	bool HasCamera() const;
-	ECheckBoxState IsLookingThrough() const;
-	void OnLookThroughChanged(ECheckBoxState NewState);
+	bool IsLookingThrough() const;
+	void OnLookThroughChanged(bool bLookThrough);
 	FReply OnNewCameraClicked();
 
 	TSharedPtr<FUEcineCameraTarget> Target;
+	EUEcineDepartment ActiveDepartment = EUEcineDepartment::Camera;
 };

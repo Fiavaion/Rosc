@@ -1,11 +1,13 @@
 #include "Channels/MovieSceneFloatChannel.h"
 #include "CineCameraActor.h"
+#include "Components/SplineComponent.h"
 #include "Editor.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/AutomationTest.h"
 #include "MovieScene.h"
 #include "MovieSceneSequencePlayer.h"
+#include "ObjectTools.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Tracks/MovieSceneFloatTrack.h"
 #include "UEcineCameraEditing.h"
@@ -116,7 +118,6 @@ bool FUEcineGripCraneMoveTest::RunTest(const FString& Parameters)
 		EditedRig.Marks[1].Arrival = MakeTiming(6.0, 0.25, 0.25);
 		EditedRig.Marks[2].Arrival = MakeTiming(4.0, 0.5, 0.5);
 	});
-	TestEqual(TEXT("Marks are numbered"), *Rig->Marks[2].Label, TEXT("3"));
 	TestEqual(TEXT("Both moves are within the crane's limits"),
 		UEcine::Move::Check(Rig->GetSpec(), First, Second, Rig->Marks[1].Arrival).Num() + UEcine::Move::Check(Rig->GetSpec(), Second, Third, Rig->Marks[2].Arrival).Num(), 0);
 	TestTrue(TEXT("The same first move in one second is beyond the crane"), UEcine::Move::Check(Rig->GetSpec(), First, Second, MakeTiming(1.0, 0.25, 0.25)).Num() > 0);
@@ -198,13 +199,43 @@ bool FUEcineGripCraneMoveTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("The move bakes with an operator"), BakeMove(Rig, Sequence, StartFrame, Error));
 		CheckPlayback(TEXT("Handheld"));
 
+		// What the panel's bake button does with a sequence open: bake at the playhead.
+		const int32 PlayheadFrame = 48;
+		ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(PlayheadFrame), EUpdatePositionMethod::Scrub));
+		TestTrue(TEXT("Baking to Sequencer uses the open sequence"), BakeMoveToSequencer(Rig, Error) == Sequence);
+		float SwingOnSecondMark = 0.0f;
+		FindAxisChannel(Sequence, Rig, EUEcineRigAxis::Swing)->Evaluate(ConvertFrameTime(FFrameTime(PlayheadFrame + 144), DisplayRate, TickResolution), SwingOnSecondMark);
+		TestEqual(TEXT("Baked at the playhead, the rig reaches the second mark six seconds after it"), static_cast<double>(SwingOnSecondMark), Second.Swing, 0.01);
+
 		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	}
+
+	// With nothing open, the bake button makes a sequence at the camera's frame rate and opens it.
+	TestNull(TEXT("No sequence is open"), ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence());
+	ULevelSequence* NewSequence = BakeMoveToSequencer(Rig, Error);
+	if (TestNotNull(TEXT("Baking to Sequencer with nothing open makes a sequence"), NewSequence))
+	{
+		TestTrue(TEXT("The new sequence is an asset under the UEcine folder"), NewSequence->GetPathName().StartsWith(TEXT("/Game/UEcine/Sequences/")));
+		TestTrue(TEXT("The new sequence is open"), ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence() == NewSequence);
+		TestTrue(TEXT("The new sequence runs at the camera's frame rate"), NewSequence->GetMovieScene()->GetDisplayRate() == FFrameRate(24, 1));
+		float SwingOnSecondMark = 0.0f;
+		const FMovieSceneFloatChannel* Swing = FindAxisChannel(NewSequence, Rig, EUEcineRigAxis::Swing);
+		if (TestNotNull(TEXT("The new sequence has the move"), Swing))
+		{
+			Swing->Evaluate(ConvertFrameTime(FFrameTime(144), DisplayRate, NewSequence->GetMovieScene()->GetTickResolution()), SwingOnSecondMark);
+			TestEqual(TEXT("In the new sequence the move starts on the first frame"), static_cast<double>(SwingOnSecondMark), Second.Swing, 0.01);
+		}
+
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+		TestTrue(TEXT("The test's sequence asset is removed"), ObjectTools::DeleteSingleObject(NewSequence, false));
 	}
 
 	// Without marks there is nothing to bake, and the reason is given.
 	EditRig(Rig, FText::FromString(TEXT("Clear Marks")), [](AUEcineRig& EditedRig) { EditedRig.Marks.SetNum(1); });
 	TestFalse(TEXT("One mark is not a move"), BakeMove(Rig, Sequence, StartFrame, Error));
 	TestFalse(TEXT("The refusal says why"), Error.IsEmpty());
+	TestNull(TEXT("The bake button refuses too"), BakeMoveToSequencer(Rig, Error));
+	TestNull(TEXT("A refused bake makes no sequence"), ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence());
 
 	// Taking the camera off leaves it where it is and removes the rig.
 	const FVector LocationOnRig = Camera->GetActorLocation();
@@ -213,6 +244,41 @@ bool FUEcineGripCraneMoveTest::RunTest(const FString& Parameters)
 	TestNull(TEXT("The camera is off the rig"), FindRig(Camera));
 	TestTrue(TEXT("The camera stays where it was"), Camera->GetActorLocation().Equals(LocationOnRig, 0.05));
 
+	World->EditorDestroyActor(Camera, false);
+	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine grip test")));
+	return true;
+}
+
+/** Laying dolly track from the panel: the travel range follows the track, and it can be undone. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineGripDollyTrackTest, "UEcine.Editor.Grip.DollyTrack", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineGripDollyTrackTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::GripEditing;
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ACineCameraActor* Camera = UEcine::CameraEditing::SpawnCamera(World, FTransform(FVector(0.0, 0.0, 150.0)));
+	AUEcineRig* Rig = PutCameraOnRig(Camera, UEcine::Rig::GetDefaultPreset(EUEcineRigType::Dolly));
+	if (!TestNotNull(TEXT("The camera is put on a dolly"), Rig))
+	{
+		return false;
+	}
+	TestTrue(TEXT("The camera did not move"), Camera->GetActorLocation().Equals(FVector(0.0, 0.0, 150.0), 0.05));
+	TestEqual(TEXT("A dolly comes with six metres of track"), Rig->GetTrackLength(), 600.0f, 0.1f);
+
+	EditRig(Rig, FText::FromString(TEXT("Lay Track")), [](AUEcineRig& EditedRig)
+	{
+		EditedRig.GetTrack()->Modify();
+		EditedRig.SetStraightTrack(900.0f);
+	});
+	TestEqual(TEXT("More track is laid"), Rig->GetTrackLength(), 900.0f, 0.1f);
+	TestEqual(TEXT("The dolly can travel the new length"), Rig->GetSpec().GetAxis(EUEcineRigAxis::Travel).Max, 900.0, 0.1);
+
+	TestTrue(TEXT("Laying track can be undone"), GEditor->UndoTransaction());
+	TestEqual(TEXT("After undo the track is its old length"), Rig->GetTrackLength(), 600.0f, 0.1f);
+
+	GEditor->SelectNone(false, true, false);
+	TakeCameraOffRig(Camera);
 	World->EditorDestroyActor(Camera, false);
 	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine grip test")));
 	return true;

@@ -32,5 +32,12 @@ public class UEcineEditor : ModuleRules
 			"WorkspaceMenuStructure",
 			"UEcineRuntime"
 		});
+
+		// The panel picture tests draw the panel off screen.
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"RenderCore",
+			"UMG"
+		});
 	}
 }

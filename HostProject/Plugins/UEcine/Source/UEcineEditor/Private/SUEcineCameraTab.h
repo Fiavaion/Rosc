@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UEcineCameraPackage.h"
+#include "UEcineWidgets.h"
 #include "UObject/WeakObjectPtr.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
@@ -23,8 +24,6 @@ public:
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, const TSharedRef<FUEcineCameraTarget>& InTarget);
-	/** Closes a drag's undo step if the tab goes away mid-drag. */
-	virtual ~SUEcineCameraTab() override;
 
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
@@ -60,7 +59,6 @@ private:
 	void RebuildLayout();
 	void RefreshResolvedCamera();
 
-	TSharedRef<SWidget> BuildNoCameraState();
 	TSharedRef<SWidget> BuildNoPackageState();
 	TSharedRef<SWidget> BuildPackageEditor();
 	TSharedRef<SWidget> BuildLensButtons();
@@ -78,13 +76,12 @@ private:
 	/** Changes the package as one undoable step; shows a notification when it cannot be applied. */
 	void Edit(const FText& Description, TFunctionRef<void(FUEcineCameraPackage&)> EditFunction);
 
-	// Continuous controls (zoom, exposure compensation) change the package many times during
-	// one drag; these keep the whole drag in a single undo step.
-	void BeginDrag(const FText& Description);
+	/** Changes the package during a slider drag, inside the drag's open undo step. */
 	void DragEdit(TFunctionRef<void(FUEcineCameraPackage&)> EditFunction);
-	void EndDrag();
 
-	FReply OnNewCameraClicked();
+	/** A spin box for one continuous number of the package; a drag is one undo step. */
+	TSharedRef<SWidget> MakePackageSpinBox(UEcine::Widgets::FSpinBoxArgs Args, TFunction<float(const FUEcineCameraPackage&)> GetValue, TFunction<void(FUEcineCameraPackage&, float)> SetValue);
+
 	FReply OnBuildPackageClicked();
 
 	TSharedPtr<FUEcineCameraTarget> Target;
@@ -99,5 +96,4 @@ private:
 	const FUEcineRecordingFormat* ResolvedFormat = nullptr;
 
 	TSharedPtr<SVerticalBox> WarningsBox;
-	bool bDragTransactionOpen = false;
 };

@@ -33,4 +33,59 @@ bool FUEcineUnitsFormatTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineUnitsParseTest, "UEcine.Core.Units.Parse", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineUnitsParseTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::Units;
+	const EUEcineDistanceUnits Metric = EUEcineDistanceUnits::Metric;
+	const EUEcineDistanceUnits Imperial = EUEcineDistanceUnits::Imperial;
+
+	const auto TestParse = [this](const TCHAR* Text, EUEcineDistanceUnits Units, double ExpectedMillimetres)
+	{
+		const TOptional<double> Parsed = ParseDistance(Text, Units);
+		if (TestTrue(FString::Printf(TEXT("'%s' is a distance"), Text), Parsed.IsSet()))
+		{
+			TestEqual(FString::Printf(TEXT("'%s' in millimetres"), Text), Parsed.GetValue(), ExpectedMillimetres, 1.e-6);
+		}
+	};
+
+	TestParse(TEXT("3.2 m"), Metric, 3200.0);
+	TestParse(TEXT("45 cm"), Metric, 450.0);
+	TestParse(TEXT("45cm"), Metric, 450.0);
+	TestParse(TEXT("1 m 20 cm"), Metric, 1200.0);
+	TestParse(TEXT("12 mm"), Metric, 12.0);
+	TestParse(TEXT("2.5"), Metric, 2500.0);
+	TestParse(TEXT(" -5 m "), Metric, -5000.0);
+
+	TestParse(TEXT("10' 6\""), Imperial, 3200.4);
+	TestParse(TEXT("10'6\""), Imperial, 3200.4);
+	TestParse(TEXT("10'"), Imperial, 3048.0);
+	TestParse(TEXT("9\""), Imperial, 228.6);
+	TestParse(TEXT("4' 6"), Imperial, 1371.6);
+	TestParse(TEXT("10 ft 6 in"), Imperial, 3200.4);
+	TestParse(TEXT("10"), Imperial, 3048.0);
+	TestParse(TEXT("-4' 6\""), Imperial, -1371.6);
+
+	// A unit that is written wins over the setting.
+	TestParse(TEXT("3 m"), Imperial, 3000.0);
+	TestParse(TEXT("10'"), Metric, 3048.0);
+
+	// What is shown can be read back.
+	for (const double Millimetres : { 0.0, 350.0, 3050.0, 29800.0, -5000.0 })
+	{
+		TestParse(*FormatDistance(Millimetres, Metric).ToString(), Metric, Millimetres);
+	}
+	for (const double Millimetres : { 228.6, 1371.6, 3048.0, 36576.0, -1371.6 })
+	{
+		TestParse(*FormatDistance(Millimetres, Imperial).ToString(), Imperial, Millimetres);
+	}
+
+	for (const TCHAR* NotADistance : { TEXT(""), TEXT("-"), TEXT("far"), TEXT("3 furlongs"), TEXT("3 m and a bit"), TEXT("3 4"), TEXT("nan"), TEXT("m"), TEXT("."), TEXT("1.2.3 m") })
+	{
+		TestFalse(FString::Printf(TEXT("'%s' is not a distance"), NotADistance), ParseDistance(NotADistance, Metric).IsSet());
+	}
+	return true;
+}
+
 #endif

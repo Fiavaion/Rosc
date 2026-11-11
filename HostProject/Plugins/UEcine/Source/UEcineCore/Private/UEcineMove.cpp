@@ -204,6 +204,28 @@ TArray<FUEcineMoveFinding> UEcine::Move::Check(const FUEcineRigSpec& Spec, const
 	return Findings;
 }
 
+TArray<FUEcineMoveFinding> UEcine::Move::MostLimiting(TConstArrayView<FUEcineMoveFinding> Findings)
+{
+	TArray<FUEcineMoveFinding> Kept;
+	const FUEcineMoveFinding* NeedsMostTime = nullptr;
+	for (const FUEcineMoveFinding& Finding : Findings)
+	{
+		if (Finding.MinimumDurationSeconds <= 0.0)
+		{
+			Kept.Add(Finding);
+		}
+		else if (NeedsMostTime == nullptr || Finding.MinimumDurationSeconds > NeedsMostTime->MinimumDurationSeconds)
+		{
+			NeedsMostTime = &Finding;
+		}
+	}
+	if (NeedsMostTime != nullptr)
+	{
+		Kept.Add(*NeedsMostTime);
+	}
+	return Kept;
+}
+
 FText UEcine::Move::Describe(const FUEcineMoveFinding& Finding, EUEcineRigType RigType, EUEcineDistanceUnits Units)
 {
 	FFormatNamedArguments Args;
