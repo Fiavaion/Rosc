@@ -23,6 +23,7 @@
 #include "Sections/MovieSceneCinematicShotSection.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Tests/UEcineDeliverChoicesBefore.h"
 #include "Tests/UEcineRenderedFiles.h"
 #include "UEcineBurnInWidget.h"
 #include "UEcineCameraEditing.h"
@@ -55,10 +56,7 @@ namespace
 		FString OutputDirectory;
 
 		/** The user's own delivery choices and monitor tools, to put back. */
-		TOptional<FDirectoryPath> FolderBefore;
-		FString PatternBefore;
-		bool bSlateBefore = true;
-		bool bBurnInBefore = true;
+		TOptional<FUEcineDeliverChoicesBefore> ChoicesBefore;
 		TOptional<FUEcineMonitorSettings> MonitorBefore;
 
 		/** The render being waited for, as an index into the test's stages. */
@@ -80,15 +78,9 @@ namespace
 	void CleanUpDeliverTest(FAutomationTestBase& Test, FDeliverTestState& State)
 	{
 		GetMutableDefault<UMovieSceneToolsProjectSettings>()->DefaultDuration = State.ShotSecondsBefore;
-		if (State.FolderBefore.IsSet())
+		if (State.ChoicesBefore.IsSet())
 		{
-			UEcine::DeliverEditing::EditChoices([&State](UUEcineEditorSettings& Choices)
-			{
-				Choices.DeliverFolder = State.FolderBefore.GetValue();
-				Choices.DeliverNamePattern = State.PatternBefore;
-				Choices.bDeliverSlate = State.bSlateBefore;
-				Choices.bDeliverBurnIn = State.bBurnInBefore;
-			});
+			State.ChoicesBefore->PutBack();
 		}
 		if (State.MonitorBefore.IsSet())
 		{
@@ -193,11 +185,7 @@ namespace
 	/** Sends the test's deliveries to a folder of its own, emptied, with the delivery choices as they are when first installed. */
 	void UseDeliverTestFolder(FDeliverTestState& State, const TCHAR* Name)
 	{
-		const UUEcineEditorSettings* Choices = GetDefault<UUEcineEditorSettings>();
-		State.FolderBefore = Choices->DeliverFolder;
-		State.PatternBefore = Choices->DeliverNamePattern;
-		State.bSlateBefore = Choices->bDeliverSlate;
-		State.bBurnInBefore = Choices->bDeliverBurnIn;
+		State.ChoicesBefore.Emplace();
 
 		State.OutputDirectory = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("UEcine/Renders") / Name);
 		IFileManager::Get().DeleteDirectory(*State.OutputDirectory, false, true);

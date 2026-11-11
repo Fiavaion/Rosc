@@ -18,6 +18,7 @@
 #include "SUEcinePanel.h"
 #include "Slate/WidgetRenderer.h"
 #include "TextureResource.h"
+#include "Tests/UEcineDeliverChoicesBefore.h"
 #include "Tests/UEcineRenderedFiles.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UEcineCameraDatabase.h"
@@ -161,41 +162,6 @@ namespace
 			return true;
 		}));
 	}
-}
-
-namespace
-{
-	/** The user's own choices for deliveries, to put back after a test that changes them. */
-	struct FDeliverChoicesBefore
-	{
-		FDeliverChoicesBefore()
-		{
-			const UUEcineEditorSettings* Choices = GetDefault<UUEcineEditorSettings>();
-			Intent = Choices->DeliverIntent;
-			Folder = Choices->DeliverFolder;
-			Pattern = Choices->DeliverNamePattern;
-			bSlate = Choices->bDeliverSlate;
-			bBurnIn = Choices->bDeliverBurnIn;
-		}
-
-		void PutBack() const
-		{
-			UEcine::DeliverEditing::EditChoices([this](UUEcineEditorSettings& Choices)
-			{
-				Choices.DeliverIntent = Intent;
-				Choices.DeliverFolder = Folder;
-				Choices.DeliverNamePattern = Pattern;
-				Choices.bDeliverSlate = bSlate;
-				Choices.bDeliverBurnIn = bBurnIn;
-			});
-		}
-
-		EUEcineDeliverIntent Intent;
-		FDirectoryPath Folder;
-		FString Pattern;
-		bool bSlate;
-		bool bBurnIn;
-	};
 }
 
 /** Pictures of the Camera tab. Needs a renderer: run with tools/test.ps1 -Rendering; otherwise it reports itself skipped. */
@@ -573,7 +539,7 @@ bool FUEcineDeliverTabVisualTest::RunTest(const FString& Parameters)
 	}
 	UEcine::RenderedFiles::ExpectRenderLogNoise(*this);
 
-	const FDeliverChoicesBefore ChoicesBefore;
+	const FUEcineDeliverChoicesBefore ChoicesBefore;
 	const FString OutputDirectory = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("UEcine/Renders/DeliverTabPictures"));
 	IFileManager::Get().DeleteDirectory(*OutputDirectory, false, true);
 	EditChoices([&OutputDirectory](UUEcineEditorSettings& Choices)
@@ -697,7 +663,7 @@ bool FUEcineDeliverTabStatesVisualTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	const FDeliverChoicesBefore ChoicesBefore;
+	const FUEcineDeliverChoicesBefore ChoicesBefore;
 	UEcine::DeliverEditing::EditChoices([](UUEcineEditorSettings& Choices) { Choices.DeliverIntent = EUEcineDeliverIntent::VfxHandoff; });
 	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
 	GEditor->SelectNone(false, true, false);
