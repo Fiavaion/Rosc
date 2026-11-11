@@ -30,6 +30,7 @@ public class UEcineEditor : ModuleRules
 			"SlateCore",
 			"UnrealEd",
 			"WorkspaceMenuStructure",
+			"UEcineMonitor",
 			"UEcineRuntime"
 		});
 

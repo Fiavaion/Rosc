@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "UEcineMonitorTypes.h"
 #include "UEcineUnits.h"
 #include "UEcineEditorSettings.generated.h"
 
@@ -15,6 +16,10 @@ public:
 	/** Whether distances are shown in metres or in feet and inches. */
 	UPROPERTY(config, EditAnywhere, Category = "Units")
 	EUEcineDistanceUnits DistanceUnits = EUEcineDistanceUnits::Metric;
+
+	/** Which monitor tools are on. Set from the Monitor tab (see UUEcineMonitorSubsystem), so it is not shown here. */
+	UPROPERTY(config)
+	FUEcineMonitorSettings MonitorSettings;
 
 	static EUEcineDistanceUnits GetDistanceUnits();
 
