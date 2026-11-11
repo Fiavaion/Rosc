@@ -40,12 +40,6 @@ namespace
 		GEditor->RedrawLevelEditingViewports();
 	}
 
-	/** Where the lens itself is focused: where the focus is set, but never nearer than the lens can go. */
-	float GetLensDistance(const ACineCameraActor* Camera)
-	{
-		return FMath::Max(UEcine::FocusEditing::GetFocusDistance(Camera), UEcine::FocusEditing::GetCloseFocus(Camera));
-	}
-
 	/** Sets a hand-set focus distance. The Cine Camera adds its focus offset to the manual distance, so it is taken off here. */
 	void SetManualFocus(ACineCameraActor* Camera, float DistanceCm, const FText& Description)
 	{
@@ -73,6 +67,11 @@ namespace
 		const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
 		return Package != nullptr && Package->FocusMarksCm.IsValidIndex(MarkIndex);
 	}
+}
+
+float UEcine::FocusEditing::GetLensDistance(const ACineCameraActor* Camera)
+{
+	return FMath::Max(GetFocusDistance(Camera), GetCloseFocus(Camera));
 }
 
 float UEcine::FocusEditing::GetFocusDistance(const ACineCameraActor* Camera)

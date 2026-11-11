@@ -24,6 +24,9 @@ namespace UEcine::FocusEditing
 	/** The nearest the camera's lens can focus. */
 	UECINEEDITOR_API float GetCloseFocus(const ACineCameraActor* Camera);
 
+	/** Where the lens itself is focused: where the focus is set, but never nearer than the lens can go. */
+	UECINEEDITOR_API float GetLensDistance(const ACineCameraActor* Camera);
+
 	/**
 	 * Sets the focus by hand. A camera that was following a subject stops following it. A
 	 * distance nearer than the lens can focus is set to its close focus.

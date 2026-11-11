@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Layout/Margin.h"
 #include "Styling/SlateStyle.h"
 
 /**
@@ -24,6 +25,11 @@ public:
 	static constexpr float SectionSpacing = 14.0f;
 	/** Padding between the panel edge and its content. */
 	static constexpr float PanelPadding = 10.0f;
+
+	/** The space above a row inside a section, above a row of buttons, and above a section. */
+	static inline const FMargin RowPadding{ 0.0f, RowSpacing, 0.0f, 0.0f };
+	static inline const FMargin ButtonRowPadding{ 0.0f, RowSpacing + 2.0f, 0.0f, 0.0f };
+	static inline const FMargin SectionPadding{ 0.0f, SectionSpacing, 0.0f, 0.0f };
 
 private:
 	static TSharedPtr<FSlateStyleSet> StyleSet;

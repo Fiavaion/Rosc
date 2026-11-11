@@ -28,10 +28,6 @@ using namespace UEcine::Widgets;
 
 namespace
 {
-	const FMargin RowPadding(0.0f, FUEcineStyle::RowSpacing, 0.0f, 0.0f);
-	const FMargin ButtonRowPadding(0.0f, FUEcineStyle::RowSpacing + 2.0f, 0.0f, 0.0f);
-	const FMargin SectionPadding(0.0f, FUEcineStyle::SectionSpacing, 0.0f, 0.0f);
-
 	FText FormatDistanceMm(double Millimetres)
 	{
 		return UEcine::Units::FormatDistance(Millimetres, UUEcineEditorSettings::GetDistanceUnits());
@@ -80,8 +76,8 @@ void SUEcineFocusTab::RebuildLayout()
 	if (CurrentLayoutKey.Camera.IsValid())
 	{
 		Add(FMargin(0.0f), MakeSectionHeader(LOCTEXT("FocusSection", "Focus")));
-		Add(RowPadding, BuildDistanceRow());
-		Add(ButtonRowPadding, MakeToggleButton(LOCTEXT("PickFocusButton", "Pick Focus"),
+		Add(FUEcineStyle::RowPadding, BuildDistanceRow());
+		Add(FUEcineStyle::ButtonRowPadding, MakeToggleButton(LOCTEXT("PickFocusButton", "Pick Focus"),
 			LOCTEXT("PickFocusToolTip", "Pick focus: then click a subject in the viewport to focus on it. Escape calls it off."),
 			TAttribute<bool>::CreateSPLambda(this, [this] { return UEcine::FocusEditing::IsPickingFocus(Target->GetCamera()); }),
 			[this](bool bPick)
@@ -95,25 +91,25 @@ void SUEcineFocusTab::RebuildLayout()
 					UEcine::FocusEditing::EndPickFocus();
 				}
 			}));
-		Add(RowPadding, BuildFollowRows());
-		Add(RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineFocusTab::GetFocusWarning)));
+		Add(FUEcineStyle::RowPadding, BuildFollowRows());
+		Add(FUEcineStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineFocusTab::GetFocusWarning)));
 
-		Add(SectionPadding, MakeSectionHeader(LOCTEXT("DepthSection", "Depth of Field")));
-		Add(RowPadding, BuildDepthRows());
+		Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("DepthSection", "Depth of Field")));
+		Add(FUEcineStyle::RowPadding, BuildDepthRows());
 
-		Add(SectionPadding, MakeSectionHeader(LOCTEXT("FocusMarksSection", "Focus Marks")));
+		Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("FocusMarksSection", "Focus Marks")));
 		if (CurrentLayoutKey.bHasPackage)
 		{
-			Add(RowPadding, BuildRackTimeRow());
+			Add(FUEcineStyle::RowPadding, BuildRackTimeRow());
 			Add(FMargin(0.0f), SAssignNew(MarksBox, SVerticalBox));
-			Add(ButtonRowPadding, MakeButton(LOCTEXT("MarkFocusButton", "Mark Focus"),
+			Add(FUEcineStyle::ButtonRowPadding, MakeButton(LOCTEXT("MarkFocusButton", "Mark Focus"),
 				LOCTEXT("MarkFocusToolTip", "Store where the focus is now as the next focus mark."),
 				FOnClicked::CreateSPLambda(this, [this]
 				{
 					UEcine::FocusEditing::AddFocusMark(Target->GetCamera());
 					return FReply::Handled();
 				})));
-			Add(ButtonRowPadding,
+			Add(FUEcineStyle::ButtonRowPadding,
 				SNew(STextBlock)
 				.TextStyle(&TextStyle("UEcine.Body"))
 				.AutoWrapText(true)
@@ -157,7 +153,7 @@ void SUEcineFocusTab::RebuildMarks()
 	MarksBox->ClearChildren();
 	if (ShownMarkCount == 0)
 	{
-		MarksBox->AddSlot().AutoHeight().Padding(RowPadding)
+		MarksBox->AddSlot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			SNew(STextBlock)
 			.TextStyle(&TextStyle("UEcine.Body"))
@@ -167,7 +163,7 @@ void SUEcineFocusTab::RebuildMarks()
 	}
 	for (int32 MarkIndex = 0; MarkIndex < ShownMarkCount; ++MarkIndex)
 	{
-		MarksBox->AddSlot().AutoHeight().Padding(ButtonRowPadding)[ BuildMarkRow(MarkIndex) ];
+		MarksBox->AddSlot().AutoHeight().Padding(FUEcineStyle::ButtonRowPadding)[ BuildMarkRow(MarkIndex) ];
 	}
 }
 
@@ -217,7 +213,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildFollowRows()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(ButtonRowPadding)
+		.Padding(FUEcineStyle::ButtonRowPadding)
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
@@ -268,7 +264,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildDepthRows()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(RowPadding)
+		.Padding(FUEcineStyle::RowPadding)
 		[
 			MakeDepthRow(LOCTEXT("FarLimitLabel", "Far limit"),
 				LOCTEXT("FarLimitToolTip", "The farthest distance that is acceptably sharp at the current focus, focal length and T-stop."),
@@ -276,7 +272,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildDepthRows()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(RowPadding)
+		.Padding(FUEcineStyle::RowPadding)
 		[
 			MakeDepthRow(LOCTEXT("DepthLabel", "Depth of field"),
 				LOCTEXT("DepthToolTip", "How much of the scene, front to back, is acceptably sharp. Stop down, go wider or focus farther away for more."),
@@ -284,7 +280,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildDepthRows()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.Padding(RowPadding)
+		.Padding(FUEcineStyle::RowPadding)
 		[
 			MakeDepthRow(LOCTEXT("FocusHyperfocalLabel", "Hyperfocal"),
 				LOCTEXT("FocusHyperfocalToolTip", "Focus here and everything from half this distance to infinity is acceptably sharp at the current T-stop."),
@@ -378,8 +374,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildMarkRow(int32 MarkIndex)
 
 float SUEcineFocusTab::GetLensDistance() const
 {
-	const ACineCameraActor* Camera = Target->GetCamera();
-	return FMath::Max(UEcine::FocusEditing::GetFocusDistance(Camera), UEcine::FocusEditing::GetCloseFocus(Camera));
+	return UEcine::FocusEditing::GetLensDistance(Target->GetCamera());
 }
 
 TOptional<SUEcineFocusTab::FDepth> SUEcineFocusTab::GetDepth() const

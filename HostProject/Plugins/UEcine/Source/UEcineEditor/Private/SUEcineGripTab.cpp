@@ -80,8 +80,6 @@ namespace
 		Rig.SetPose(Pose);
 	}
 
-	const FMargin RowPadding(0.0f, FUEcineStyle::RowSpacing, 0.0f, 0.0f);
-	const FMargin SectionPadding(0.0f, FUEcineStyle::SectionSpacing, 0.0f, 0.0f);
 }
 
 void SUEcineGripTab::Construct(const FArguments& InArgs, const TSharedRef<FUEcineCameraTarget>& InTarget)
@@ -130,28 +128,28 @@ void SUEcineGripTab::RebuildLayout()
 	if (CurrentLayoutKey.Camera.IsValid())
 	{
 		Add(FMargin(0.0f), MakeSectionHeader(LOCTEXT("SupportSection", "Support")));
-		Add(RowPadding, BuildSupportRow());
+		Add(FUEcineStyle::RowPadding, BuildSupportRow());
 
 		if (const AUEcineRig* Rig = CurrentLayoutKey.Rig.Get())
 		{
 			const FUEcineRigSpec Spec = Rig->GetSpec();
 			if (Spec.Type == EUEcineRigType::Dolly)
 			{
-				Add(RowPadding, BuildTrackRow());
+				Add(FUEcineStyle::RowPadding, BuildTrackRow());
 			}
 
-			Add(SectionPadding, MakeSectionHeader(LOCTEXT("PositionSection", "Position")));
+			Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("PositionSection", "Position")));
 			for (int32 AxisIndex = 0; AxisIndex < UEcineRigAxisCount; ++AxisIndex)
 			{
 				if (Spec.Axes[AxisIndex].bUsed)
 				{
-					Add(RowPadding, BuildAxisRow(Spec.Type, static_cast<EUEcineRigAxis>(AxisIndex)));
+					Add(FUEcineStyle::RowPadding, BuildAxisRow(Spec.Type, static_cast<EUEcineRigAxis>(AxisIndex)));
 				}
 			}
 
-			Add(SectionPadding, MakeSectionHeader(LOCTEXT("MarksSection", "Marks")));
+			Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("MarksSection", "Marks")));
 			Add(FMargin(0.0f), SAssignNew(MarksBox, SVerticalBox));
-			Add(FMargin(0.0f, FUEcineStyle::RowSpacing + 2.0f, 0.0f, 0.0f),
+			Add(FUEcineStyle::ButtonRowPadding,
 				MakeButton(LOCTEXT("MarkPositionButton", "Mark Position"),
 					LOCTEXT("MarkPositionToolTip", "Store where the support is now as the next mark. A move runs from each mark to the one after it."),
 					FOnClicked::CreateSPLambda(this, [this]
@@ -160,15 +158,15 @@ void SUEcineGripTab::RebuildLayout()
 						return FReply::Handled();
 					})));
 
-			Add(SectionPadding, MakeSectionHeader(LOCTEXT("OperatorSection", "Operator")));
-			Add(RowPadding, BuildOperatorRows());
+			Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("OperatorSection", "Operator")));
+			Add(FUEcineStyle::RowPadding, BuildOperatorRows());
 
-			Add(SectionPadding, MakeSectionHeader(LOCTEXT("SequencerSection", "Sequencer")));
-			Add(RowPadding, BuildBakeRows());
+			Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("SequencerSection", "Sequencer")));
+			Add(FUEcineStyle::RowPadding, BuildBakeRows());
 		}
 		else
 		{
-			Add(SectionPadding,
+			Add(FUEcineStyle::SectionPadding,
 				SNew(STextBlock)
 				.TextStyle(&TextStyle("UEcine.Body"))
 				.AutoWrapText(true)
@@ -206,7 +204,7 @@ void SUEcineGripTab::RebuildMarks()
 
 	if (ShownMarkCount == 0)
 	{
-		Add(RowPadding,
+		Add(FUEcineStyle::RowPadding,
 			SNew(STextBlock)
 			.TextStyle(&TextStyle("UEcine.Body"))
 			.AutoWrapText(true)
@@ -218,12 +216,12 @@ void SUEcineGripTab::RebuildMarks()
 	{
 		if (MarkIndex > 0)
 		{
-			Add(RowPadding, BuildMoveTimeRow(MarkIndex));
-			Add(RowPadding, BuildEaseRow(MarkIndex, true));
-			Add(RowPadding, BuildEaseRow(MarkIndex, false));
-			Add(RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineGripTab::GetMoveWarnings, MarkIndex)));
+			Add(FUEcineStyle::RowPadding, BuildMoveTimeRow(MarkIndex));
+			Add(FUEcineStyle::RowPadding, BuildEaseRow(MarkIndex, true));
+			Add(FUEcineStyle::RowPadding, BuildEaseRow(MarkIndex, false));
+			Add(FUEcineStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineGripTab::GetMoveWarnings, MarkIndex)));
 		}
-		Add(FMargin(0.0f, FUEcineStyle::RowSpacing + 2.0f, 0.0f, 0.0f), BuildMarkRow(MarkIndex));
+		Add(FUEcineStyle::ButtonRowPadding, BuildMarkRow(MarkIndex));
 	}
 }
 
@@ -465,7 +463,7 @@ TSharedRef<SWidget> SUEcineGripTab::BuildOperatorRows()
 			})
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(RowPadding)
+			.Padding(FUEcineStyle::RowPadding)
 			[
 				MakeRow(Intensity.Name, Intensity.ToolTip, MakeRigSpinBox(Intensity,
 					[](const AUEcineRig& Rig) { return Rig.Operator.Intensity * 100.0f; },
@@ -473,7 +471,7 @@ TSharedRef<SWidget> SUEcineGripTab::BuildOperatorRows()
 			]
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(RowPadding)
+			.Padding(FUEcineStyle::RowPadding)
 			[
 				MakeRow(Take.Name, Take.ToolTip, MakeRigSpinBox(Take,
 					[](const AUEcineRig& Rig) { return static_cast<float>(Rig.Operator.Seed); },

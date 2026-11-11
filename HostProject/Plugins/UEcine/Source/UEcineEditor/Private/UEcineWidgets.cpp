@@ -1,6 +1,7 @@
 #include "UEcineWidgets.h"
 
 #include "Editor.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Styling/AppStyle.h"
 #include "UEcineEditorSettings.h"
@@ -9,6 +10,7 @@
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
@@ -236,6 +238,45 @@ TSharedRef<SWidget> UEcine::Widgets::MakeIconButton(const FName IconName, const 
 				.ColorAndOpacity(FSlateColor::UseForeground())
 			]
 		];
+}
+
+TSharedRef<SWidget> UEcine::Widgets::MakeComboButton(const FText& Name, const FText& ToolTip, TAttribute<FText> ValueText, FOnGetContent OnGetMenu)
+{
+	return SNew(SBox)
+		.MinDesiredHeight(FUEcineStyle::MinTargetSize)
+		[
+			SNew(SComboButton)
+			.ToolTipText(ToolTip)
+			.AccessibleText(Name)
+			.OnGetMenuContent(MoveTemp(OnGetMenu))
+			.ButtonContent()
+			[
+				SNew(STextBlock)
+				.TextStyle(&TextStyle("UEcine.Value"))
+				.Text(MoveTemp(ValueText))
+			]
+		];
+}
+
+TSharedRef<SWidget> UEcine::Widgets::MakeChoiceRow(const FText& Label, const FText& ToolTip, TAttribute<FText> ValueText, TArray<FChoice> Choices, TAttribute<bool> IsEnabled)
+{
+	const TSharedRef<SWidget> Combo = MakeComboButton(Label, ToolTip, MoveTemp(ValueText), FOnGetContent::CreateLambda([Choices = MoveTemp(Choices)]
+	{
+		FMenuBuilder MenuBuilder(true, nullptr);
+		for (const FChoice& Choice : Choices)
+		{
+			MenuBuilder.AddMenuEntry(
+				Choice.Name,
+				FText::GetEmpty(),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda(Choice.Choose), FCanExecuteAction(), FIsActionChecked::CreateLambda(Choice.IsChosen)),
+				NAME_None,
+				EUserInterfaceActionType::RadioButton);
+		}
+		return MenuBuilder.MakeWidget();
+	}));
+	Combo->SetEnabled(MoveTemp(IsEnabled));
+	return MakeRow(Label, ToolTip, Combo);
 }
 
 TSharedRef<SWidget> UEcine::Widgets::MakeSpinBox(FSpinBoxArgs Args)

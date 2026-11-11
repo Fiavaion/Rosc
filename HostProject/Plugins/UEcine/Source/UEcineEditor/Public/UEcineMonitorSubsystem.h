@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Containers/Ticker.h"
 #include "CoreMinimal.h"
 #include "EditorSubsystem.h"
 #include "UEcineMonitorTypes.h"
@@ -11,6 +12,9 @@ class FUEcineMonitorViewExtension;
  * The on-set monitor: holds which monitor tools are on and draws them in the level viewports.
  * The tools are a way of looking at the picture, so they are a per-user preference, are not part of
  * undo history, and never appear in renders or scene captures.
+ *
+ * Frame lines and the data readout belong to a camera, so a viewport shows them for the camera it
+ * is looking through, whether the user is piloting it or Sequencer has cut to it.
  */
 UCLASS()
 class UECINEEDITOR_API UUEcineMonitorSubsystem : public UEditorSubsystem
@@ -28,6 +32,13 @@ public:
 	/** Changes which tools are on. Level viewports follow at once, and the choice is remembered between sessions. */
 	void SetSettings(const FUEcineMonitorSettings& NewSettings);
 
+	/**
+	 * Looks at which level viewports are looking through a camera, and what the frame lines and the
+	 * data readout should show there. Done every frame; call it to have a change in the next picture drawn.
+	 */
+	void UpdateCameraOverlays();
+
 private:
 	TSharedPtr<FUEcineMonitorViewExtension, ESPMode::ThreadSafe> PictureExtension;
+	FTSTicker::FDelegateHandle TickerHandle;
 };

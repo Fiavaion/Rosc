@@ -8,6 +8,7 @@
 #include "SUEcineCameraTab.h"
 #include "SUEcineFocusTab.h"
 #include "SUEcineGripTab.h"
+#include "SUEcineMonitorTab.h"
 #include "Styling/AppStyle.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraTarget.h"
@@ -110,6 +111,11 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 					MakeDepartmentTab(EUEcineDepartment::Focus, LOCTEXT("FocusDepartment", "Focus"),
 						LOCTEXT("FocusDepartmentToolTip", "Focus: set focus, follow a subject, mark focus distances and rack between them."))
 				]
+				+ SWrapBox::Slot()
+				[
+					MakeDepartmentTab(EUEcineDepartment::Monitor, LOCTEXT("MonitorDepartment", "Monitor"),
+						LOCTEXT("MonitorDepartmentToolTip", "Monitor: false colour, zebras, waveform, histogram, focus peaking, frame lines and camera data over the viewport picture."))
+				]
 			]
 		]
 		+ SVerticalBox::Slot()
@@ -120,8 +126,12 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 			.Padding(0.0f)
 			[
 				// Slot 0 invites the user to make a camera; the departments follow in tab order.
+				// The monitor's tools work on any view, so its tab does not wait for a camera.
 				SNew(SWidgetSwitcher)
-				.WidgetIndex_Lambda([this] { return HasCamera() ? 1 + static_cast<int32>(ActiveDepartment) : 0; })
+				.WidgetIndex_Lambda([this]
+				{
+					return HasCamera() || ActiveDepartment == EUEcineDepartment::Monitor ? 1 + static_cast<int32>(ActiveDepartment) : 0;
+				})
 				+ SWidgetSwitcher::Slot()
 				.Padding(FUEcineStyle::PanelPadding)
 				[
@@ -142,6 +152,10 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				+ SWidgetSwitcher::Slot()
 				[
 					SNew(SUEcineFocusTab, Target.ToSharedRef())
+				]
+				+ SWidgetSwitcher::Slot()
+				[
+					SNew(SUEcineMonitorTab, Target.ToSharedRef())
 				]
 			]
 		]

@@ -17,6 +17,7 @@
 #include "UEcineCameraPackageComponent.h"
 #include "UEcineFocusEditing.h"
 #include "UEcineGripEditing.h"
+#include "UEcineMonitorSubsystem.h"
 #include "UEcineRig.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -320,6 +321,76 @@ bool FUEcineFocusTabStatesVisualTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	QueuePanelCaptures(*this, BareCamera, TEXT("focus-tab-no-package"), EUEcineDepartment::Focus, 620.0f, NarrowOnly);
+	return true;
+}
+
+/** Pictures of the Monitor tab. Needs a renderer, like the Camera tab pictures. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorTabVisualTest, "UEcine.Editor.Visual.MonitorTab", VisualTestFlags)
+
+bool FUEcineMonitorTabVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	UUEcineMonitorSubsystem* Monitor = UUEcineMonitorSubsystem::Get();
+	ACineCameraActor* CameraActor = UEcine::CameraEditing::SpawnCamera(GEditor->GetEditorWorldContext().World(), FTransform::Identity);
+	if (!TestNotNull(TEXT("The monitor exists in the editor"), Monitor) || !TestNotNull(TEXT("A camera to show"), CameraActor))
+	{
+		return false;
+	}
+
+	// Show the busiest state: every tool on, so the zebra and false colour legends are there, and
+	// frame lines for a camera that delivers its whole recording format (warning row).
+	const FUEcineMonitorSettings SettingsBefore = Monitor->GetSettings();
+	FUEcineMonitorSettings Everything;
+	Everything.bFalseColour = true;
+	Everything.bZebras = true;
+	Everything.bPeaking = true;
+	Everything.bWaveform = true;
+	Everything.bHistogram = true;
+	Everything.bFrameLines = true;
+	Everything.bSafeAreas = true;
+	Everything.bCentreMark = true;
+	Everything.bDataReadout = true;
+	Monitor->SetSettings(Everything);
+
+	QueuePanelCaptures(*this, CameraActor, TEXT("monitor-tab"), EUEcineDepartment::Monitor, 1000.0f);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([SettingsBefore]
+	{
+		UUEcineMonitorSubsystem::Get()->SetSettings(SettingsBefore);
+		return true;
+	}));
+	return true;
+}
+
+/** A picture of the Monitor tab with every tool off and no camera to work on: the tab is there all the same. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineMonitorTabStatesVisualTest, "UEcine.Editor.Visual.MonitorTabStates", VisualTestFlags)
+
+bool FUEcineMonitorTabStatesVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	UUEcineMonitorSubsystem* Monitor = UUEcineMonitorSubsystem::Get();
+	if (!TestNotNull(TEXT("The monitor exists in the editor"), Monitor))
+	{
+		return false;
+	}
+
+	const FUEcineMonitorSettings SettingsBefore = Monitor->GetSettings();
+	Monitor->SetSettings(FUEcineMonitorSettings());
+	GEditor->SelectNone(false, true, false);
+
+	QueuePanelCaptures(*this, nullptr, TEXT("monitor-tab-no-camera"), EUEcineDepartment::Monitor, 720.0f, NarrowOnly);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([SettingsBefore]
+	{
+		UUEcineMonitorSubsystem::Get()->SetSettings(SettingsBefore);
+		return true;
+	}));
 	return true;
 }
 

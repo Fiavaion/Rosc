@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Framework/SlateDelegates.h"
 #include "Input/Reply.h"
 #include "Styling/SlateTypes.h"
 #include "Widgets/Input/NumericTypeInterface.h"
@@ -34,6 +35,20 @@ namespace UEcine::Widgets
 
 	/** A square button showing only an icon. The tooltip is also its name for screen readers. */
 	TSharedRef<SWidget> MakeIconButton(FName IconName, const FText& ToolTip, FOnClicked OnClicked);
+
+	/** A drop-down button showing the current choice. Its menu is built each time it opens. */
+	TSharedRef<SWidget> MakeComboButton(const FText& Name, const FText& ToolTip, TAttribute<FText> ValueText, FOnGetContent OnGetMenu);
+
+	/** One entry of a drop-down list of choices. */
+	struct FChoice
+	{
+		FText Name;
+		TFunction<bool()> IsChosen;
+		TFunction<void()> Choose;
+	};
+
+	/** A label and a drop-down list of choices, with the current one ticked. */
+	TSharedRef<SWidget> MakeChoiceRow(const FText& Label, const FText& ToolTip, TAttribute<FText> ValueText, TArray<FChoice> Choices, TAttribute<bool> IsEnabled = true);
 
 	struct FSpinBoxArgs
 	{

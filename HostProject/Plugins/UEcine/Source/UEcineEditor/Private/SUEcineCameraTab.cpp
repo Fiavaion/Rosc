@@ -161,21 +161,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 {
 	const auto MakeComboRow = [this](const FText& Label, const FText& LabelToolTip, TAttribute<FText> ValueText, TSharedRef<SWidget> (SUEcineCameraTab::*MakeMenu)())
 	{
-		return MakeRow(Label, LabelToolTip,
-			SNew(SBox)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SComboButton)
-				.ToolTipText(LabelToolTip)
-				.AccessibleText(Label)
-				.OnGetMenuContent(this, MakeMenu)
-				.ButtonContent()
-				[
-					SNew(STextBlock)
-					.TextStyle(&TextStyle("UEcine.Value"))
-					.Text(MoveTemp(ValueText))
-				]
-			]);
+		return MakeRow(Label, LabelToolTip, MakeComboButton(Label, LabelToolTip, MoveTemp(ValueText), FOnGetContent::CreateSP(this, MakeMenu)));
 	};
 
 	// The exposure controls all step along a ladder of standard values.
@@ -254,9 +240,6 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 	Compensation.MaxSliderValue = 6.0f;
 	Compensation.Delta = 0.1f;
 
-	const FMargin RowPadding(0.0f, FUEcineStyle::RowSpacing, 0.0f, 0.0f);
-	const FMargin SectionPadding(0.0f, FUEcineStyle::SectionSpacing, 0.0f, 0.0f);
-
 	return SNew(SVerticalBox)
 
 		// Camera body and recording format
@@ -264,7 +247,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 		[
 			MakeSectionHeader(LOCTEXT("CameraSection", "Camera"))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeComboRow(
 				LOCTEXT("BodyLabel", "Body"),
@@ -276,7 +259,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 				}),
 				&SUEcineCameraTab::MakeBodyMenu)
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeComboRow(
 				LOCTEXT("FormatLabel", "Format"),
@@ -287,7 +270,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 				}),
 				&SUEcineCameraTab::MakeFormatMenu)
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("SensorAreaLabel", "Sensor area"),
@@ -299,7 +282,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 						: FText::GetEmpty();
 				}))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("ResolutionLabel", "Resolution"),
@@ -313,11 +296,11 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 		]
 
 		// Lens
-		+ SVerticalBox::Slot().AutoHeight().Padding(SectionPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::SectionPadding)
 		[
 			MakeSectionHeader(LOCTEXT("LensSection", "Lens"))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeComboRow(
 				LOCTEXT("KitLabel", "Kit"),
@@ -333,7 +316,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 		[
 			BuildLensButtons()
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			SNew(SBox)
 			.Visibility_Lambda([this] { return bResolvedValid && Resolved.MaxFocalLengthMm > Resolved.MinFocalLengthMm ? EVisibility::Visible : EVisibility::Collapsed; })
@@ -343,7 +326,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 					[](FUEcineCameraPackage& Package, float Value) { Package.FocalLengthMm = Value; }))
 			]
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("AngleOfViewLabel", "Angle of view"),
@@ -359,7 +342,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 						FormatNumber(UEcine::Optics::VerticalFieldOfViewDeg(Resolved.SensorHeightMm, Resolved.FocalLengthMm), 1));
 				}))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("EquivalentLabel", "Full-frame equivalent"),
@@ -374,7 +357,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 						FormatNumber(UEcine::Optics::EquivalentFocalLengthMm(Resolved.FocalLengthMm, Resolved.SensorWidthMm, Resolved.Squeeze), 0));
 				}))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("ImageAspectLabel", "Image aspect"),
@@ -386,7 +369,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 						: FText::GetEmpty();
 				}))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("CloseFocusLabel", "Close focus"),
@@ -396,7 +379,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 					return bResolvedValid ? UEcine::Units::FormatDistance(Resolved.CloseFocusMm, UUEcineEditorSettings::GetDistanceUnits()) : FText::GetEmpty();
 				}))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("HyperfocalLabel", "Hyperfocal"),
@@ -413,16 +396,16 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 		]
 
 		// Exposure
-		+ SVerticalBox::Slot().AutoHeight().Padding(SectionPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::SectionPadding)
 		[
 			MakeSectionHeader(LOCTEXT("ExposureSection", "Exposure"))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)[ BuildLadderRow(TStopControl) ]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)[ BuildLadderRow(IsoControl) ]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)[ BuildLadderRow(ShutterControl) ]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)[ BuildLadderRow(NdControl) ]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)[ BuildLadderRow(FrameRateControl) ]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)[ BuildLadderRow(TStopControl) ]
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)[ BuildLadderRow(IsoControl) ]
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)[ BuildLadderRow(ShutterControl) ]
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)[ BuildLadderRow(NdControl) ]
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)[ BuildLadderRow(FrameRateControl) ]
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("ShutterTimeLabel", "Exposure time"),
@@ -432,7 +415,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 					return bResolvedValid ? FText::Format(LOCTEXT("ShutterTimeValue", "1/{0} s"), FormatNumber(Resolved.ShutterSpeedReciprocal, 1)) : FText::GetEmpty();
 				}))
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			MakeReadoutRow(
 				LOCTEXT("ExposesForLabel", "Exposes for"),
@@ -464,7 +447,7 @@ TSharedRef<SWidget> SUEcineCameraTab::BuildPackageEditor()
 				.Text(LOCTEXT("PhysicalExposureLabel", "Physical exposure"))
 			]
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(RowPadding)
+		+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 		[
 			SNew(SBox)
 			.IsEnabled_Lambda([this] { return GetPackage().bPhysicalExposure; })

@@ -11,7 +11,8 @@ enum class EUEcineDepartment : uint8
 {
 	Camera,
 	Grip,
-	Focus
+	Focus,
+	Monitor
 };
 
 /**
