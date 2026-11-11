@@ -9,6 +9,7 @@
 #include "Graph/Nodes/MovieGraphGlobalOutputSettingNode.h"
 #include "Graph/Nodes/MovieGraphRenderLayerNode.h"
 #include "Graph/Nodes/MovieGraphSamplingMethodNode.h"
+#include "Graph/Nodes/MovieGraphSetCVarValueNode.h"
 #include "Graph/Nodes/MovieGraphSetMetadataAttributesNode.h"
 #include "Graph/Nodes/MovieGraphWarmUpSettingNode.h"
 #include "Materials/MaterialInterface.h"
@@ -156,6 +157,17 @@ UMovieGraphConfig* UEcine::RenderGraph::Build(const FUEcineRenderSpec& Spec, UOb
 
 	TArray<UMovieGraphNode*> GlobalsBranch = { Output, Metadata, Sampling, WarmUp };
 	TArray<UMovieGraphNode*> PictureBranch = { Layer, Picture };
+
+	if (Spec.bDeliveryFrameOnly)
+	{
+		// The renderer sets this for the length of the shot and puts it back afterwards.
+		UMovieGraphSetCVarValueNode* DeliveryFrame = Graph->ConstructRuntimeNode<UMovieGraphSetCVarValueNode>();
+		DeliveryFrame->bOverride_Name = true;
+		DeliveryFrame->Name = UEcine::Deliver::DeliveryFrameOnlyVariable;
+		DeliveryFrame->bOverride_Value = true;
+		DeliveryFrame->Value = 1.0f;
+		GlobalsBranch.Add(DeliveryFrame);
+	}
 
 	if (Spec.bMattes)
 	{

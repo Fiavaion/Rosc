@@ -16,7 +16,10 @@
 #include "Sections/MovieSceneCinematicShotSection.h"
 #include "Tests/UEcineRenderedFiles.h"
 #include "UEcineBurnInWidget.h"
+#include "CineCameraComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "UEcineCameraEditing.h"
+#include "UEcineCameraPackageComponent.h"
 #include "UEcineRenderSubsystem.h"
 #include "UEcineShotEditing.h"
 
@@ -146,6 +149,14 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	Cube->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+	// The camera delivers a frame much wider than its sensor.
+	UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
+	if (!TestNotNull(TEXT("The camera has a camera package"), Package))
+	{
+		CleanUpDeliverTest(*this, *State);
+		return false;
+	}
+	Package->Package.DeliveryAspect = 2.39f;
 
 	FText Error;
 	const bool bShotsAdded = AddShot(Camera, Error) && AddShot(Camera, Error);
@@ -170,21 +181,23 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 	Layers.ShotName = State->Shots[0].Name;
 	Layers.Spec.OutputDirectory = State->OutputDirectory;
 	Layers.Spec.FileName = State->Shots[0].Name + TEXT("_vfx.{frame_number}");
-	Layers.Spec.Resolution = FIntPoint(640, 360);
+	Layers.Spec.Resolution = FIntPoint(640, 268);
+	Layers.Spec.bDeliveryFrameOnly = true;
 	Layers.Spec.Format = EUEcineRenderFormat::MultilayerExr;
 	Layers.Spec.bSceneLinear = true;
 	Layers.Spec.bDepth = Layers.Spec.bNormals = Layers.Spec.bMotionVectors = Layers.Spec.bMattes = true;
 	Layers.Spec.bBurnIn = Layers.Spec.bSlate = true;
-	Layers.Spec.Metadata = { { TEXT("uecine/shot"), State->Shots[0].Name }, { TEXT("uecine/lens/kit"), TEXT("First Shot Primes") } };
+	Layers.Spec.Metadata = { { TEXT("uecine/sequence"), TEXT("Render test") }, { TEXT("uecine/shot"), State->Shots[0].Name }, { TEXT("uecine/lens/kit"), TEXT("First Shot Primes") } };
 
 	FUEcineRenderShot& Movie = RenderShots.AddDefaulted_GetRef();
 	Movie.ShotName = State->Shots[1].Name;
 	Movie.Spec.OutputDirectory = State->OutputDirectory;
 	Movie.Spec.FileName = State->Shots[1].Name + TEXT("_review");
-	Movie.Spec.Resolution = FIntPoint(640, 360);
+	Movie.Spec.Resolution = FIntPoint(640, 268);
+	Movie.Spec.bDeliveryFrameOnly = true;
 	Movie.Spec.Format = EUEcineRenderFormat::ProRes422LT;
 	Movie.Spec.bBurnIn = Movie.Spec.bSlate = true;
-	Movie.Spec.Metadata = { { TEXT("uecine/shot"), State->Shots[1].Name }, { TEXT("uecine/lens/kit"), TEXT("Second Shot Zoom") } };
+	Movie.Spec.Metadata = { { TEXT("uecine/sequence"), TEXT("Render test") }, { TEXT("uecine/shot"), State->Shots[1].Name }, { TEXT("uecine/lens/kit"), TEXT("Second Shot Zoom") } };
 
 	State->PlaybackRangeBefore = Cut->GetMovieScene()->GetPlaybackRange();
 	for (const FShot& Shot : State->Shots)
@@ -248,7 +261,7 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 				TArray<FString> MetadataNames;
 				Header.Text.GetKeys(MetadataNames);
 				AddInfo(FString::Printf(TEXT("EXR text attributes: %s"), *FString::Join(MetadataNames, TEXT(" | "))));
-				TestEqual(TEXT("The EXR is the size asked for"), Header.Size, FIntPoint(640, 360));
+				TestEqual(TEXT("The EXR is the size asked for"), Header.Size, FIntPoint(640, 268));
 				TestEqual(TEXT("The EXR says which shot it is"), Header.Text.FindRef(TEXT("uecine/shot")), State->Shots[0].Name);
 				TestEqual(TEXT("The EXR carries the first shot's metadata, not the second's"), Header.Text.FindRef(TEXT("uecine/lens/kit")), FString(TEXT("First Shot Primes")));
 			}
@@ -272,6 +285,11 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 				TestTrue(TEXT("The first frame is the slate: it covers the middle of the picture"), SlateMiddle > 0.9);
 				TestTrue(TEXT("A later frame has the burn-in strip along the bottom and nothing over the middle"), BurnInStrip > 0.5 && BurnInMiddle < 0.05);
 				TestTrue(TEXT("The picture is not empty"), PictureMiddle > 0.01);
+				// A camera that still recorded its whole sensor would be boxed inside the wider frame.
+				const TArrayView64<const FLinearColor> PicturePixels = Picture.AsRGBA32F();
+				const FLinearColor LeftEdge = PicturePixels[static_cast<int64>(Picture.SizeY / 2) * Picture.SizeX + 4];
+				const FLinearColor RightEdge = PicturePixels[static_cast<int64>(Picture.SizeY / 2) * Picture.SizeX + Picture.SizeX - 5];
+				TestTrue(TEXT("The picture fills the delivery frame from edge to edge"), LeftEdge.GetLuminance() > 0.01f && RightEdge.GetLuminance() > 0.01f);
 				// The camera looks down at a cube about five metres away.
 				TestTrue(TEXT("The depth layer measures the distance to what the camera sees, in centimetres"), DepthAtCentre.R > 300.0f && DepthAtCentre.R < 800.0f);
 			}
@@ -281,6 +299,14 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("The movie is named for its shot"), FPaths::GetCleanFilename(MovFiles[0]), State->Shots[1].Name + TEXT("_review.mov"));
 			TestEqual(TEXT("The movie holds the slate, the shot and the tail frame"), CountMovFrames(MovFiles[0]), SlatedFrames);
 		}
+
+		// The camera in the editor was never cropped, and the level is no longer told to crop.
+		if (const ACineCameraActor* Camera = Cast<ACineCameraActor>(State->SpawnedActors[0].Get()))
+		{
+			TestEqual(TEXT("The editor's camera keeps its whole sensor"), Camera->GetCineCameraComponent()->CropSettings.AspectRatio, 0.0f);
+		}
+		const IConsoleVariable* DeliveryFrameOnly = IConsoleManager::Get().FindConsoleVariable(UEcine::Deliver::DeliveryFrameOnlyVariable);
+		TestTrue(TEXT("The renderer has put the delivery frame switch back"), DeliveryFrameOnly != nullptr && DeliveryFrameOnly->GetInt() == 0);
 
 		// The sequence is as it was.
 		const ULevelSequence* Cut = State->CreatedSequences[0].Get();

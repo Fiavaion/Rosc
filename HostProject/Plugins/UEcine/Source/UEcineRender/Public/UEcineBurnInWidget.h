@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Graph/MovieGraphBurnInWidget.h"
+#include "UEcineDeliver.h"
 #include "UEcineBurnInWidget.generated.h"
 
 class SUEcineBurnIn;
@@ -39,14 +40,14 @@ protected:
 private:
 	void UpdateForFrame(const UMovieGraphPipeline* Pipeline, const UMovieGraphEvaluatedConfig* Config, int32 CameraIndex);
 
-	TSharedPtr<SUEcineBurnIn> BurnIn;
+	TSharedPtr<SUEcineBurnIn> Drawn;
 
 	// What is drawn over the frame being rendered. Kept here because the renderer tells the
 	// widget about its first frame before the drawn part of it exists.
-	/** Along the bottom of the picture. Empty for no strip. */
-	FText Strip;
-	/** Over the whole picture. Empty for no slate. */
-	FText Slate;
+	/** Over the whole picture. Empty when the frame is not a slate. */
+	FUEcineSlate Slate;
+	/** In the corners of the picture. Empty on a slate, and when the render has no burn-ins. */
+	FUEcineBurnIn BurnIn;
 	/** The picture's height in pixels; the text is sized from it. */
 	int32 PictureHeight = 1080;
 

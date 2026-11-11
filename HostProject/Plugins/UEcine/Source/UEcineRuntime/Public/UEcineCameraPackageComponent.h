@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CineCameraSettings.h"
 #include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
 #include "UEcineCameraPackage.h"
@@ -46,7 +47,20 @@ public:
 	/** The package component on an actor, or null when it has none. */
 	static UUEcineCameraPackageComponent* Find(const AActor* Actor);
 
+	/**
+	 * In a running level, crops the camera to its delivery frame while a render asks for that
+	 * (see UEcine::Deliver::DeliveryFrameOnlyVariable), and puts its own crop back afterwards.
+	 * The camera in the editor is never touched.
+	 */
+	void UpdateDeliveryFrameCrop();
+
+	virtual void BeginPlay() override;
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
+
+private:
+	/** The camera's own crop, kept while it is cropped to the delivery frame. */
+	TOptional<FPlateCropSettings> CropBeforeRender;
 };

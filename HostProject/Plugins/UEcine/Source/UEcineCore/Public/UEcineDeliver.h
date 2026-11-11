@@ -286,6 +286,12 @@ namespace UEcine::Deliver
 	/** The folder under a delivery's output folder that an intent's files go in. */
 	UECINECORE_API const TCHAR* GetIntentFolder(EUEcineDeliverIntent Intent);
 
+	/**
+	 * The console variable a render sets to 1 for as long as its cameras are to record only
+	 * their delivery frame. Camera package components in the running level answer to it.
+	 */
+	inline const TCHAR* const DeliveryFrameOnlyVariable = TEXT("UEcine.Render.DeliveryFrameOnly");
+
 	/** Metadata that says the file's first frame is a slate. The widget that draws over the picture reads it. */
 	inline const TCHAR* const SlateMetadataName = TEXT("uecine/slate");
 	/** Metadata that says camera and shot data are drawn over every frame of the picture. */
