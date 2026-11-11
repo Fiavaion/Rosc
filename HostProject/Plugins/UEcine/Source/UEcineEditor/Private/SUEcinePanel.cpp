@@ -6,6 +6,7 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "LevelEditorSubsystem.h"
 #include "SUEcineCameraTab.h"
+#include "SUEcineDeliverTab.h"
 #include "SUEcineFocusTab.h"
 #include "SUEcineGripTab.h"
 #include "SUEcineMonitorTab.h"
@@ -122,6 +123,11 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 					MakeDepartmentTab(EUEcineDepartment::Shots, LOCTEXT("ShotsDepartment", "Shots"),
 						LOCTEXT("ShotsDepartmentToolTip", "Shots: the shot list of the sequence in Sequencer, storyboard frames, overhead plans, and the shot list and camera report to hand out."))
 				]
+				+ SWrapBox::Slot()
+				[
+					MakeDepartmentTab(EUEcineDepartment::Deliver, LOCTEXT("DeliverDepartment", "Deliver"),
+						LOCTEXT("DeliverDepartmentToolTip", "Deliver: render the sequence in Sequencer for review, for visual effects or as a master, after a preflight check."))
+				]
 			]
 		]
 		+ SVerticalBox::Slot()
@@ -162,6 +168,10 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				+ SWidgetSwitcher::Slot()
 				[
 					SNew(SUEcineShotsTab, Target.ToSharedRef())
+				]
+				+ SWidgetSwitcher::Slot()
+				[
+					SNew(SUEcineDeliverTab)
 				]
 			]
 		]
@@ -229,8 +239,8 @@ bool SUEcinePanel::HasCamera() const
 
 int32 SUEcinePanel::GetShownSlot() const
 {
-	// The monitor's tools work on any view and the shot list is Sequencer's, so neither waits for a camera.
-	const bool bWorksWithoutCamera = ActiveDepartment == EUEcineDepartment::Monitor || ActiveDepartment == EUEcineDepartment::Shots;
+	// The monitor's tools work on any view, and the shot list and deliveries are of the sequence in Sequencer, so none of them waits for a camera.
+	const bool bWorksWithoutCamera = ActiveDepartment == EUEcineDepartment::Monitor || ActiveDepartment == EUEcineDepartment::Shots || ActiveDepartment == EUEcineDepartment::Deliver;
 	return HasCamera() || bWorksWithoutCamera ? 1 + static_cast<int32>(ActiveDepartment) : 0;
 }
 

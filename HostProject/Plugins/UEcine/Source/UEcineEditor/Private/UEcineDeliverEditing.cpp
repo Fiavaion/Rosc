@@ -63,13 +63,6 @@ namespace
 		return TEXT("Custom");
 	}
 
-	/** The folder every sequence's deliveries go under. */
-	FString GetDeliveryFolder()
-	{
-		const FString& Chosen = GetDefault<UUEcineEditorSettings>()->DeliverFolder.Path;
-		return FPaths::ConvertRelativePathToFull(Chosen.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("UEcine") / TEXT("Deliveries") : Chosen);
-	}
-
 	/**
 	 * True when nothing holds the exposure of a camera's picture still: not the camera, not a
 	 * post-process volume over the whole level, and the project lets exposure adapt.
@@ -298,6 +291,12 @@ namespace
 void UEcine::DeliverEditing::NoteColourSpaceAtStartup()
 {
 	ColourSpaceAtStartup = UE::Color::FColorSpace::GetWorking();
+}
+
+FString UEcine::DeliverEditing::GetDeliveryFolder()
+{
+	const FString& Chosen = GetDefault<UUEcineEditorSettings>()->DeliverFolder.Path;
+	return FPaths::ConvertRelativePathToFull(Chosen.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("UEcine") / TEXT("Deliveries") : Chosen);
 }
 
 FUEcineDeliverSettings UEcine::DeliverEditing::GetSettings()

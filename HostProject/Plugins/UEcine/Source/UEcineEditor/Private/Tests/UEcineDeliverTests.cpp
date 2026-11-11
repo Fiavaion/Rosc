@@ -64,6 +64,8 @@ namespace
 		/** The render being waited for, as an index into the test's stages. */
 		int32 Stage = INDEX_NONE;
 		double StartSeconds = 0.0;
+		/** The furthest the render being waited for has said it is, from 0 to 1. */
+		float ProgressSeen = 0.0f;
 		double TimeoutSeconds = 600.0;
 		UEcine::DeliverEditing::FDelivery Delivery;
 		/** A frame of the first VFX handoff, to hold the second against. */
@@ -208,16 +210,6 @@ namespace
 		});
 	}
 
-	/**
-	 * The engine logs this for every graph render started in the editor: it asks for the version
-	 * number before it has the graph to read it from (LESSON-API-010). The render is not affected.
-	 */
-	void ExpectRenderLogNoise(FAutomationTestBase& Test)
-	{
-		Test.AddExpectedError(TEXT("Cannot resolve version number without a valid evaluated graph"), EAutomationExpectedErrorFlags::Contains, 0);
-		Test.AddExpectedError(TEXT("Script call stack"), EAutomationExpectedErrorFlags::Contains, 0);
-	}
-
 	/** One render of a test: started, waited for, then looked at. */
 	struct FDeliverTestStage
 	{
@@ -235,6 +227,7 @@ namespace
 			UUEcineRenderSubsystem* Render = GEditor->GetEditorSubsystem<UUEcineRenderSubsystem>();
 			if (Render->IsRendering())
 			{
+				State->ProgressSeen = FMath::Max(State->ProgressSeen, Render->GetProgress());
 				if (FPlatformTime::Seconds() - State->StartSeconds < State->TimeoutSeconds)
 				{
 					return false;
@@ -252,6 +245,7 @@ namespace
 			}
 			++State->Stage;
 			State->StartSeconds = FPlatformTime::Seconds();
+			State->ProgressSeen = 0.0f;
 			if (!Stages.IsValidIndex(State->Stage) || !Stages[State->Stage].Start())
 			{
 				CleanUpDeliverTest(*Test, *State);
@@ -461,7 +455,7 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("Skipped: rendering needs a renderer (tools/test.ps1 -Rendering)."));
 		return true;
 	}
-	ExpectRenderLogNoise(*this);
+	UEcine::RenderedFiles::ExpectRenderLogNoise(*this);
 
 	const TSharedRef<FDeliverTestState> State = MakeShared<FDeliverTestState>();
 	if (!MakeDeliverTestScene(*this, *State, 2))
@@ -527,6 +521,7 @@ bool FUEcineDeliverRenderTwoShotsTest::RunTest(const FString& Parameters)
 		using namespace UEcine::RenderedFiles;
 		const FUEcineRenderResult& Result = GEditor->GetEditorSubsystem<UUEcineRenderSubsystem>()->GetLastResult();
 		TestTrue(TEXT("The render succeeded"), Result.bSuccess);
+		TestTrue(TEXT("The render said how far it was while it ran"), State->ProgressSeen > 0.0f && State->ProgressSeen <= 1.0f);
 
 		// A slated shot is one frame longer at each end.
 		constexpr int32 SlatedFrames = DeliverTestShotFrames + 2;
@@ -803,7 +798,7 @@ bool FUEcineDeliverIntentsTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("Skipped: rendering needs a renderer (tools/test.ps1 -Rendering)."));
 		return true;
 	}
-	ExpectRenderLogNoise(*this);
+	UEcine::RenderedFiles::ExpectRenderLogNoise(*this);
 
 	const TSharedRef<FDeliverTestState> State = MakeShared<FDeliverTestState>();
 	if (!MakeDeliverTestScene(*this, *State, 2))
@@ -909,7 +904,7 @@ bool FUEcineDeliverUncutTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("Skipped: rendering needs a renderer (tools/test.ps1 -Rendering)."));
 		return true;
 	}
-	ExpectRenderLogNoise(*this);
+	UEcine::RenderedFiles::ExpectRenderLogNoise(*this);
 
 	const TSharedRef<FDeliverTestState> State = MakeShared<FDeliverTestState>();
 	State->TimeoutSeconds = 180.0;

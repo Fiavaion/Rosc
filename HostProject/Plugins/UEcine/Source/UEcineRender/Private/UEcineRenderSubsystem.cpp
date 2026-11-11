@@ -98,7 +98,8 @@ void UUEcineRenderSubsystem::CancelRender()
 
 float UUEcineRenderSubsystem::GetProgress() const
 {
-	return Executor != nullptr ? Executor->GetStatusProgress() : 0.0f;
+	// The engine's executor reports how far it is on the job, and never on itself.
+	return Executor != nullptr && Queue != nullptr && !Queue->GetJobs().IsEmpty() ? Queue->GetJobs()[0]->GetStatusProgress() : 0.0f;
 }
 
 void UUEcineRenderSubsystem::HandleJobFinished(FMoviePipelineOutputData Output)

@@ -2,6 +2,7 @@
 #include "Editor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "HAL/FileManager.h"
 #include "ImageUtils.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
@@ -9,19 +10,25 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "MovieScene.h"
 #include "MovieSceneSequencePlayer.h"
+#include "MovieSceneToolsProjectSettings.h"
 #include "ObjectTools.h"
 #include "RenderingThread.h"
 #include "SUEcinePanel.h"
 #include "Slate/WidgetRenderer.h"
 #include "TextureResource.h"
+#include "Tests/UEcineRenderedFiles.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
+#include "UEcineDeliverEditing.h"
+#include "UEcineEditorSettings.h"
 #include "UEcineFocusEditing.h"
 #include "UEcineGripEditing.h"
 #include "UEcineMonitorSubsystem.h"
+#include "UEcineRenderSubsystem.h"
 #include "UEcineRig.h"
 #include "UEcineShotEditing.h"
 
@@ -98,8 +105,10 @@ namespace
 				State->Renderer->DrawWidget(State->Target.Get(), State->Panel.ToSharedRef(), Scale, DrawSize, 0.1f);
 			};
 
-			// A first pass lays the tab out and asks for its glyphs and icons at this scale. The
-			// editor makes those ready between frames, so the picture is taken a moment later.
+			// A first pass makes the tab, which may change what it shows as soon as it is drawn
+			// (preflight is run, a plan is drawn). A second lays that out, learns where its text
+			// wraps and asks for its glyphs and icons at this scale. The editor makes those ready
+			// between frames, so the picture is the third pass, a moment later.
 			ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([State, Department, DrawSize, Draw]
 			{
 				State->Panel = SNew(SUEcinePanel);
@@ -108,6 +117,7 @@ namespace
 				Draw();
 				return true;
 			}));
+			ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(Draw, 0.25f));
 
 			ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([&Test, State, Name, DrawSize, Draw]
 			{
@@ -136,7 +146,7 @@ namespace
 
 				State->Panel.Reset();
 				State->Target.Reset();
-			}, 0.5f));
+			}, 0.25f));
 		}
 
 		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([State]
@@ -151,6 +161,41 @@ namespace
 			return true;
 		}));
 	}
+}
+
+namespace
+{
+	/** The user's own choices for deliveries, to put back after a test that changes them. */
+	struct FDeliverChoicesBefore
+	{
+		FDeliverChoicesBefore()
+		{
+			const UUEcineEditorSettings* Choices = GetDefault<UUEcineEditorSettings>();
+			Intent = Choices->DeliverIntent;
+			Folder = Choices->DeliverFolder;
+			Pattern = Choices->DeliverNamePattern;
+			bSlate = Choices->bDeliverSlate;
+			bBurnIn = Choices->bDeliverBurnIn;
+		}
+
+		void PutBack() const
+		{
+			UEcine::DeliverEditing::EditChoices([this](UUEcineEditorSettings& Choices)
+			{
+				Choices.DeliverIntent = Intent;
+				Choices.DeliverFolder = Folder;
+				Choices.DeliverNamePattern = Pattern;
+				Choices.bDeliverSlate = bSlate;
+				Choices.bDeliverBurnIn = bBurnIn;
+			});
+		}
+
+		EUEcineDeliverIntent Intent;
+		FDirectoryPath Folder;
+		FString Pattern;
+		bool bSlate;
+		bool bBurnIn;
+	};
 }
 
 /** Pictures of the Camera tab. Needs a renderer: run with tools/test.ps1 -Rendering; otherwise it reports itself skipped. */
@@ -506,6 +551,162 @@ bool FUEcineShotsTabStatesVisualTest::RunTest(const FString& Parameters)
 	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
 	GEditor->SelectNone(false, true, false);
 	QueuePanelCaptures(*this, nullptr, TEXT("shots-tab-no-sequence"), EUEcineDepartment::Shots, 420.0f, NarrowOnly);
+	return true;
+}
+
+/**
+ * Pictures of the Deliver tab with a four-shot sequence open. Set to deliver for review, with a
+ * shot that has lost its camera cut (a finding that stops the render, with its fix) and a slate
+ * that falls before the sequence (a finding worth knowing). Then with the camera cut put back by
+ * the fix and set to deliver a master, ready to render. Then while that master renders.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineDeliverTabVisualTest, "UEcine.Editor.Visual.DeliverTab", VisualTestFlags)
+
+bool FUEcineDeliverTabVisualTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::DeliverEditing;
+	using namespace UEcine::ShotEditing;
+
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+	UEcine::RenderedFiles::ExpectRenderLogNoise(*this);
+
+	const FDeliverChoicesBefore ChoicesBefore;
+	const FString OutputDirectory = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("UEcine/Renders/DeliverTabPictures"));
+	IFileManager::Get().DeleteDirectory(*OutputDirectory, false, true);
+	EditChoices([&OutputDirectory](UUEcineEditorSettings& Choices)
+	{
+		Choices.DeliverIntent = EUEcineDeliverIntent::Review;
+		Choices.DeliverFolder.Path = OutputDirectory;
+		Choices.DeliverNamePattern = UEcine::Deliver::DefaultNamePattern;
+		Choices.bDeliverSlate = true;
+		Choices.bDeliverBurnIn = true;
+	});
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	ACineCameraActor* CameraActor = UEcine::CameraEditing::SpawnCamera(World, FTransform(FRotator::ZeroRotator, FVector(0.0, -200.0, 150.0)));
+	if (!TestNotNull(TEXT("A camera to show"), CameraActor))
+	{
+		ChoicesBefore.PutBack();
+		return false;
+	}
+
+	// Six frames a shot: long enough to take a picture of the render, and no longer.
+	UMovieSceneToolsProjectSettings* SequencerSettings = GetMutableDefault<UMovieSceneToolsProjectSettings>();
+	const float ShotSecondsBefore = SequencerSettings->DefaultDuration;
+	SequencerSettings->DefaultDuration = 6.0f / 24.0f;
+	FText Error;
+	const bool bShotsAdded = AddShot(CameraActor, Error) && AddShot(CameraActor, Error) && AddShot(CameraActor, Error) && AddShot(CameraActor, Error);
+	SequencerSettings->DefaultDuration = ShotSecondsBefore;
+	TArray<ULevelSequence*> CreatedSequences;
+	if (ULevelSequence* OpenSequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence())
+	{
+		CreatedSequences.Add(OpenSequence);
+	}
+	const TArray<FShot> Shots = GetShots();
+	for (const FShot& Shot : Shots)
+	{
+		CreatedSequences.AddUnique(Shot.Sequence);
+	}
+
+	if (TestTrue(TEXT("Four shots to show"), bShotsAdded && Shots.Num() == 4))
+	{
+		Shots[1].Sequence->GetMovieScene()->RemoveCameraCutTrack();
+		QueuePanelCaptures(*this, nullptr, TEXT("deliver-tab"), EUEcineDepartment::Deliver, 1400.0f);
+
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this]
+		{
+			const FCheck Check = CheckDelivery(EUEcineDeliverIntent::Review);
+			const FUEcinePreflightFinding* NoCameraCut = Check.Findings.FindByPredicate([](const FUEcinePreflightFinding& Finding) { return Finding.Check == EUEcinePreflightCheck::ShotWithoutCameraCut; });
+			FText FixError;
+			TestTrue(TEXT("The shot without a camera cut is found and put right"), NoCameraCut != nullptr && ApplyFix(*NoCameraCut, FixError));
+			EditChoices([](UUEcineEditorSettings& Choices) { Choices.DeliverIntent = EUEcineDeliverIntent::Master; });
+			return true;
+		}));
+		QueuePanelCaptures(*this, nullptr, TEXT("deliver-tab-ready"), EUEcineDepartment::Deliver, 900.0f, NarrowOnly);
+
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this]
+		{
+			FDelivery Delivery;
+			FText StartError;
+			if (!StartDelivery(EUEcineDeliverIntent::Master, Delivery, StartError))
+			{
+				AddError(FString::Printf(TEXT("The delivery to show rendering did not start: %s"), *StartError.ToString()));
+			}
+			return true;
+		}));
+		// The picture is of a render under way, so it waits for the first frame to be made.
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([]
+		{
+			const UUEcineRenderSubsystem* Render = GEditor->GetEditorSubsystem<UUEcineRenderSubsystem>();
+			return !Render->IsRendering() || Render->GetProgress() > 0.0f;
+		}));
+		QueuePanelCaptures(*this, nullptr, TEXT("deliver-tab-rendering"), EUEcineDepartment::Deliver, 900.0f, NarrowOnly);
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this]
+		{
+			// The picture only shows a render when the render outlasts the taking of it.
+			AddInfo(GEditor->GetEditorSubsystem<UUEcineRenderSubsystem>()->IsRendering()
+				? TEXT("deliver-tab-rendering was taken while the render ran")
+				: TEXT("deliver-tab-rendering was taken after the render had ended: it shows the tab at rest"));
+			return true;
+		}));
+	}
+
+	const double CleanUpStartSeconds = FPlatformTime::Seconds();
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, ChoicesBefore, CreatedSequences, OutputDirectory, CleanUpStartSeconds, WeakCamera = TWeakObjectPtr<ACineCameraActor>(CameraActor)]
+	{
+		UUEcineRenderSubsystem* Render = GEditor->GetEditorSubsystem<UUEcineRenderSubsystem>();
+		if (Render->IsRendering())
+		{
+			if (FPlatformTime::Seconds() - CleanUpStartSeconds < 300.0)
+			{
+				return false;
+			}
+			AddError(TEXT("The render did not finish in 300 seconds"));
+			Render->CancelRender();
+		}
+
+		ChoicesBefore.PutBack();
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+		GEditor->SelectNone(false, true, false);
+		if (ACineCameraActor* CameraToRemove = WeakCamera.Get())
+		{
+			CameraToRemove->GetWorld()->EditorDestroyActor(CameraToRemove, false);
+		}
+		GEditor->ResetTransaction(FText::FromString(TEXT("UEcine deliver tab visual test")));
+		for (ULevelSequence* Sequence : CreatedSequences)
+		{
+			TestTrue(TEXT("The test's sequence asset is removed"), ObjectTools::DeleteSingleObject(Sequence, false));
+		}
+		IFileManager::Get().DeleteDirectory(*OutputDirectory, false, true);
+		return true;
+	}));
+	return true;
+}
+
+/** A picture of the Deliver tab with no sequence open, set to deliver a VFX handoff: preflight says what is missing. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineDeliverTabStatesVisualTest, "UEcine.Editor.Visual.DeliverTabStates", VisualTestFlags)
+
+bool FUEcineDeliverTabStatesVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	const FDeliverChoicesBefore ChoicesBefore;
+	UEcine::DeliverEditing::EditChoices([](UUEcineEditorSettings& Choices) { Choices.DeliverIntent = EUEcineDeliverIntent::VfxHandoff; });
+	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	GEditor->SelectNone(false, true, false);
+	QueuePanelCaptures(*this, nullptr, TEXT("deliver-tab-no-sequence"), EUEcineDepartment::Deliver, 800.0f, NarrowOnly);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([ChoicesBefore]
+	{
+		ChoicesBefore.PutBack();
+		return true;
+	}));
 	return true;
 }
 

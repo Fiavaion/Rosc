@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UEcinePaperwork.h"
 #include "UEcineUnits.h"
+#include "UEcineDeliver.generated.h"
 
 /** The kind of file a render writes. */
 enum class EUEcineRenderFormat : uint8
@@ -71,12 +72,13 @@ struct FUEcineRenderSpec
 };
 
 /** What a delivery is for. The one choice sets everything about the render. */
+UENUM()
 enum class EUEcineDeliverIntent : uint8
 {
 	/** A light movie of each shot with a slate and burn-ins, to pass around and comment on. */
 	Review,
 	/** Every frame as an OpenEXR file with the passes, camera and lens data that visual effects work from. */
-	VfxHandoff,
+	VfxHandoff UMETA(DisplayName = "VFX Handoff"),
 	/** The finished picture of each shot at full quality, clean. */
 	Master
 };
@@ -253,7 +255,7 @@ namespace UEcine::Deliver
 	/** Every intent, in the order Deliver offers them. */
 	UECINECORE_API TConstArrayView<EUEcineDeliverIntent> GetIntents();
 
-	/** "Review", "VFX handoff", "Master". */
+	/** The name of a kind of delivery: "Review", "VFX Handoff", "Master". */
 	UECINECORE_API FText GetIntentName(EUEcineDeliverIntent Intent);
 
 	/** One sentence on what an intent makes. */

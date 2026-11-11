@@ -27,6 +27,9 @@ namespace UEcine::Widgets
 	/** A line or two of guidance in the body text. Takes no space while the text is empty. */
 	TSharedRef<SWidget> MakeNote(TAttribute<FText> Text);
 
+	/** An icon of the editor's beside a message that says how something stands. Takes no space while the message is empty. */
+	TSharedRef<SWidget> MakeStatusLine(FName IconName, TAttribute<FText> Message);
+
 	/** A warning icon beside the message. Takes no space while the message is empty. */
 	TSharedRef<SWidget> MakeWarning(TAttribute<FText> Message);
 

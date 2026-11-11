@@ -135,8 +135,14 @@ What the run added to the design:
 - **The colour space named in the files is the one the editor started in.** "Work in ACEScg"
   writes the project's setting and nothing else; it takes effect at the next start and is not
   undone with the editor's undo.
-- **Preflight runs when asked**, not continuously: it plays to the start of each shot to find
-  the camera the shot spawns.
+- **Preflight does not run continuously**: it plays to the start of each shot to find the
+  camera the shot spawns. The Deliver tab runs it when the tab opens, when the kind of delivery,
+  a delivery choice or the shot list changes, after a fix or a render, and on Check Again; never
+  while the sequence plays or renders. A render runs it once more itself.
+- **Findings that read the same for several shots are shown as one**, naming every shot, and
+  their fix puts all of them right as one undo step.
+- **The kind of delivery last chosen is kept** with the user's other choices (per user, per
+  project), so the tab opens as it was left.
 - **Stop ends the play session the render runs in**, which is how the engine stops a render
   itself. A render is over only when that session is gone (LESSON-API-014). What a stopped
   render had written stays on disk.

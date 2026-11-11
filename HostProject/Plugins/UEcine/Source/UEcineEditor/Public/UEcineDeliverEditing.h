@@ -20,6 +20,12 @@ namespace UEcine::DeliverEditing
 	UECINEEDITOR_API void NoteColourSpaceAtStartup();
 
 	/**
+	 * The folder every sequence's deliveries go under: the one the user chose, or
+	 * UEcine/Deliveries in the project's Saved folder.
+	 */
+	UECINEEDITOR_API FString GetDeliveryFolder();
+
+	/**
 	 * Everything a delivery is told beside its intent: the user's choices, the sequence open in
 	 * Sequencer, today's date and the project's colour space. The output folder is the
 	 * sequence's own folder under the delivery folder.

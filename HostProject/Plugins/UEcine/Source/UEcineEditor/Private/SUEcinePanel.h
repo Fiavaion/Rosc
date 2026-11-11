@@ -13,7 +13,8 @@ enum class EUEcineDepartment : uint8
 	Grip,
 	Focus,
 	Monitor,
-	Shots
+	Shots,
+	Deliver
 };
 
 /**

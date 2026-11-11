@@ -18,6 +18,7 @@ public class UEcineEditor : ModuleRules
 		{
 			"AssetTools",
 			"CinematicCamera",
+			"DesktopPlatform",
 			"EditorSubsystem",
 			"Engine",
 			"ImageCore",

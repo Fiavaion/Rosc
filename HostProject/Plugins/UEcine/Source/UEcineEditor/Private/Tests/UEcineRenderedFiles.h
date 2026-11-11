@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class FAutomationTestBase;
 struct FImage;
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -39,6 +40,13 @@ namespace UEcine::RenderedFiles
 
 	/** How many pictures the video track of a QuickTime file holds, or -1 when the file is not there or has none. */
 	int32 CountMovFrames(const FString& Filename);
+
+	/**
+	 * The engine logs an error for every graph render started in the editor: it asks for the
+	 * version number before it has the graph to read it from (LESSON-API-010). The render is not
+	 * affected, and a test that renders expects the message.
+	 */
+	void ExpectRenderLogNoise(FAutomationTestBase& Test);
 }
 
 #endif

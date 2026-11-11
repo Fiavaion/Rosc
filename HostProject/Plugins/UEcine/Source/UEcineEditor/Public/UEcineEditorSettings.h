@@ -23,6 +23,10 @@ public:
 	UPROPERTY(config)
 	FUEcineMonitorSettings MonitorSettings;
 
+	/** What the Deliver tab is set to deliver. */
+	UPROPERTY(config, EditAnywhere, Category = "Deliver", meta = (DisplayName = "Deliver For"))
+	EUEcineDeliverIntent DeliverIntent = EUEcineDeliverIntent::Review;
+
 	/**
 	 * The folder deliveries are written under; each sequence has a folder of its own in it.
 	 * Left empty, they go under UEcine/Deliveries in the project's Saved folder.

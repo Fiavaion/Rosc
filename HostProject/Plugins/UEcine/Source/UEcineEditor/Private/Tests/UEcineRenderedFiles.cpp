@@ -3,6 +3,7 @@
 #include "HAL/FileManager.h"
 #include "ImageCore.h"
 #include "Math/Float16.h"
+#include "Misc/AutomationTest.h"
 #include "Misc/Compression.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/Archive.h"
@@ -448,6 +449,12 @@ int32 UEcine::RenderedFiles::CountMovFrames(const FString& Filename)
 		}
 	}
 	return -1;
+}
+
+void UEcine::RenderedFiles::ExpectRenderLogNoise(FAutomationTestBase& Test)
+{
+	Test.AddExpectedError(TEXT("Cannot resolve version number without a valid evaluated graph"), EAutomationExpectedErrorFlags::Contains, 0);
+	Test.AddExpectedError(TEXT("Script call stack"), EAutomationExpectedErrorFlags::Contains, 0);
 }
 
 #endif

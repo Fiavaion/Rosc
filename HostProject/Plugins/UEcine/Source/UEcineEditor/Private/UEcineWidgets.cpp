@@ -159,7 +159,7 @@ TSharedRef<SWidget> UEcine::Widgets::MakeEmptyState(const FText& Message, const 
 		];
 }
 
-TSharedRef<SWidget> UEcine::Widgets::MakeWarning(TAttribute<FText> Message)
+TSharedRef<SWidget> UEcine::Widgets::MakeStatusLine(const FName IconName, TAttribute<FText> Message)
 {
 	return SNew(SHorizontalBox)
 		.Visibility_Lambda([Message] { return Message.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
@@ -169,7 +169,7 @@ TSharedRef<SWidget> UEcine::Widgets::MakeWarning(TAttribute<FText> Message)
 		.Padding(0.0f, 1.0f, 6.0f, 0.0f)
 		[
 			SNew(SImage)
-			.Image(FAppStyle::Get().GetBrush("Icons.WarningWithColor"))
+			.Image(FAppStyle::Get().GetBrush(IconName))
 		]
 		+ SHorizontalBox::Slot()
 		.FillWidth(1.0f)
@@ -179,6 +179,11 @@ TSharedRef<SWidget> UEcine::Widgets::MakeWarning(TAttribute<FText> Message)
 			.Text(Message)
 			.AutoWrapText(true)
 		];
+}
+
+TSharedRef<SWidget> UEcine::Widgets::MakeWarning(TAttribute<FText> Message)
+{
+	return MakeStatusLine("Icons.WarningWithColor", MoveTemp(Message));
 }
 
 TSharedRef<SWidget> UEcine::Widgets::MakeButton(TAttribute<FText> Label, TAttribute<FText> ToolTip, FOnClicked OnClicked, TAttribute<bool> IsEnabled)

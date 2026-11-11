@@ -138,7 +138,7 @@ FText UEcine::Deliver::GetIntentName(EUEcineDeliverIntent Intent)
 	switch (Intent)
 	{
 	case EUEcineDeliverIntent::Review: return LOCTEXT("IntentReview", "Review");
-	case EUEcineDeliverIntent::VfxHandoff: return LOCTEXT("IntentVfx", "VFX handoff");
+	case EUEcineDeliverIntent::VfxHandoff: return LOCTEXT("IntentVfx", "VFX Handoff");
 	default: return LOCTEXT("IntentMaster", "Master");
 	}
 }
