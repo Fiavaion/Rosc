@@ -52,6 +52,21 @@ ULevelSequence* UEcine::SequenceUtils::CreateSequence(const FString& PackageName
 	return Sequence;
 }
 
+UEcine::SequenceUtils::FScopedPlayhead::FScopedPlayhead()
+	: Ticks(ULevelSequenceEditorBlueprintLibrary::GetGlobalPosition(EMovieSceneTimeUnit::TickResolution).Frame)
+{
+}
+
+UEcine::SequenceUtils::FScopedPlayhead::~FScopedPlayhead()
+{
+	SetPlayheadTicks(Ticks);
+}
+
+void UEcine::SequenceUtils::SetPlayheadTicks(FFrameTime Ticks)
+{
+	ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(Ticks, EUpdatePositionMethod::Scrub), EMovieSceneTimeUnit::TickResolution);
+}
+
 UEcine::SequenceUtils::FBakeTarget UEcine::SequenceUtils::FindOrCreateBakeTarget(const AActor* NamedAfter, const TCHAR* NameSuffix, const ACineCameraActor* Camera)
 {
 	FBakeTarget Target;

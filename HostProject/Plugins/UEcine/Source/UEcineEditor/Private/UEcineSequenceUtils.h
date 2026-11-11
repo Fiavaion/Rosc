@@ -4,6 +4,7 @@
 #include "Math/Range.h"
 #include "Misc/FrameNumber.h"
 #include "Misc/FrameRate.h"
+#include "Misc/FrameTime.h"
 #include "MovieSceneSection.h"
 #include "MovieSceneTrack.h"
 
@@ -31,6 +32,23 @@ namespace UEcine::SequenceUtils
 	 * @param PackageName Where to make it, such as "/Game/UEcine/Sequences/Crane". A number is added when the name is taken.
 	 */
 	ULevelSequence* CreateSequence(const FString& PackageName, FFrameRate DisplayRate);
+
+	/** Puts Sequencer's playhead back where it was when a look through the open sequence is over. */
+	struct FScopedPlayhead
+	{
+		FScopedPlayhead();
+		~FScopedPlayhead();
+
+		FScopedPlayhead(const FScopedPlayhead&) = delete;
+		FScopedPlayhead& operator=(const FScopedPlayhead&) = delete;
+
+	private:
+		/** In ticks of the open sequence. */
+		FFrameTime Ticks;
+	};
+
+	/** Moves Sequencer's playhead to a tick of the open sequence and plays the level to that moment. */
+	void SetPlayheadTicks(FFrameTime Ticks);
 
 	/** Where a bake from the panel is written. */
 	struct FBakeTarget

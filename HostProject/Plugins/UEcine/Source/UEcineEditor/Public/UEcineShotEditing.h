@@ -70,6 +70,9 @@ namespace UEcine::ShotEditing
 	 */
 	UECINEEDITOR_API ACineCameraActor* FindShotCamera(const FShot& Shot);
 
+	/** What a binding of the shot's sequence stands for in the level right now. */
+	UECINEEDITOR_API TArray<UObject*> ResolveBinding(const FShot& Shot, const FGuid& Binding);
+
 	/** The pictures taken of a shot, in the order of their frames. */
 	UECINEEDITOR_API TConstArrayView<FUEcineStoryboardFrame> GetStoryboardFrames(const ULevelSequence* ShotSequence);
 

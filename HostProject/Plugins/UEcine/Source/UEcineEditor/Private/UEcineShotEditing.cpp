@@ -70,28 +70,8 @@ namespace
 
 	void SetPlayheadFrame(const ULevelSequence* OpenSequence, FFrameNumber Frame)
 	{
-		const FFrameTime Ticks(FrameToTicks(OpenSequence->GetMovieScene(), Frame));
-		ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(Ticks, EUpdatePositionMethod::Scrub), EMovieSceneTimeUnit::TickResolution);
+		UEcine::SequenceUtils::SetPlayheadTicks(FFrameTime(FrameToTicks(OpenSequence->GetMovieScene(), Frame)));
 	}
-
-	/** Puts Sequencer's playhead back where it was when a look through the shots is over. */
-	struct FScopedShotPlayhead
-	{
-		FScopedShotPlayhead()
-			: Ticks(ULevelSequenceEditorBlueprintLibrary::GetGlobalPosition(EMovieSceneTimeUnit::TickResolution).Frame)
-		{
-		}
-
-		~FScopedShotPlayhead()
-		{
-			ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(Ticks, EUpdatePositionMethod::Scrub), EMovieSceneTimeUnit::TickResolution);
-		}
-
-		FScopedShotPlayhead(const FScopedShotPlayhead&) = delete;
-		FScopedShotPlayhead& operator=(const FScopedShotPlayhead&) = delete;
-
-		FFrameTime Ticks;
-	};
 
 	UEcine::ShotEditing::FShot MakeShot(ULevelSequence* Sequence, UMovieSceneCinematicShotSection* Section, const FString& Name, const UMovieScene* OpenMovieScene, const TRange<FFrameNumber>& Ticks)
 	{
@@ -117,16 +97,9 @@ namespace
 		Edit(*Data);
 	}
 
-	/** What a binding of the shot's sequence stands for in the level right now. */
-	TArray<UObject*> ResolveShotBinding(const UEcine::ShotEditing::FShot& Shot, const FGuid& Binding)
-	{
-		const FMovieSceneSequenceID SequenceID = Shot.Section != nullptr ? Shot.Section->GetSequenceID() : MovieSceneSequenceID::Root;
-		return ULevelSequenceEditorBlueprintLibrary::GetBoundObjects(UE::MovieScene::FFixedObjectBindingID(Binding, SequenceID));
-	}
-
 	ACineCameraActor* FindCameraOfBinding(const UEcine::ShotEditing::FShot& Shot, const FGuid& Binding)
 	{
-		for (UObject* Object : ResolveShotBinding(Shot, Binding))
+		for (UObject* Object : UEcine::ShotEditing::ResolveBinding(Shot, Binding))
 		{
 			if (ACineCameraActor* Camera = Cast<ACineCameraActor>(Object))
 			{
@@ -459,6 +432,12 @@ ACineCameraActor* UEcine::ShotEditing::FindShotCamera(const FShot& Shot)
 	return nullptr;
 }
 
+TArray<UObject*> UEcine::ShotEditing::ResolveBinding(const FShot& Shot, const FGuid& Binding)
+{
+	const FMovieSceneSequenceID SequenceID = Shot.Section != nullptr ? Shot.Section->GetSequenceID() : MovieSceneSequenceID::Root;
+	return ULevelSequenceEditorBlueprintLibrary::GetBoundObjects(UE::MovieScene::FFixedObjectBindingID(Binding, SequenceID));
+}
+
 TConstArrayView<FUEcineStoryboardFrame> UEcine::ShotEditing::GetStoryboardFrames(const ULevelSequence* ShotSequence)
 {
 	const UUEcineShotMetaData* Data = ShotSequence->FindMetaData<UUEcineShotMetaData>();
@@ -591,7 +570,7 @@ FUEcinePlan UEcine::ShotEditing::MakePlan(const FShot& Shot)
 		return Plan;
 	}
 
-	const FScopedShotPlayhead PutPlayheadBack;
+	const UEcine::SequenceUtils::FScopedPlayhead PutPlayheadBack;
 	const int32 SampleCount = FMath::Min(Shot.DurationFrames, MaxPlanSamples);
 	for (int32 SampleIndex = 0; SampleIndex < SampleCount; ++SampleIndex)
 	{
@@ -624,7 +603,7 @@ FUEcinePlan UEcine::ShotEditing::MakePlan(const FShot& Shot)
 			const UMovieScene* ShotMovieScene = Shot.Sequence->GetMovieScene();
 			for (const FMovieSceneBinding& Binding : ShotMovieScene->GetBindings())
 			{
-				for (const UObject* Object : ResolveShotBinding(Shot, Binding.GetObjectGuid()))
+				for (const UObject* Object : ResolveBinding(Shot, Binding.GetObjectGuid()))
 				{
 					AddPlanSubject(Plan, Cast<AActor>(Object));
 				}
@@ -649,7 +628,7 @@ FUEcinePaperwork UEcine::ShotEditing::BuildPaperwork()
 	Paperwork.Language = FInternationalization::Get().GetCurrentLanguage()->GetTwoLetterISOLanguageName();
 
 	const EUEcineDistanceUnits Units = UUEcineEditorSettings::GetDistanceUnits();
-	const FScopedShotPlayhead PutPlayheadBack;
+	const UEcine::SequenceUtils::FScopedPlayhead PutPlayheadBack;
 	for (const FShot& Shot : GetShots())
 	{
 		// The report says what the camera is set to as the shot starts.
