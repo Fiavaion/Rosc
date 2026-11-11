@@ -28,12 +28,16 @@ if (-not (Test-Path $reportFile)) {
 }
 
 $report = Get-Content $reportFile -Raw | ConvertFrom-Json
+# Show what went wrong, but only the first few lines per test: one broken thing often fails
+# on every frame it is checked, and the full list is in the report file.
+$maxLines = 12
 foreach ($test in $report.tests) {
-	if ($test.state -ne "Success") {
-		Write-Output ("FAILED  " + $test.fullTestPath)
-		foreach ($entry in $test.entries) {
-			if ($entry.event.type -ne "Info") { Write-Output ("        " + $entry.event.type + ": " + $entry.event.message) }
-		}
+	$problems = @($test.entries | Where-Object { $_.event.type -ne "Info" })
+	if ($test.state -ne "Success" -or $problems.Count -gt 0) {
+		$label = if ($test.state -ne "Success") { "FAILED  " } else { "WARNING " }
+		Write-Output ($label + $test.fullTestPath)
+		$problems | Select-Object -First $maxLines | ForEach-Object { Write-Output ("        " + $_.event.type + ": " + $_.event.message) }
+		if ($problems.Count -gt $maxLines) { Write-Output ("        ... and {0} more in {1}" -f ($problems.Count - $maxLines), $reportFile) }
 	}
 }
 

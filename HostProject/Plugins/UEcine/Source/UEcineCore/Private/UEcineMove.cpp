@@ -262,7 +262,8 @@ TArray<FUEcineMoveKey> UEcine::Move::MakeKeys(double StartValue, double EndValue
 		FUEcineMoveKey& Key = Keys.AddDefaulted_GetRef();
 		Key.TimeSeconds = U * T.DurationSeconds;
 		Key.Value = StartValue + Distance * Progress(T, Key.TimeSeconds);
-		Key.SlopePerSecond = Slope;
+		Key.ArriveSlopePerSecond = Slope;
+		Key.LeaveSlopePerSecond = Slope;
 	};
 
 	AddKey(0.0, bHasEaseIn ? 0.0 : SteadySlope);
@@ -276,6 +277,34 @@ TArray<FUEcineMoveKey> UEcine::Move::MakeKeys(double StartValue, double EndValue
 		AddKey(EaseOutStart, SteadySlope);
 	}
 	AddKey(1.0, bHasEaseOut ? 0.0 : SteadySlope);
+	return Keys;
+}
+
+TArray<FUEcineMoveKey> UEcine::Move::MakeKeysForMarks(TConstArrayView<FUEcineRigMark> Marks, EUEcineRigAxis Axis)
+{
+	check(!Marks.IsEmpty());
+
+	TArray<FUEcineMoveKey> Keys;
+	FUEcineMoveKey& First = Keys.AddDefaulted_GetRef();
+	First.Value = Marks[0].Pose.Get(Axis);
+
+	double MoveStart = 0.0;
+	for (int32 Index = 1; Index < Marks.Num(); ++Index)
+	{
+		const TArray<FUEcineMoveKey> MoveKeys = MakeKeys(Marks[Index - 1].Pose.Get(Axis), Marks[Index].Pose.Get(Axis), Marks[Index].Arrival);
+
+		// The move's first key lands on the key that ends the move before it: one key, leaving at this move's slope.
+		Keys.Last().LeaveSlopePerSecond = MoveKeys[0].LeaveSlopePerSecond;
+		for (int32 KeyIndex = 1; KeyIndex < MoveKeys.Num(); ++KeyIndex)
+		{
+			FUEcineMoveKey& Key = Keys.Add_GetRef(MoveKeys[KeyIndex]);
+			Key.TimeSeconds += MoveStart;
+		}
+		MoveStart += Marks[Index].Arrival.Normalized().DurationSeconds;
+
+		// At rest on the mark until the next move says otherwise.
+		Keys.Last().LeaveSlopePerSecond = 0.0;
+	}
 	return Keys;
 }
 

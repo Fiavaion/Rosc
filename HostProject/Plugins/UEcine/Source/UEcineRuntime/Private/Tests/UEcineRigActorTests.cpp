@@ -50,7 +50,12 @@ bool FUEcineRigActorTest::RunTest(const FString& Parameters)
 	{
 		const FName PropertyName = AUEcineRig::GetAxisPropertyName(static_cast<EUEcineRigAxis>(AxisIndex));
 		TestNotNull(*FString::Printf(TEXT("Axis property %s exists"), *PropertyName.ToString()), FindFProperty<FFloatProperty>(AUEcineRig::StaticClass(), PropertyName));
-		TestNotNull(*FString::Printf(TEXT("Axis property %s has a setter"), *PropertyName.ToString()), AUEcineRig::StaticClass()->FindFunctionByName(*(TEXT("Set") + PropertyName.ToString())));
+		const UFunction* Setter = AUEcineRig::StaticClass()->FindFunctionByName(*(TEXT("Set") + PropertyName.ToString()));
+		if (TestNotNull(*FString::Printf(TEXT("Axis property %s has a setter"), *PropertyName.ToString()), Setter))
+		{
+			// Without this the engine ignores Sequencer's call while scrubbing in the editor.
+			TestTrue(*FString::Printf(TEXT("The setter for %s can be called in the editor"), *PropertyName.ToString()), Setter->GetBoolMetaData(TEXT("CallInEditor")));
+		}
 	}
 
 	// Dolly: travel follows the track, and the travel range is the length of track laid.

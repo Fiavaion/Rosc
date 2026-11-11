@@ -23,9 +23,9 @@ namespace
 				const double S2 = S * S;
 				const double S3 = S2 * S;
 				return (2.0 * S3 - 3.0 * S2 + 1.0) * A.Value
-					+ (S3 - 2.0 * S2 + S) * Span * A.SlopePerSecond
+					+ (S3 - 2.0 * S2 + S) * Span * A.LeaveSlopePerSecond
 					+ (-2.0 * S3 + 3.0 * S2) * B.Value
-					+ (S3 - S2) * Span * B.SlopePerSecond;
+					+ (S3 - S2) * Span * B.ArriveSlopePerSecond;
 			}
 		}
 		return Keys.Last().Value;
@@ -257,6 +257,16 @@ bool FUEcineMoveTimingTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Marks: halfway through the second move"), EvaluateMarks(Marks, 5.0).Pan, 10.0, 1.e-9);
 	TestEqual(TEXT("Marks: holds the last mark afterwards"), EvaluateMarks(Marks, 60.0).Pan, -20.0, 1.e-9);
 	TestEqual(TEXT("Marks: one mark is a held position"), EvaluateMarks(MakeArrayView(Marks.GetData(), 1), 3.0).Extension, 300.0, 1.e-9);
+
+	// One curve per axis runs through all the marks and matches the solver everywhere.
+	const TArray<FUEcineMoveKey> PanKeys = MakeKeysForMarks(Marks, EUEcineRigAxis::Pan);
+	TestEqual(TEXT("Marks: four keys for the first move and two more for the second"), PanKeys.Num(), 6);
+	for (int32 Step = 0; Step <= 120; ++Step)
+	{
+		const double Time = 6.0 * Step / 120.0;
+		TestEqual(TEXT("Marks: the keyed curve matches the solver"), EvaluateKeys(PanKeys, Time), EvaluateMarks(Marks, Time).Pan, 1.e-6);
+	}
+	TestEqual(TEXT("Marks: one mark is one key"), MakeKeysForMarks(MakeArrayView(Marks.GetData(), 1), EUEcineRigAxis::Pan).Num(), 1);
 	return true;
 }
 

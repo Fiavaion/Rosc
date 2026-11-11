@@ -74,12 +74,17 @@ struct FUEcineMoveFinding
 	double MinimumDurationSeconds = 0.0;
 };
 
-/** A point on an axis curve: value and slope at a time. Cubic interpolation between these reproduces the move exactly. */
+/**
+ * A point on an axis curve: the value at a time and the slope of the curve coming into and going
+ * out of it. Cubic interpolation between these reproduces the move exactly. The two slopes
+ * differ only where one move ends and the next begins.
+ */
 struct FUEcineMoveKey
 {
 	double TimeSeconds = 0.0;
 	double Value = 0.0;
-	double SlopePerSecond = 0.0;
+	double ArriveSlopePerSecond = 0.0;
+	double LeaveSlopePerSecond = 0.0;
 };
 
 namespace UEcine::Move
@@ -113,4 +118,7 @@ namespace UEcine::Move
 
 	/** The keys that draw one axis of the move as a curve, in time order. */
 	UECINECORE_API TArray<FUEcineMoveKey> MakeKeys(double StartValue, double EndValue, const FUEcineMoveTiming& Timing);
+
+	/** The keys that draw one axis through every mark in order, timed from leaving the first mark. Marks must not be empty. */
+	UECINECORE_API TArray<FUEcineMoveKey> MakeKeysForMarks(TConstArrayView<FUEcineRigMark> Marks, EUEcineRigAxis Axis);
 }

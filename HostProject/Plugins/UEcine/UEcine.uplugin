@@ -33,5 +33,11 @@
 			"LoadingPhase": "Default",
 			"PlatformAllowList": [ "Win64" ]
 		}
+	],
+	"Plugins": [
+		{
+			"Name": "LevelSequenceEditor",
+			"Enabled": true
+		}
 	]
 }

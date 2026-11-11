@@ -16,11 +16,16 @@ public class UEcineEditor : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
+			"AssetTools",
 			"CinematicCamera",
 			"EditorSubsystem",
 			"Engine",
 			"InputCore",
 			"LevelEditor",
+			"LevelSequence",
+			"LevelSequenceEditor",
+			"MovieScene",
+			"MovieSceneTracks",
 			"Slate",
 			"SlateCore",
 			"UnrealEd",

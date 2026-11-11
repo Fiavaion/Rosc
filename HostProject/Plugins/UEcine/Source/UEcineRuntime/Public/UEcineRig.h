@@ -64,16 +64,18 @@ public:
 	USplineComponent* GetTrack() const { return Track; }
 
 	// Sequencer sets an animated property through a function named Set<Property> when one
-	// exists; these move the rig as each axis changes.
-	UFUNCTION(BlueprintSetter) void SetTravel(float Value);
-	UFUNCTION(BlueprintSetter) void SetTraverse(float Value);
-	UFUNCTION(BlueprintSetter) void SetLift(float Value);
-	UFUNCTION(BlueprintSetter) void SetSwing(float Value);
-	UFUNCTION(BlueprintSetter) void SetBoom(float Value);
-	UFUNCTION(BlueprintSetter) void SetExtension(float Value);
-	UFUNCTION(BlueprintSetter) void SetPan(float Value);
-	UFUNCTION(BlueprintSetter) void SetTilt(float Value);
-	UFUNCTION(BlueprintSetter) void SetRoll(float Value);
+	// exists; these move the rig as each axis changes. CallInEditor is what lets Sequencer
+	// reach them while scrubbing in the editor: without it the engine drops function calls on
+	// actors in an editor world (LESSON-API-001).
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetTravel(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetTraverse(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetLift(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetSwing(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetBoom(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetExtension(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetPan(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetTilt(float Value);
+	UFUNCTION(BlueprintSetter, CallInEditor) void SetRoll(float Value);
 
 	/** The name of the property behind an axis, as Sequencer tracks refer to it. */
 	static FName GetAxisPropertyName(EUEcineRigAxis Axis);
