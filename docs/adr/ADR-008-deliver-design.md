@@ -1,7 +1,7 @@
 # ADR-008: How Deliver builds and runs a render
 
 **Date:** 2026-11-11
-**Status:** Proposed — pending Spike #3
+**Status:** Accepted (Spike #3 run 2026-11-11: every rule kept, no fallback taken)
 **Deciders:** Claude, from a reading of the 5.8 Movie Render Pipeline source
 
 ## Context
@@ -90,6 +90,36 @@ from an automation test with latent commands, on a six-frame shot at 640 pixels 
 - **ProRes by reflection.** Kept if the node class is found by path, its quality is set and a
   `.mov` is written. Otherwise Review falls back to the H.264 MP4 node (public header), and the
   brief's "ProRes" becomes a finding in the phase report.
+
+## Spike #3 — result (2026-11-11)
+`UEcine.Editor.Deliver.RenderTwoShots`, run with `tools/test.ps1 -Rendering`: two six-frame
+shots of one unsaved sequence in Template_Default, rendered in one job in about a second.
+- **Executor: kept.** The generated graphs rendered to completion unattended. The executor
+  listed nine files, all on disk in the folder asked for: eight EXR files for the first shot
+  and one `.mov` of eight frames for the second (six frames, a slate and a tail frame each).
+  The sequence's playback range and both shot sections were unchanged afterwards.
+- **Burn-in: kept.** The native widget's hook ran once per output frame (16 for 16). Its slate
+  covered the first frame and its strip the bottom of the others, read from the EXR's burn-in
+  layer; the `.mov` was decoded with ffmpeg by hand and showed the slate on frame 0 and the
+  strip over the picture on frame 3.
+- **Per-shot graphs: kept.** Each file was named for its shot and carried its own shot's
+  metadata (`uecine/lens/kit` differed between the EXR header and the movie's slate).
+- **ProRes by reflection: kept.** ffprobe reads the movie as ProRes 422 LT, 10-bit, Rec.709,
+  24 fps, eight frames, with a timecode track.
+
+What the run added to the design:
+- In a multilayer EXR the slate and burn-ins are a layer of their own (`BurnIn`), not drawn
+  into the picture: right for VFX, and the layer the tests read.
+- Layers are named `FinalImage`, `Deferred_depth`, `Deferred_normal`, `Deferred_motion` and
+  `beauty_ObjectID00…02`; depth is in centimetres from the camera.
+- VFX handoff EXRs are packed with ZIP, one row at a time (lossless, and what compositing
+  programs read fastest) instead of the engine's default PIZ. The tests read layers back with
+  a reader of their own for this packing.
+- Whether a render succeeded comes from the executor's finish, not the job's output data
+  (LESSON-API-011). The engine logs one harmless error at the start of every graph render in
+  the editor (LESSON-API-010).
+- The output frame must have the shape of the camera's frame, or the picture is boxed inside
+  it: the recipes size each render from the recording format and delivery frame.
 
 ## Consequences
 - ✅ One code path for the panel button and the acceptance test.

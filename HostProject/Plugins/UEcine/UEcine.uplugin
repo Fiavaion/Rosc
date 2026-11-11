@@ -34,6 +34,12 @@
 			"PlatformAllowList": [ "Win64" ]
 		},
 		{
+			"Name": "UEcineRender",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
+		},
+		{
 			"Name": "UEcineEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default",
@@ -43,6 +49,18 @@
 	"Plugins": [
 		{
 			"Name": "LevelSequenceEditor",
+			"Enabled": true
+		},
+		{
+			"Name": "MovieRenderPipeline",
+			"Enabled": true
+		},
+		{
+			"Name": "MoviePipelineMaskRenderPass",
+			"Enabled": true
+		},
+		{
+			"Name": "AppleProResMedia",
 			"Enabled": true
 		}
 	]

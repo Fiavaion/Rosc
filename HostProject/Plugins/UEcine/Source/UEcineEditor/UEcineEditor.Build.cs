@@ -34,6 +34,7 @@ public class UEcineEditor : ModuleRules
 			"UnrealEd",
 			"WorkspaceMenuStructure",
 			"UEcineMonitor",
+			"UEcineRender",
 			"UEcineRuntime"
 		});
 
