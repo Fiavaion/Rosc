@@ -1,7 +1,7 @@
 #include "Misc/AutomationTest.h"
 #include "UEcineMove.h"
 #include "UEcineOperator.h"
-#include "UEcineRig.h"
+#include "UEcineRigTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -241,6 +241,22 @@ bool FUEcineMoveTimingTest::RunTest(const FString& Parameters)
 	const FUEcineRigPose Middle = Evaluate(Start, End, Feathered, 2.0);
 	TestEqual(TEXT("Every axis moves together: pan"), Middle.Pan, 10.0, 1.e-9);
 	TestEqual(TEXT("Every axis moves together: telescope"), Middle.Extension, 450.0, 1.e-9);
+
+	// Three marks: 4 seconds to the second, then 2 seconds back to where it started.
+	TArray<FUEcineRigMark> Marks;
+	Marks.AddDefaulted(3);
+	Marks[0].Pose = Start;
+	Marks[1].Pose = End;
+	Marks[1].Arrival = Feathered;
+	Marks[2].Pose = Start;
+	Marks[2].Arrival = MakeTiming(2.0, 0.5, 0.5);
+	TestEqual(TEXT("Marks: total time is the sum of the moves"), GetTotalDuration(Marks), 6.0, 1.e-9);
+	TestEqual(TEXT("Marks: starts on the first mark"), EvaluateMarks(Marks, 0.0).Pan, -20.0, 1.e-9);
+	TestEqual(TEXT("Marks: halfway through the first move"), EvaluateMarks(Marks, 2.0).Pan, 10.0, 1.e-9);
+	TestEqual(TEXT("Marks: on the second mark when the first move ends"), EvaluateMarks(Marks, 4.0).Pan, 40.0, 1.e-9);
+	TestEqual(TEXT("Marks: halfway through the second move"), EvaluateMarks(Marks, 5.0).Pan, 10.0, 1.e-9);
+	TestEqual(TEXT("Marks: holds the last mark afterwards"), EvaluateMarks(Marks, 60.0).Pan, -20.0, 1.e-9);
+	TestEqual(TEXT("Marks: one mark is a held position"), EvaluateMarks(MakeArrayView(Marks.GetData(), 1), 3.0).Extension, 300.0, 1.e-9);
 	return true;
 }
 

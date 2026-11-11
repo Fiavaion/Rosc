@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UEcineRig.h"
+#include "UEcineRigTypes.h"
 #include "UEcineMove.generated.h"
 
 /**
@@ -27,6 +27,23 @@ struct UECINECORE_API FUEcineMoveTiming
 
 	/** The same timing with a positive duration and ease fractions that fit inside the move. */
 	FUEcineMoveTiming Normalized() const;
+};
+
+/** A position the rig is asked to hit, as a grip marks the floor with tape. */
+USTRUCT(BlueprintType)
+struct UECINECORE_API FUEcineRigMark
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
+	FString Label;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
+	FUEcineRigPose Pose;
+
+	/** How the rig arrives here from the mark before. Not used by the first mark. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
+	FUEcineMoveTiming Arrival;
 };
 
 /** What a rig cannot do about a move. */
@@ -72,6 +89,15 @@ namespace UEcine::Move
 
 	/** The rig's pose at a time from the start of the move. */
 	UECINECORE_API FUEcineRigPose Evaluate(const FUEcineRigPose& Start, const FUEcineRigPose& End, const FUEcineMoveTiming& Timing, double TimeSeconds);
+
+	/** How long it takes to run through every mark in order, from the first to the last. */
+	UECINECORE_API double GetTotalDuration(TConstArrayView<FUEcineRigMark> Marks);
+
+	/**
+	 * The rig's pose at a time from when it leaves the first mark, moving through the marks in
+	 * order and coming to each one with that mark's arrival timing. Marks must not be empty.
+	 */
+	UECINECORE_API FUEcineRigPose EvaluateMarks(TConstArrayView<FUEcineRigMark> Marks, double TimeSeconds);
 
 	/** Top speed reached by an axis that covers the given distance. */
 	UECINECORE_API double PeakSpeed(const FUEcineMoveTiming& Timing, double Distance);

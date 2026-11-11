@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UEcineUnits.h"
-#include "UEcineRig.generated.h"
+#include "UEcineRigTypes.generated.h"
 
 /** The kinds of camera support the Grip department offers. */
 UENUM(BlueprintType)
@@ -167,9 +167,6 @@ namespace UEcine::Rig
 
 	/** True for axes measured in centimetres, false for axes measured in degrees. */
 	UECINECORE_API bool IsDistanceAxis(EUEcineRigAxis Axis);
-
-	/** True for rigs whose Travel axis runs along a track or rail. */
-	UECINECORE_API bool UsesTrack(EUEcineRigType Type);
 
 	/** A point on a straight track that runs along the rig's forward axis. */
 	UECINECORE_API FTransform StraightTrackPoint(double TravelCm);

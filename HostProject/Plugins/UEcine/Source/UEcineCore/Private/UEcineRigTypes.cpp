@@ -1,4 +1,4 @@
-#include "UEcineRig.h"
+#include "UEcineRigTypes.h"
 
 #define LOCTEXT_NAMESPACE "UEcineCore"
 
@@ -282,11 +282,6 @@ FText UEcine::Rig::GetAxisName(EUEcineRigType Type, EUEcineRigAxis Axis)
 bool UEcine::Rig::IsDistanceAxis(EUEcineRigAxis Axis)
 {
 	return Axis == EUEcineRigAxis::Travel || Axis == EUEcineRigAxis::Traverse || Axis == EUEcineRigAxis::Lift || Axis == EUEcineRigAxis::Extension;
-}
-
-bool UEcine::Rig::UsesTrack(EUEcineRigType Type)
-{
-	return Type == EUEcineRigType::Slider || Type == EUEcineRigType::Dolly;
 }
 
 FTransform UEcine::Rig::StraightTrackPoint(double TravelCm)

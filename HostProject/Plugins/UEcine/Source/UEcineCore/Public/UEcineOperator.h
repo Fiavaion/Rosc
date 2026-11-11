@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UEcineRig.h"
+#include "UEcineRigTypes.h"
 #include "UEcineOperator.generated.h"
 
 /** Whose hands the camera is in. Each leaves its own small, human trace on the frame. */

@@ -78,6 +78,33 @@ FUEcineRigPose UEcine::Move::Evaluate(const FUEcineRigPose& Start, const FUEcine
 	return Pose;
 }
 
+double UEcine::Move::GetTotalDuration(TConstArrayView<FUEcineRigMark> Marks)
+{
+	double Total = 0.0;
+	for (int32 Index = 1; Index < Marks.Num(); ++Index)
+	{
+		Total += Marks[Index].Arrival.Normalized().DurationSeconds;
+	}
+	return Total;
+}
+
+FUEcineRigPose UEcine::Move::EvaluateMarks(TConstArrayView<FUEcineRigMark> Marks, double TimeSeconds)
+{
+	check(!Marks.IsEmpty());
+
+	double MoveStart = 0.0;
+	for (int32 Index = 1; Index < Marks.Num(); ++Index)
+	{
+		const double Duration = Marks[Index].Arrival.Normalized().DurationSeconds;
+		if (TimeSeconds < MoveStart + Duration)
+		{
+			return Evaluate(Marks[Index - 1].Pose, Marks[Index].Pose, Marks[Index].Arrival, TimeSeconds - MoveStart);
+		}
+		MoveStart += Duration;
+	}
+	return Marks.Last().Pose;
+}
+
 double UEcine::Move::PeakSpeed(const FUEcineMoveTiming& Timing, double Distance)
 {
 	const FUEcineMoveTiming T = Timing.Normalized();
