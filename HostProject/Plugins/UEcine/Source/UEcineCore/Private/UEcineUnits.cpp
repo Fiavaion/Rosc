@@ -14,6 +14,12 @@ namespace UEcine::Units
 
 	FText FormatDistance(double Millimetres, EUEcineDistanceUnits Units)
 	{
+		if (Millimetres <= -0.5)
+		{
+			return FText::Format(LOCTEXT("NegativeDistance", "-{0}"), FormatDistance(-Millimetres, Units));
+		}
+		Millimetres = FMath::Max(Millimetres, 0.0);
+
 		if (Units == EUEcineDistanceUnits::Imperial)
 		{
 			const int64 TotalInches = FMath::RoundToInt64(Millimetres / 25.4);

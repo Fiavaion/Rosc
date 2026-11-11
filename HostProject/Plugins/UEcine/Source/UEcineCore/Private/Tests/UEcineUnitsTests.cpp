@@ -25,6 +25,11 @@ bool FUEcineUnitsFormatTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Inches that round up to twelve carry into feet"), *FormatDistance(3040.0, EUEcineDistanceUnits::Imperial).ToString(), TEXT("10' 0\""));
 	TestEqual(TEXT("A hundred feet and over is whole feet"), *FormatDistance(36576.0, EUEcineDistanceUnits::Imperial).ToString(), TEXT("120'"));
 
+	// Rig positions can be behind or below their starting point.
+	TestEqual(TEXT("A negative distance keeps its unit"), *FormatDistance(-5000.0, EUEcineDistanceUnits::Metric).ToString(), TEXT("-5 m"));
+	TestEqual(TEXT("A negative imperial distance"), *FormatDistance(-1371.6, EUEcineDistanceUnits::Imperial).ToString(), TEXT("-4' 6\""));
+	TestEqual(TEXT("Nothing is not negative"), *FormatDistance(-0.2, EUEcineDistanceUnits::Metric).ToString(), TEXT("0 cm"));
+
 	return true;
 }
 
