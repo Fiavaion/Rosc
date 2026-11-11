@@ -10,7 +10,8 @@ class FUEcineCameraTarget;
 enum class EUEcineDepartment : uint8
 {
 	Camera,
-	Grip
+	Grip,
+	Focus
 };
 
 /**

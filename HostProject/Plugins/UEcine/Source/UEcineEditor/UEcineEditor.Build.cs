@@ -26,6 +26,7 @@ public class UEcineEditor : ModuleRules
 			"LevelSequenceEditor",
 			"MovieScene",
 			"MovieSceneTracks",
+			"SceneDepthPickerMode",
 			"Slate",
 			"SlateCore",
 			"UnrealEd",

@@ -2,7 +2,6 @@
 
 #include "CoreMinimal.h"
 #include "Misc/FrameNumber.h"
-#include "Misc/FrameRate.h"
 #include "UEcineRigTypes.h"
 
 class ACineCameraActor;
@@ -41,12 +40,6 @@ namespace UEcine::GripEditing
 
 	/** Puts the rig on a mark. */
 	UECINEEDITOR_API void GoToMark(AUEcineRig* Rig, int32 MarkIndex);
-
-	/** The Sequencer frame rate for a camera frame rate: 23.976 becomes 24000/1001, and so on. */
-	UECINEEDITOR_API FFrameRate GetFrameRate(double FramesPerSecond);
-
-	/** Creates a Level Sequence asset under /Game/UEcine/Sequences with the given display rate. */
-	UECINEEDITOR_API ULevelSequence* CreateSequence(const FString& BaseName, FFrameRate DisplayRate);
 
 	/**
 	 * Writes the rig's move through its marks into a Level Sequence as keys on the rig's axes,

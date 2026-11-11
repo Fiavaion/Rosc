@@ -152,20 +152,13 @@ void SUEcineGripTab::RebuildLayout()
 			Add(SectionPadding, MakeSectionHeader(LOCTEXT("MarksSection", "Marks")));
 			Add(FMargin(0.0f), SAssignNew(MarksBox, SVerticalBox));
 			Add(FMargin(0.0f, FUEcineStyle::RowSpacing + 2.0f, 0.0f, 0.0f),
-				SNew(SBox)
-				.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-				[
-					SNew(SButton)
-					.HAlign(HAlign_Center)
-					.VAlign(VAlign_Center)
-					.Text(LOCTEXT("MarkPositionButton", "Mark Position"))
-					.ToolTipText(LOCTEXT("MarkPositionToolTip", "Store where the support is now as the next mark. A move runs from each mark to the one after it."))
-					.OnClicked_Lambda([this]
+				MakeButton(LOCTEXT("MarkPositionButton", "Mark Position"),
+					LOCTEXT("MarkPositionToolTip", "Store where the support is now as the next mark. A move runs from each mark to the one after it."),
+					FOnClicked::CreateSPLambda(this, [this]
 					{
 						UEcine::GripEditing::AddMark(GetRig());
 						return FReply::Handled();
-					})
-				]);
+					})));
 
 			Add(SectionPadding, MakeSectionHeader(LOCTEXT("OperatorSection", "Operator")));
 			Add(RowPadding, BuildOperatorRows());
@@ -313,38 +306,25 @@ TSharedRef<SWidget> SUEcineGripTab::BuildMarkRow(int32 MarkIndex)
 		+ SHorizontalBox::Slot()
 		.FillWidth(1.0f)
 		[
-			SNew(SBox)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SButton)
-				.HAlign(HAlign_Center)
-				.VAlign(VAlign_Center)
-				.Text(FText::Format(LOCTEXT("MarkButton", "Mark {0}"), Number))
-				.ToolTipText(FText::Format(LOCTEXT("MarkButtonToolTip", "Put the support on mark {0}."), Number))
-				.OnClicked_Lambda([this, MarkIndex]
+			MakeButton(FText::Format(LOCTEXT("MarkButton", "Mark {0}"), Number),
+				FText::Format(LOCTEXT("MarkButtonToolTip", "Put the support on mark {0}."), Number),
+				FOnClicked::CreateSPLambda(this, [this, MarkIndex]
 				{
 					UEcine::GripEditing::GoToMark(GetRig(), MarkIndex);
 					return FReply::Handled();
-				})
-			]
+				}))
 		]
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
 		[
-			SNew(SBox)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SButton)
-				.VAlign(VAlign_Center)
-				.Text(LOCTEXT("RemarkButton", "Re-mark"))
-				.ToolTipText(FText::Format(LOCTEXT("RemarkToolTip", "Move mark {0} to where the support is now."), Number))
-				.OnClicked_Lambda([this, MarkIndex]
+			MakeButton(LOCTEXT("RemarkButton", "Re-mark"),
+				FText::Format(LOCTEXT("RemarkToolTip", "Move mark {0} to where the support is now."), Number),
+				FOnClicked::CreateSPLambda(this, [this, MarkIndex]
 				{
 					UEcine::GripEditing::UpdateMark(GetRig(), MarkIndex);
 					return FReply::Handled();
-				})
-			]
+				}))
 		]
 		+ SHorizontalBox::Slot()
 		.AutoWidth()

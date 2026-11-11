@@ -1,5 +1,6 @@
 #include "CineCameraActor.h"
 #include "Editor.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "ImageUtils.h"
 #include "Misc/App.h"
@@ -14,6 +15,7 @@
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
+#include "UEcineFocusEditing.h"
 #include "UEcineGripEditing.h"
 #include "UEcineRig.h"
 
@@ -256,6 +258,68 @@ bool FUEcineGripTabStatesVisualTest::RunTest(const FString& Parameters)
 		}
 		return true;
 	}));
+	return true;
+}
+
+/** Pictures of the Focus tab. Needs a renderer, like the Camera tab pictures. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineFocusTabVisualTest, "UEcine.Editor.Visual.FocusTab", VisualTestFlags)
+
+bool FUEcineFocusTabVisualTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::FocusEditing;
+
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ACineCameraActor* CameraActor = UEcine::CameraEditing::SpawnCamera(World, FTransform::Identity);
+	if (!TestNotNull(TEXT("A camera to show"), CameraActor))
+	{
+		return false;
+	}
+
+	// Show the busiest state: two focus marks, and the focus following a subject that has come
+	// nearer than the lens can focus (warning row).
+	SetFocusDistance(CameraActor, 150.0f);
+	AddFocusMark(CameraActor);
+	SetFocusDistance(CameraActor, 320.0f);
+	AddFocusMark(CameraActor);
+	AStaticMeshActor* Subject = World->SpawnActor<AStaticMeshActor>(FVector(20.0, 0.0, 0.0), FRotator::ZeroRotator);
+	Subject->SetActorLabel(TEXT("Hero"));
+	FollowActor(CameraActor, Subject);
+	TestTrue(TEXT("The subject is nearer than the lens can focus"), GetFocusDistance(CameraActor) < GetCloseFocus(CameraActor));
+
+	QueuePanelCaptures(*this, CameraActor, TEXT("focus-tab"), EUEcineDepartment::Focus, 760.0f);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([WeakSubject = TWeakObjectPtr<AStaticMeshActor>(Subject)]
+	{
+		if (AStaticMeshActor* SubjectToRemove = WeakSubject.Get())
+		{
+			SubjectToRemove->GetWorld()->EditorDestroyActor(SubjectToRemove, false);
+		}
+		return true;
+	}));
+	return true;
+}
+
+/** A picture of the Focus tab for a camera with no camera package: focus works, marks ask for a package. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineFocusTabStatesVisualTest, "UEcine.Editor.Visual.FocusTabStates", VisualTestFlags)
+
+bool FUEcineFocusTabStatesVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ACineCameraActor* BareCamera = Cast<ACineCameraActor>(GEditor->AddActor(World->GetCurrentLevel(), ACineCameraActor::StaticClass(), FTransform::Identity));
+	if (!TestNotNull(TEXT("A camera with no package to show"), BareCamera))
+	{
+		return false;
+	}
+	QueuePanelCaptures(*this, BareCamera, TEXT("focus-tab-no-package"), EUEcineDepartment::Focus, 620.0f, NarrowOnly);
 	return true;
 }
 

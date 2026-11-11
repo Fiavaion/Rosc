@@ -1,6 +1,5 @@
 #include "UEcineGripEditing.h"
 
-#include "AssetToolsModule.h"
 #include "Channels/MovieSceneChannelProxy.h"
 #include "Channels/MovieSceneDoubleChannel.h"
 #include "Channels/MovieSceneFloatChannel.h"
@@ -10,15 +9,12 @@
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "MovieScene.h"
-#include "MovieSceneSequencePlayer.h"
-#include "ObjectTools.h"
 #include "ScopedTransaction.h"
 #include "Sections/MovieScene3DTransformSection.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Subsystems/EditorActorSubsystem.h"
 #include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
-#include "UEcineCameraPackageComponent.h"
 #include "UEcineMove.h"
 #include "UEcineOperator.h"
 #include "UEcineRig.h"
@@ -87,25 +83,6 @@ namespace
 	FString MakeRigLabel(const ACineCameraActor* Camera, EUEcineRigType Type)
 	{
 		return FString::Printf(TEXT("%s %s"), *Camera->GetActorLabel(), *UEcine::Rig::GetTypeName(Type).ToString());
-	}
-
-	UMovieSceneFloatTrack* FindOrAddAxisTrack(UMovieScene* MovieScene, const FGuid& Binding, FName PropertyName, const FText& DisplayName)
-	{
-		if (const FMovieSceneBinding* Existing = MovieScene->FindBinding(Binding))
-		{
-			for (UMovieSceneTrack* Track : Existing->GetTracks())
-			{
-				UMovieSceneFloatTrack* FloatTrack = Cast<UMovieSceneFloatTrack>(Track);
-				if (FloatTrack != nullptr && FloatTrack->GetPropertyName() == PropertyName)
-				{
-					return FloatTrack;
-				}
-			}
-		}
-		UMovieSceneFloatTrack* Track = MovieScene->AddTrack<UMovieSceneFloatTrack>(Binding);
-		Track->SetPropertyNameAndPath(PropertyName, PropertyName.ToString());
-		Track->SetDisplayName(DisplayName);
-		return Track;
 	}
 
 	bool HasMoveToBake(const AUEcineRig* Rig, FText& OutError)
@@ -240,38 +217,6 @@ void UEcine::GripEditing::GoToMark(AUEcineRig* Rig, int32 MarkIndex)
 	}
 }
 
-FFrameRate UEcine::GripEditing::GetFrameRate(double FramesPerSecond)
-{
-	const int32 Nominal = FMath::RoundToInt32(FramesPerSecond);
-	if (FMath::IsNearlyEqual(FramesPerSecond, static_cast<double>(Nominal), 0.001))
-	{
-		return FFrameRate(Nominal, 1);
-	}
-	// The NTSC family runs a thousandth slow: 23.976 is 24000/1001, 29.97 is 30000/1001.
-	if (FMath::IsNearlyEqual(FramesPerSecond, Nominal * 1000.0 / 1001.0, 0.01))
-	{
-		return FFrameRate(Nominal * 1000, 1001);
-	}
-	return FFrameRate(FMath::RoundToInt32(FramesPerSecond * 1000.0), 1000);
-}
-
-ULevelSequence* UEcine::GripEditing::CreateSequence(const FString& BaseName, FFrameRate DisplayRate)
-{
-	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
-
-	FString PackageName;
-	FString AssetName;
-	AssetTools.CreateUniqueAssetName(TEXT("/Game/UEcine/Sequences") / BaseName, FString(), PackageName, AssetName);
-
-	ULevelSequence* Sequence = Cast<ULevelSequence>(AssetTools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), ULevelSequence::StaticClass(), nullptr));
-	if (Sequence != nullptr)
-	{
-		Sequence->Initialize();
-		Sequence->GetMovieScene()->SetDisplayRate(DisplayRate);
-	}
-	return Sequence;
-}
-
 bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError)
 {
 	if (!HasMoveToBake(Rig, OutError))
@@ -309,7 +254,7 @@ bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FF
 			continue;
 		}
 
-		UMovieSceneFloatTrack* Track = FindOrAddAxisTrack(MovieScene, RigBinding, AUEcineRig::GetAxisPropertyName(Axis), UEcine::Rig::GetAxisName(Spec.Type, Axis));
+		UMovieSceneFloatTrack* Track = FindOrAddFloatTrack(MovieScene, RigBinding, AUEcineRig::GetAxisPropertyName(Axis), AUEcineRig::GetAxisPropertyName(Axis).ToString(), UEcine::Rig::GetAxisName(Spec.Type, Axis));
 		Track->Modify();
 		UMovieSceneFloatSection* Section = FindOrAddSection<UMovieSceneFloatSection>(Track);
 		Section->Modify();
@@ -371,13 +316,7 @@ bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FF
 		}
 	}
 
-	// Make sure the move can be played: grow the playback range to take it in.
-	const TRange<FFrameNumber> PlaybackRange = MovieScene->GetPlaybackRange();
-	if (PlaybackRange.IsEmpty() || !PlaybackRange.Contains(MoveRange))
-	{
-		MovieScene->SetPlaybackRange(PlaybackRange.IsEmpty() ? MoveRange : TRange<FFrameNumber>::Hull(PlaybackRange, MoveRange));
-	}
-
+	IncludeInPlaybackRange(MovieScene, MoveRange);
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;
 }
@@ -390,27 +329,14 @@ ULevelSequence* UEcine::GripEditing::BakeMoveToSequencer(AUEcineRig* Rig, FText&
 		return nullptr;
 	}
 
-	ULevelSequence* Sequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
-	FFrameNumber StartFrame = 0;
-	if (Sequence != nullptr)
+	const ACineCameraActor* Camera = Rig->GetMountedCamera();
+	const FBakeTarget Target = FindOrCreateBakeTarget(Camera != nullptr ? static_cast<const AActor*>(Camera) : Rig, TEXT("_Move"), Camera);
+	if (Target.Sequence == nullptr)
 	{
-		StartFrame = ULevelSequenceEditorBlueprintLibrary::GetGlobalPosition().Frame.FloorToFrame();
+		OutError = LOCTEXT("BakeNoNewSequence", "A new sequence could not be made for the move.");
+		return nullptr;
 	}
-	else
-	{
-		const ACineCameraActor* Camera = Rig->GetMountedCamera();
-		const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
-		const double FramesPerSecond = Package != nullptr ? Package->Package.FramesPerSecond : 24.0;
-		const AActor* NamedAfter = Camera != nullptr ? static_cast<const AActor*>(Camera) : Rig;
-
-		Sequence = CreateSequence(ObjectTools::SanitizeObjectName(NamedAfter->GetActorLabel() + TEXT("_Move")), GetFrameRate(FramesPerSecond));
-		if (Sequence == nullptr || !ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(Sequence))
-		{
-			OutError = LOCTEXT("BakeNoNewSequence", "A new sequence could not be made for the move.");
-			return nullptr;
-		}
-	}
-	return BakeMove(Rig, Sequence, StartFrame, OutError) ? Sequence : nullptr;
+	return BakeMove(Rig, Target.Sequence, Target.StartFrame, OutError) ? Target.Sequence : nullptr;
 }
 
 #undef LOCTEXT_NAMESPACE

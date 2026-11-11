@@ -6,6 +6,7 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "LevelEditorSubsystem.h"
 #include "SUEcineCameraTab.h"
+#include "SUEcineFocusTab.h"
 #include "SUEcineGripTab.h"
 #include "Styling/AppStyle.h"
 #include "UEcineCameraEditing.h"
@@ -104,6 +105,11 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 					MakeDepartmentTab(EUEcineDepartment::Grip, LOCTEXT("GripDepartment", "Grip"),
 						LOCTEXT("GripDepartmentToolTip", "Grip: put the camera on a tripod, slider, dolly, jib, crane, Steadicam or drone, and block its move."))
 				]
+				+ SWrapBox::Slot()
+				[
+					MakeDepartmentTab(EUEcineDepartment::Focus, LOCTEXT("FocusDepartment", "Focus"),
+						LOCTEXT("FocusDepartmentToolTip", "Focus: set focus, follow a subject, mark focus distances and rack between them."))
+				]
 			]
 		]
 		+ SVerticalBox::Slot()
@@ -132,6 +138,10 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				+ SWidgetSwitcher::Slot()
 				[
 					SNew(SUEcineGripTab, Target.ToSharedRef())
+				]
+				+ SWidgetSwitcher::Slot()
+				[
+					SNew(SUEcineFocusTab, Target.ToSharedRef())
 				]
 			]
 		]

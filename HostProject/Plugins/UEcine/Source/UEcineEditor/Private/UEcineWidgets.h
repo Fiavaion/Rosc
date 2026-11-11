@@ -26,6 +26,9 @@ namespace UEcine::Widgets
 	/** A warning icon beside the message. Takes no space while the message is empty. */
 	TSharedRef<SWidget> MakeWarning(TAttribute<FText> Message);
 
+	/** A push button with a text label. */
+	TSharedRef<SWidget> MakeButton(TAttribute<FText> Label, TAttribute<FText> ToolTip, FOnClicked OnClicked, TAttribute<bool> IsEnabled = true);
+
 	/** A button that stays lit while its state is on: one lens of a kit, one tab of the panel. */
 	TSharedRef<SWidget> MakeToggleButton(const FText& Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled);
 
@@ -46,6 +49,8 @@ namespace UEcine::Widgets
 		TOptional<float> MinSliderValue;
 		TOptional<float> MaxSliderValue;
 		float Delta = 1.0f;
+		/** Above 1, a drag moves the value slowly near the low end of the range and quickly near the high end. */
+		float SliderExponent = 1.0f;
 		int32 MaxFractionalDigits = 1;
 		/** How the value is written and read, when it is more than a plain number. */
 		TSharedPtr<INumericTypeInterface<float>> TypeInterface;
@@ -62,6 +67,12 @@ namespace UEcine::Widgets
 	 * is one undo step, closed when the drag ends or the control goes away.
 	 */
 	TSharedRef<SWidget> MakeSpinBox(FSpinBoxArgs Args);
+
+	/**
+	 * Writes and reads a distance the way the crew says it, in the user's units: 3.2 m or 10' 6".
+	 * The value itself stays in centimetres.
+	 */
+	TSharedRef<INumericTypeInterface<float>> MakeDistanceInterface();
 
 	/** Tells the user how something they asked for turned out, in a toast with a tick or a cross. */
 	void Notify(const FText& Message, bool bSucceeded);

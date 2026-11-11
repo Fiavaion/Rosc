@@ -3,7 +3,9 @@
 #include "Editor.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Styling/AppStyle.h"
+#include "UEcineEditorSettings.h"
 #include "UEcineStyle.h"
+#include "UEcineUnits.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
@@ -42,6 +44,32 @@ namespace
 		}
 
 		bool bOpen = false;
+	};
+
+	/** A distance in centimetres, written and read in the user's units. */
+	class FDistanceTypeInterface : public TDefaultNumericTypeInterface<float>
+	{
+	public:
+		virtual FString ToString(const float& Value) const override
+		{
+			return UEcine::Units::FormatDistance(Value * 10.0, UUEcineEditorSettings::GetDistanceUnits()).ToString();
+		}
+
+		virtual TOptional<float> FromString(const FString& InString, const float& ExistingValue) override
+		{
+			// Text the user did not change keeps the exact value, not the rounded one on show.
+			if (InString == ToString(ExistingValue))
+			{
+				return ExistingValue;
+			}
+			const TOptional<double> Millimetres = UEcine::Units::ParseDistance(InString, UUEcineEditorSettings::GetDistanceUnits());
+			return Millimetres.IsSet() ? TOptional<float>(static_cast<float>(Millimetres.GetValue() / 10.0)) : TOptional<float>();
+		}
+
+		virtual bool IsCharacterValid(TCHAR InChar) const override
+		{
+			return true;
+		}
 	};
 }
 
@@ -151,6 +179,21 @@ TSharedRef<SWidget> UEcine::Widgets::MakeWarning(TAttribute<FText> Message)
 		];
 }
 
+TSharedRef<SWidget> UEcine::Widgets::MakeButton(TAttribute<FText> Label, TAttribute<FText> ToolTip, FOnClicked OnClicked, TAttribute<bool> IsEnabled)
+{
+	return SNew(SBox)
+		.MinDesiredHeight(FUEcineStyle::MinTargetSize)
+		[
+			SNew(SButton)
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			.Text(MoveTemp(Label))
+			.ToolTipText(MoveTemp(ToolTip))
+			.IsEnabled(MoveTemp(IsEnabled))
+			.OnClicked(MoveTemp(OnClicked))
+		];
+}
+
 TSharedRef<SWidget> UEcine::Widgets::MakeToggleButton(const FText& Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled)
 {
 	return SNew(SBox)
@@ -211,6 +254,7 @@ TSharedRef<SWidget> UEcine::Widgets::MakeSpinBox(FSpinBoxArgs Args)
 			.MinSliderValue(Args.MinSliderValue.IsSet() ? TAttribute<TOptional<float>>(Args.MinSliderValue) : Args.MinValue)
 			.MaxSliderValue(Args.MaxSliderValue.IsSet() ? TAttribute<TOptional<float>>(Args.MaxSliderValue) : Args.MaxValue)
 			.Delta(Args.Delta)
+			.SliderExponent(Args.SliderExponent)
 			.MinFractionalDigits(FMath::Min(1, Args.MaxFractionalDigits))
 			.MaxFractionalDigits(Args.MaxFractionalDigits)
 			.TypeInterface(Args.TypeInterface)
@@ -237,6 +281,11 @@ TSharedRef<SWidget> UEcine::Widgets::MakeSpinBox(FSpinBoxArgs Args)
 				}
 			})
 		];
+}
+
+TSharedRef<INumericTypeInterface<float>> UEcine::Widgets::MakeDistanceInterface()
+{
+	return MakeShared<FDistanceTypeInterface>();
 }
 
 void UEcine::Widgets::Notify(const FText& Message, bool bSucceeded)

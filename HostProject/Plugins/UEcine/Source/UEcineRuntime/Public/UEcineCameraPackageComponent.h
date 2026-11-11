@@ -9,8 +9,8 @@ class UCineCameraComponent;
 
 /**
  * Lives on a standard Cine Camera Actor and remembers which real camera body, recording format
- * and lens it represents. Applying the package writes ordinary Cine Camera properties, so the
- * camera keeps working if the component is removed.
+ * and lens it represents, and the focus puller's marks for it. Applying the package writes
+ * ordinary Cine Camera properties, so the camera keeps working if the component is removed.
  */
 UCLASS(ClassGroup = (UEcine), meta = (BlueprintSpawnableComponent, DisplayName = "UEcine Camera Package"))
 class UECINERUNTIME_API UUEcineCameraPackageComponent : public UActorComponent
@@ -20,6 +20,17 @@ class UECINERUNTIME_API UUEcineCameraPackageComponent : public UActorComponent
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
 	FUEcineCameraPackage Package;
+
+	/**
+	 * The focus distances the focus puller has marked for this camera, in centimetres, in the
+	 * order they were marked.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus")
+	TArray<float> FocusMarksCm;
+
+	/** How long a rack from one focus distance to another takes, in seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus", meta = (ClampMin = "0.1", Units = "s"))
+	float RackSeconds = 1.0f;
 
 	/**
 	 * Writes the package to the owning actor's Cine Camera: filmback, lens limits, focal length,

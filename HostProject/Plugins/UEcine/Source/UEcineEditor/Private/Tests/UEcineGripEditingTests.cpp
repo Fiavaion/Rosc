@@ -284,11 +284,11 @@ bool FUEcineGripDollyTrackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineGripFrameRateTest, "UEcine.Editor.Grip.FrameRate", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineSequenceFrameRateTest, "UEcine.Editor.Sequence.FrameRate", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
-bool FUEcineGripFrameRateTest::RunTest(const FString& Parameters)
+bool FUEcineSequenceFrameRateTest::RunTest(const FString& Parameters)
 {
-	using UEcine::GripEditing::GetFrameRate;
+	using UEcine::SequenceUtils::GetFrameRate;
 	TestTrue(TEXT("24 fps"), GetFrameRate(24.0) == FFrameRate(24, 1));
 	TestTrue(TEXT("An unusual rate is kept to a thousandth"), GetFrameRate(22.5) == FFrameRate(22500, 1000));
 	TestTrue(TEXT("23.976 fps is 24000/1001"), GetFrameRate(23.976) == FFrameRate(24000, 1001));
