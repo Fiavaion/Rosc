@@ -29,15 +29,21 @@ FFrameRate UEcine::SequenceUtils::GetFrameRate(double FramesPerSecond)
 	return FFrameRate(FMath::RoundToInt32(FramesPerSecond * 1000.0), 1000);
 }
 
-ULevelSequence* UEcine::SequenceUtils::CreateSequence(const FString& BaseName, FFrameRate DisplayRate)
+FFrameRate UEcine::SequenceUtils::GetCameraFrameRate(const ACineCameraActor* Camera)
+{
+	const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
+	return GetFrameRate(Package != nullptr ? Package->Package.FramesPerSecond : 24.0);
+}
+
+ULevelSequence* UEcine::SequenceUtils::CreateSequence(const FString& PackageName, FFrameRate DisplayRate)
 {
 	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
 
-	FString PackageName;
+	FString UniquePackageName;
 	FString AssetName;
-	AssetTools.CreateUniqueAssetName(TEXT("/Game/UEcine/Sequences") / BaseName, FString(), PackageName, AssetName);
+	AssetTools.CreateUniqueAssetName(PackageName, FString(), UniquePackageName, AssetName);
 
-	ULevelSequence* Sequence = Cast<ULevelSequence>(AssetTools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), ULevelSequence::StaticClass(), nullptr));
+	ULevelSequence* Sequence = Cast<ULevelSequence>(AssetTools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(UniquePackageName), ULevelSequence::StaticClass(), nullptr));
 	if (Sequence != nullptr)
 	{
 		Sequence->Initialize();
@@ -49,16 +55,14 @@ ULevelSequence* UEcine::SequenceUtils::CreateSequence(const FString& BaseName, F
 UEcine::SequenceUtils::FBakeTarget UEcine::SequenceUtils::FindOrCreateBakeTarget(const AActor* NamedAfter, const TCHAR* NameSuffix, const ACineCameraActor* Camera)
 {
 	FBakeTarget Target;
-	Target.Sequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
+	Target.Sequence = ULevelSequenceEditorBlueprintLibrary::GetFocusedLevelSequence();
 	if (Target.Sequence != nullptr)
 	{
-		Target.StartFrame = ULevelSequenceEditorBlueprintLibrary::GetGlobalPosition().Frame.FloorToFrame();
+		Target.StartFrame = ULevelSequenceEditorBlueprintLibrary::GetLocalPosition().Frame.FloorToFrame();
 		return Target;
 	}
 
-	const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
-	const double FramesPerSecond = Package != nullptr ? Package->Package.FramesPerSecond : 24.0;
-	ULevelSequence* NewSequence = CreateSequence(ObjectTools::SanitizeObjectName(NamedAfter->GetActorLabel() + NameSuffix), GetFrameRate(FramesPerSecond));
+	ULevelSequence* NewSequence = CreateSequence(FString(SequenceFolder) / ObjectTools::SanitizeObjectName(NamedAfter->GetActorLabel() + NameSuffix), GetCameraFrameRate(Camera));
 	if (NewSequence != nullptr && ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(NewSequence))
 	{
 		Target.Sequence = NewSequence;

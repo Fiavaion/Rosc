@@ -135,6 +135,7 @@ FUEcinePlanDrawing UEcine::Plan::Layout(const FUEcinePlan& Plan, FVector2D Pictu
 		Algo::Transform(Plan.CameraPath, Line.Points, [&ToPage](const FUEcinePlanCamera& Camera) { return ToPage(Camera.Position); });
 	}
 
+	const FVector2D TravelDirection = (ToPage(Last.Position) - ToPage(First.Position)).GetSafeNormal();
 	for (int32 CameraIndex = 0; CameraIndex < DrawnCameras.Num(); ++CameraIndex)
 	{
 		const FUEcinePlanCamera& Camera = *DrawnCameras[CameraIndex];
@@ -162,8 +163,11 @@ FUEcinePlanDrawing UEcine::Plan::Layout(const FUEcinePlan& Plan, FVector2D Pictu
 
 		if (bCameraChanges)
 		{
+			// The letter stands behind the camera, or beside it when the camera travels the way it
+			// looks and the path runs through there.
+			const bool bPathBehind = bCameraTravels && FMath::Abs(FVector2D::DotProduct(TravelDirection, Forward)) > 0.7;
 			FUEcinePlanLabel& Letter = Drawing.Labels.AddDefaulted_GetRef();
-			Letter.Position = Back - 12.0 * Forward - FVector2D(4.0, 0.0);
+			Letter.Position = (bPathBehind ? Position - 0.5 * CameraLength * Forward + (0.5 * CameraWidth + 10.0) * Side : Back - 12.0 * Forward) - FVector2D(4.0, 0.0);
 			Letter.Text = CameraIndex == 0 ? TEXT("A") : TEXT("B");
 		}
 	}

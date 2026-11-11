@@ -32,7 +32,7 @@ namespace
 		First.FrameRate = TEXT("24 fps");
 		First.Focus = TEXT("3.05 m");
 		First.Support = TEXT("Telescoping crane");
-		First.Storyboard.Add({ TEXT("Frame 1"), { 0x89, 0x50, 0x4E, 0x47 } });
+		First.Storyboard.Add({ TEXT("Frame 1"), { 0xFF, 0xD8, 0xFF, 0xE0 } });
 		First.PlanSvg = TEXT("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n");
 
 		FUEcineShotReport& Second = Paperwork.Shots.AddDefaulted_GetRef();
@@ -89,7 +89,7 @@ bool FUEcinePaperworkHtmlTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Each shot has a heading with its scene, name and size"), Html.Contains(TEXT("<h3>Scene 12 · shot0010 · WS</h3>")));
 	TestTrue(TEXT("A shot with no scene or size is headed by its name"), Html.Contains(TEXT("<h3>shot0020</h3>")));
 	TestTrue(TEXT("A storyboard frame is inside the page, with a description"),
-		Html.Contains(TEXT("<img alt=\"Storyboard frame of shot0010: Frame 1\" src=\"data:image/png;base64,iVBORw==\">")));
+		Html.Contains(TEXT("<img alt=\"Storyboard frame of shot0010: Frame 1\" src=\"data:image/jpeg;base64,/9j/4A==\">")));
 	TestTrue(TEXT("The overhead plan is inside the page"), Html.Contains(TEXT("<figure class=\"plan\">\n<svg xmlns=")));
 	TestTrue(TEXT("The camera report gives the lens"), Html.Contains(TEXT("<tr><th scope=\"row\">Focal length</th><td>35 mm</td></tr>")));
 	TestFalse(TEXT("The camera report leaves out what is not known"), Html.Contains(TEXT("<th scope=\"row\">ND</th>")));
@@ -182,6 +182,25 @@ bool FUEcinePlanLayoutTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("A move: the start is lettered A and the end B"),
 		MoveDrawing.Labels.ContainsByPredicate([](const FUEcinePlanLabel& Label) { return Label.Text == TEXT("A"); })
 		&& MoveDrawing.Labels.ContainsByPredicate([](const FUEcinePlanLabel& Label) { return Label.Text == TEXT("B"); }));
+
+	// A push in: the camera travels the way it looks, so its letters stand beside it, clear of the path.
+	FUEcinePlan PushIn;
+	PushIn.CameraPath.Add({ FVector2D(0.0, 0.0), 0.0, 30.0 });
+	PushIn.CameraPath.Add({ FVector2D(300.0, 0.0), 0.0, 30.0 });
+	const FUEcinePlanDrawing PushInDrawing = Layout(PushIn, PictureSize, EUEcineDistanceUnits::Metric);
+	const TArray<FUEcinePlanLine> PushInPaths = FindLines(PushInDrawing, EUEcinePlanStroke::Path);
+	if (TestEqual(TEXT("A push in: one path"), PushInPaths.Num(), 1))
+	{
+		const double PathX = PushInPaths[0].Points[0].X;
+		TestEqual(TEXT("A push in runs straight up the page"), PushInPaths[0].Points[1].X, PathX, 0.01);
+		for (const FUEcinePlanLabel& Label : PushInDrawing.Labels)
+		{
+			if (Label.Text == TEXT("A") || Label.Text == TEXT("B"))
+			{
+				TestTrue(TEXT("A push in: the letter starts clear of the path"), Label.Position.X > PathX + 5.0);
+			}
+		}
+	}
 
 	// A pan on the spot: two cameras drawn, no path.
 	FUEcinePlan Pan;

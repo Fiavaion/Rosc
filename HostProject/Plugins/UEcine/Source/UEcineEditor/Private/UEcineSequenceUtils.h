@@ -20,8 +20,17 @@ namespace UEcine::SequenceUtils
 	/** The Sequencer frame rate for a camera frame rate: 23.976 becomes 24000/1001, and so on. */
 	FFrameRate GetFrameRate(double FramesPerSecond);
 
-	/** Creates a Level Sequence asset under /Game/UEcine/Sequences with the given display rate. */
-	ULevelSequence* CreateSequence(const FString& BaseName, FFrameRate DisplayRate);
+	/** The frame rate a sequence made for a camera runs at: the camera package's, or 24 with no package. */
+	FFrameRate GetCameraFrameRate(const ACineCameraActor* Camera);
+
+	/** Where the sequences the panel makes by itself are kept. */
+	inline const TCHAR* const SequenceFolder = TEXT("/Game/UEcine/Sequences");
+
+	/**
+	 * Creates a Level Sequence asset with the given display rate.
+	 * @param PackageName Where to make it, such as "/Game/UEcine/Sequences/Crane". A number is added when the name is taken.
+	 */
+	ULevelSequence* CreateSequence(const FString& PackageName, FFrameRate DisplayRate);
 
 	/** Where a bake from the panel is written. */
 	struct FBakeTarget
@@ -33,9 +42,9 @@ namespace UEcine::SequenceUtils
 	};
 
 	/**
-	 * The sequence open in Sequencer, at its playhead. With none open, a new sequence is made at
-	 * the camera's frame rate (24 with no camera package), named after the actor with the suffix,
-	 * and opened; the bake then starts at its first frame.
+	 * The sequence being worked on in Sequencer, at its playhead: inside a shot, that is the shot's
+	 * own sequence. With none open, a new sequence is made at the camera's frame rate, named after
+	 * the actor with the suffix, and opened; the bake then starts at its first frame.
 	 */
 	FBakeTarget FindOrCreateBakeTarget(const AActor* NamedAfter, const TCHAR* NameSuffix, const ACineCameraActor* Camera);
 

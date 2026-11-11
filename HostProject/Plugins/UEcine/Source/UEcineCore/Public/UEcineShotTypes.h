@@ -39,9 +39,9 @@ struct FUEcineStoryboardFrame
 	UPROPERTY()
 	int32 Height = 0;
 
-	/** The picture as a PNG file. */
+	/** The picture as a JPEG file. */
 	UPROPERTY()
-	TArray<uint8> Png;
+	TArray<uint8> Jpeg;
 };
 
 namespace UEcine::Shots

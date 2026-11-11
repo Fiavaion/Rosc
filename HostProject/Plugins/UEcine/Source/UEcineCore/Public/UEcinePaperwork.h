@@ -6,8 +6,8 @@
 struct FUEcinePaperworkPicture
 {
 	FString Caption;
-	/** The picture as a PNG file. */
-	TArray<uint8> Png;
+	/** The picture as a JPEG file. */
+	TArray<uint8> Jpeg;
 };
 
 /**

@@ -176,8 +176,8 @@ FString UEcine::Paperwork::WriteHtml(const FUEcinePaperwork& Paperwork)
 			for (const FUEcinePaperworkPicture& Picture : Shot.Storyboard)
 			{
 				const FString AltText = FText::Format(LOCTEXT("StoryboardAlt", "Storyboard frame of {0}: {1}"), FText::FromString(Shot.Shot), FText::FromString(Picture.Caption)).ToString();
-				Html += FString::Printf(TEXT("<figure><img alt=\"%s\" src=\"data:image/png;base64,%s\"><figcaption>%s</figcaption></figure>\n"),
-					*Escape(AltText), *FBase64::Encode(Picture.Png), *Escape(Picture.Caption));
+				Html += FString::Printf(TEXT("<figure><img alt=\"%s\" src=\"data:image/jpeg;base64,%s\"><figcaption>%s</figcaption></figure>\n"),
+					*Escape(AltText), *FBase64::Encode(Picture.Jpeg), *Escape(Picture.Caption));
 			}
 			Html += TEXT("</div>\n");
 		}

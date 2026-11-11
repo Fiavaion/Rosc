@@ -30,7 +30,7 @@ A, and nothing is stored that Sequencer already knows.
 - **Notes** use the engine's own `UMovieSceneMetaData::Notes` on the shot's sequence, so they
   also show in Sequencer's own metadata editor.
 - **Scene, shot size, move and storyboard frames** are a `UUEcineShotMetaData` object
-  (`UEcineRuntime`) in the shot's sequence. Storyboard frames are kept as PNG data, at most
+  (`UEcineRuntime`) in the shot's sequence. Storyboard frames are kept as JPEG data, at most
   640 pixels wide, so a shot's pictures travel with it.
 - **Paperwork is plain files:** CSV for the shot list and the camera report, and one
   self-contained HTML page (pictures and diagrams inside it) that prints to PDF from any
