@@ -6,16 +6,26 @@ public class UEcineEditor : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PrivateDependencyModuleNames.AddRange(new string[]
+		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
 			"CoreUObject",
+			"DeveloperSettings",
+			"UEcineCore"
+		});
+
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"CinematicCamera",
+			"EditorSubsystem",
 			"Engine",
+			"InputCore",
+			"LevelEditor",
 			"Slate",
 			"SlateCore",
 			"UnrealEd",
 			"WorkspaceMenuStructure",
-			"UEcineCore"
+			"UEcineRuntime"
 		});
 	}
 }

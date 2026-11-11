@@ -1,0 +1,88 @@
+#include "CineCameraActor.h"
+#include "CineCameraComponent.h"
+#include "Editor.h"
+#include "Misc/AutomationTest.h"
+#include "UEcineCameraDatabase.h"
+#include "UEcineCameraEditing.h"
+#include "UEcineCameraPackageComponent.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineCameraEditingTest, "UEcine.Editor.CameraEditing", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineCameraEditingTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	if (!TestNotNull(TEXT("The editor has a world"), World))
+	{
+		return false;
+	}
+
+	// New camera: a standard Cine Camera Actor carrying a package that is already applied.
+	ACineCameraActor* CameraActor = UEcine::CameraEditing::SpawnCamera(World, FTransform(FVector(100.0, 0.0, 150.0)));
+	if (!TestNotNull(TEXT("SpawnCamera creates a camera"), CameraActor))
+	{
+		return false;
+	}
+	TestTrue(TEXT("The camera is labelled like a film camera"), CameraActor->GetActorLabel().EndsWith(TEXT(" Cam")));
+	TestTrue(TEXT("The new camera is selected"), CameraActor->IsSelected());
+
+	UUEcineCameraPackageComponent* Component = UUEcineCameraPackageComponent::Find(CameraActor);
+	if (!TestNotNull(TEXT("The camera has a package component"), Component))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Adding a package twice returns the existing one"), UEcine::CameraEditing::AddCameraPackage(CameraActor) == Component);
+
+	const FUEcineCameraDatabase& Database = FUEcineCameraDatabase::Get();
+	const FUEcineCameraBody* Body = Database.FindBody(Component->Package.BodyId);
+	const FUEcineLensKit* Kit = Database.FindLensKit(Component->Package.LensKitId);
+	if (!TestNotNull(TEXT("The default body is in the database"), Body) || !TestNotNull(TEXT("The default lens kit is in the database"), Kit))
+	{
+		return false;
+	}
+	const FUEcineRecordingFormat* Format = Body->FindFormat(Component->Package.FormatId);
+	if (!TestNotNull(TEXT("The default format belongs to the body"), Format))
+	{
+		return false;
+	}
+
+	const UCineCameraComponent* Camera = CameraActor->GetCineCameraComponent();
+	TestEqual(TEXT("Filmback width is the recording format's"), Camera->Filmback.SensorWidth, static_cast<float>(Format->SensorWidthMm), 0.001f);
+	TestEqual(TEXT("Filmback height is the recording format's"), Camera->Filmback.SensorHeight, static_cast<float>(Format->SensorHeightMm), 0.001f);
+
+	// Change the lens: one undoable step that reaches the camera.
+	const float FocalBefore = Camera->CurrentFocalLength;
+	const int32 NewLensIndex = Component->Package.LensIndex == 0 ? Kit->Lenses.Num() - 1 : 0;
+	const float NewFocal = static_cast<float>(Kit->Lenses[NewLensIndex].FocalLengthMm);
+	TestNotEqual(TEXT("The test changes to a different focal length"), NewFocal, FocalBefore);
+
+	FText Error;
+	const bool bEdited = UEcine::CameraEditing::EditPackage(Component, FText::FromString(TEXT("Change Lens")),
+		[Kit, NewLensIndex](FUEcineCameraPackage& Package) { Package.SelectLens(*Kit, NewLensIndex); }, Error);
+	TestTrue(TEXT("Changing the lens succeeds"), bEdited);
+	TestEqual(TEXT("The camera has the new focal length"), Camera->CurrentFocalLength, NewFocal, 0.001f);
+
+	TestTrue(TEXT("The lens change can be undone"), GEditor->UndoTransaction());
+	TestEqual(TEXT("Undo restores the camera's focal length"), Camera->CurrentFocalLength, FocalBefore, 0.001f);
+	TestEqual(TEXT("Undo restores the package"), Component->Package.FocalLengthMm, FocalBefore, 0.001f);
+
+	TestTrue(TEXT("The lens change can be redone"), GEditor->RedoTransaction());
+	TestEqual(TEXT("Redo reapplies the focal length"), Camera->CurrentFocalLength, NewFocal, 0.001f);
+
+	// An edit that cannot be applied leaves the package and camera as they were.
+	const FString BodyIdBefore = Component->Package.BodyId;
+	const bool bBadEdit = UEcine::CameraEditing::EditPackage(Component, FText::FromString(TEXT("Bad Edit")),
+		[](FUEcineCameraPackage& Package) { Package.BodyId = TEXT("no-such-body"); }, Error);
+	TestFalse(TEXT("An unknown body is rejected"), bBadEdit);
+	TestFalse(TEXT("The rejection says why"), Error.IsEmpty());
+	TestEqual(TEXT("The package is unchanged after a rejected edit"), *Component->Package.BodyId, *BodyIdBefore);
+	TestEqual(TEXT("The camera is unchanged after a rejected edit"), Camera->CurrentFocalLength, NewFocal, 0.001f);
+
+	GEditor->SelectNone(false, true, false);
+	World->EditorDestroyActor(CameraActor, false);
+	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine camera editing test")));
+	return true;
+}
+
+#endif

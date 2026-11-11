@@ -3,6 +3,7 @@
 #include "Framework/Docking/TabManager.h"
 #include "Modules/ModuleManager.h"
 #include "SUEcinePanel.h"
+#include "UEcineStyle.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "WorkspaceMenuStructure.h"
 #include "WorkspaceMenuStructureModule.h"
@@ -13,6 +14,8 @@ const FName FUEcineEditorModule::PanelTabId(TEXT("UEcinePanel"));
 
 void FUEcineEditorModule::StartupModule()
 {
+	FUEcineStyle::Register();
+
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(PanelTabId, FOnSpawnTab::CreateRaw(this, &FUEcineEditorModule::SpawnPanelTab))
 		.SetDisplayName(LOCTEXT("PanelTabTitle", "UEcine"))
 		.SetTooltipText(LOCTEXT("PanelTabTooltip", "Open the UEcine camera department: camera, grip, focus, monitor, shots and delivery."))
@@ -25,6 +28,7 @@ void FUEcineEditorModule::ShutdownModule()
 	{
 		FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(PanelTabId);
 	}
+	FUEcineStyle::Unregister();
 }
 
 TSharedRef<SDockTab> FUEcineEditorModule::SpawnPanelTab(const FSpawnTabArgs& Args)
