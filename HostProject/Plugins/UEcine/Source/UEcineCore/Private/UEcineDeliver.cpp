@@ -263,6 +263,28 @@ FString UEcine::Deliver::ResolveFileName(const FString& Pattern, EUEcineDeliverI
 	return Tidy;
 }
 
+FString UEcine::Deliver::WithVersion(const FString& Name, int32 Version)
+{
+	return Name.Replace(VersionToken, *FString::Printf(TEXT("v%03d"), Version));
+}
+
+int32 UEcine::Deliver::ReadVersion(const FString& Name, const FString& ExistingName)
+{
+	FString Before;
+	FString After;
+	if (!Name.Split(VersionToken, &Before, &After) || !ExistingName.StartsWith(Before + TEXT("v")))
+	{
+		return 0;
+	}
+	int32 End = Before.Len() + 1;
+	while (End < ExistingName.Len() && FChar::IsDigit(ExistingName[End]))
+	{
+		++End;
+	}
+	const FString Digits = ExistingName.Mid(Before.Len() + 1, End - Before.Len() - 1);
+	return !Digits.IsEmpty() && ExistingName.Mid(End) == After ? FCString::Atoi(*Digits) : 0;
+}
+
 TArray<FUEcineMetadataEntry> UEcine::Deliver::MakeMetadata(EUEcineDeliverIntent Intent, const FUEcineDeliverSettings& Settings, const FUEcineDeliverShot& Shot)
 {
 	const FUEcineShotReport& Report = Shot.Report;
@@ -334,9 +356,8 @@ FUEcineRenderSpec UEcine::Deliver::MakeRenderSpec(EUEcineDeliverIntent Intent, c
 FString UEcine::Deliver::PreviewFile(EUEcineDeliverIntent Intent, const FUEcineRenderSpec& Spec)
 {
 	FString File = FString(GetIntentFolder(Intent)) / Spec.FileName + TEXT(".") + GetFileExtension(Spec.Format);
-	File.ReplaceInline(VersionToken, TEXT("v001"));
 	File.ReplaceInline(FrameToken, TEXT("0000"));
-	return File;
+	return WithVersion(File, 1);
 }
 
 FUEcineSlate UEcine::Deliver::MakeSlate(const TMap<FString, FString>& Metadata)
@@ -407,7 +428,8 @@ FString UEcine::Deliver::WriteSidecarJson(const FUEcineRenderSpec& Spec, double 
 {
 	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetStringField(TEXT("schema"), TEXT("uecine.sidecar/1"));
-	Root->SetStringField(TEXT("files"), FPaths::GetCleanFilename(Spec.FileName) + TEXT(".") + GetFileExtension(Spec.Format));
+	// The frame number is written the way compositing programs write a run of files.
+	Root->SetStringField(TEXT("files"), (FPaths::GetCleanFilename(Spec.FileName) + TEXT(".") + GetFileExtension(Spec.Format)).Replace(FrameToken, TEXT("####")));
 	Root->SetNumberField(TEXT("width"), Spec.Resolution.X);
 	Root->SetNumberField(TEXT("height"), Spec.Resolution.Y);
 	Root->SetNumberField(TEXT("framesPerSecond"), FramesPerSecond);
@@ -460,6 +482,21 @@ TArray<FUEcinePreflightFinding> UEcine::Deliver::RunPreflight(const FUEcinePrefl
 		return Findings;
 	}
 
+	TSet<FString> Names;
+	TSet<FString> NamesFoundTwice;
+	for (const FUEcinePreflightShot& Shot : Facts.Shots)
+	{
+		bool bSeenBefore = false;
+		Names.Add(Shot.Name, &bSeenBefore);
+		if (bSeenBefore && !NamesFoundTwice.Contains(Shot.Name))
+		{
+			NamesFoundTwice.Add(Shot.Name);
+			Findings.Add(MakeFinding(EUEcinePreflightCheck::DuplicateShotName, true, Shot.Name,
+				LOCTEXT("PreflightDuplicateName", "Two shots have this name"),
+				LOCTEXT("PreflightDuplicateNameDetail", "Their files would have the same name, and one would be written over the other. Rename one of the shots in Sequencer.")));
+		}
+	}
+
 	for (const FUEcinePreflightShot& Shot : Facts.Shots)
 	{
 		if (!Shot.bHasCamera)
@@ -467,14 +504,19 @@ TArray<FUEcinePreflightFinding> UEcine::Deliver::RunPreflight(const FUEcinePrefl
 			Findings.Add(MakeFinding(EUEcinePreflightCheck::ShotWithoutCamera, true, Shot.Name,
 				LOCTEXT("PreflightNoCamera", "The shot has no camera"),
 				LOCTEXT("PreflightNoCameraDetail", "There is nothing to see the shot through. Add a Cine Camera to the shot's sequence in Sequencer.")));
-			continue;
 		}
-		if (!Shot.bHasCameraCut)
+		else if (Shot.CameraCutCount == 0)
 		{
 			Findings.Add(MakeFinding(EUEcinePreflightCheck::ShotWithoutCameraCut, true, Shot.Name,
 				LOCTEXT("PreflightNoCameraCut", "The shot has no camera cut"),
 				LOCTEXT("PreflightNoCameraCutDetail", "Without a camera cut the renderer does not look through the shot's camera, and the picture comes out from the wrong place."),
 				LOCTEXT("PreflightNoCameraCutFix", "Add camera cut")));
+		}
+		else if (Shot.CameraCutCount > 1)
+		{
+			Findings.Add(MakeFinding(EUEcinePreflightCheck::SeveralCameraCuts, true, Shot.Name,
+				LOCTEXT("PreflightSeveralCuts", "The shot cuts between cameras"),
+				LOCTEXT("PreflightSeveralCutsDetail", "A delivery is one camera to a shot: one movie, one lens, one line of the shot list. Make each camera cut a shot of its own in Sequencer.")));
 		}
 	}
 
@@ -506,7 +548,13 @@ TArray<FUEcinePreflightFinding> UEcine::Deliver::RunPreflight(const FUEcinePrefl
 		}
 	}
 
-	if (Facts.Intent == EUEcineDeliverIntent::VfxHandoff && !Facts.bWorkingSpaceIsAcesCg)
+	if (Facts.Intent == EUEcineDeliverIntent::VfxHandoff && !Facts.bWorkingSpaceIsAcesCg && Facts.bAcesCgWaitsForRestart)
+	{
+		Findings.Add(MakeFinding(EUEcinePreflightCheck::WorkingColourSpace, false, FString(),
+			LOCTEXT("PreflightColourSpaceRestart", "ACEScg waits for a restart"),
+			LOCTEXT("PreflightColourSpaceRestartDetail", "The project has been set to work in ACEScg, which takes effect when the editor is restarted. Until then the files are scene-linear in the colour space the editor started in, and say so.")));
+	}
+	else if (Facts.Intent == EUEcineDeliverIntent::VfxHandoff && !Facts.bWorkingSpaceIsAcesCg)
 	{
 		Findings.Add(MakeFinding(EUEcinePreflightCheck::WorkingColourSpace, false, FString(),
 			LOCTEXT("PreflightColourSpace", "The project does not work in ACEScg"),

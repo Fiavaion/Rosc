@@ -176,10 +176,14 @@ enum class EUEcinePreflightCheck : uint8
 {
 	/** No sequence is open in Sequencer. */
 	NoSequence,
+	/** Two shots have the same name, so their files would have too. */
+	DuplicateShotName,
 	/** A shot has no camera to be seen through. */
 	ShotWithoutCamera,
 	/** A shot has a camera but no camera cut, so the renderer would not look through it. */
 	ShotWithoutCameraCut,
+	/** A shot cuts between cameras; a delivery is one camera to a shot. */
+	SeveralCameraCuts,
 	/** A shot's camera has no camera package, so its files cannot say what it was shot on. */
 	CameraWithoutPackage,
 	/** A camera's frame rate is not the sequence's, so its shutter angle gives the wrong motion blur. */
@@ -195,7 +199,8 @@ struct FUEcinePreflightShot
 {
 	FString Name;
 	bool bHasCamera = false;
-	bool bHasCameraCut = false;
+	/** How many camera cuts the shot is made of. */
+	int32 CameraCutCount = 0;
 	bool bHasPackage = false;
 	bool bAutoExposure = false;
 	/** The frame rate of the camera package; only read when the shot has one. */
@@ -208,7 +213,10 @@ struct FUEcinePreflightFacts
 	EUEcineDeliverIntent Intent = EUEcineDeliverIntent::Review;
 	bool bHasSequence = false;
 	double SequenceFramesPerSecond = 0.0;
+	/** The colour space the editor is working in now. */
 	bool bWorkingSpaceIsAcesCg = false;
+	/** ACEScg has been chosen for the project and waits for the editor to be restarted. */
+	bool bAcesCgWaitsForRestart = false;
 	TArray<FUEcinePreflightShot> Shots;
 };
 
@@ -271,6 +279,15 @@ namespace UEcine::Deliver
 	 */
 	UECINECORE_API FString ResolveFileName(const FString& Pattern, EUEcineDeliverIntent Intent, const FUEcineDeliverSettings& Settings, const FUEcineDeliverShot& Shot);
 
+	/** A file name with its {version} filled in, as "v003". A name with no {version} is returned as it is. */
+	UECINECORE_API FString WithVersion(const FString& Name, int32 Version);
+
+	/**
+	 * Which version a file or folder already on disk is of a name that still holds {version}.
+	 * Zero when it is not that name at any version.
+	 */
+	UECINECORE_API int32 ReadVersion(const FString& Name, const FString& ExistingName);
+
 	/** What is written into a shot's files about it, and shown on its slate and burn-ins. */
 	UECINECORE_API TArray<FUEcineMetadataEntry> MakeMetadata(EUEcineDeliverIntent Intent, const FUEcineDeliverSettings& Settings, const FUEcineDeliverShot& Shot);
 
@@ -279,7 +296,8 @@ namespace UEcine::Deliver
 
 	/**
 	 * A spec's file as it will be named on disk, from its output folder on, with the first
-	 * version and the first frame filled in: "Review/Cut_shot0010_review_v001.mov".
+	 * frame filled in, and the first version when the name still holds {version}:
+	 * "Review/Cut_shot0010_review_v001.mov".
 	 */
 	UECINECORE_API FString PreviewFile(EUEcineDeliverIntent Intent, const FUEcineRenderSpec& Spec);
 

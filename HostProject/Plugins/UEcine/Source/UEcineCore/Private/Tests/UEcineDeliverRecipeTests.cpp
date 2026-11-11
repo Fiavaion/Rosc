@@ -63,7 +63,8 @@ namespace
 		Facts.bWorkingSpaceIsAcesCg = true;
 		FUEcinePreflightShot& Shot = Facts.Shots.AddDefaulted_GetRef();
 		Shot.Name = TEXT("shot0010");
-		Shot.bHasCamera = Shot.bHasCameraCut = Shot.bHasPackage = true;
+		Shot.bHasCamera = Shot.bHasPackage = true;
+		Shot.CameraCutCount = 1;
 		Shot.PackageFramesPerSecond = 24.0;
 		return Facts;
 	}
@@ -112,6 +113,16 @@ bool FUEcineDeliverNamesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Every token of the shot"), ResolveFileName(TEXT("{date}-{scene}-{shot}-{size}-{camera}"), EUEcineDeliverIntent::Master, Settings, Shot), FString(TEXT("2026-11-11-12-shot0010-Close-up-A_Cam")));
 	Shot.Report.Scene.Reset();
 	TestEqual(TEXT("A token with nothing to say leaves no gap"), ResolveFileName(TEXT("{scene}_{shot}_{scene}_{intent}_{scene}"), EUEcineDeliverIntent::VfxHandoff, Settings, Shot), FString(TEXT("shot0010_vfx")));
+
+	const FString Named = TEXT("Harbour_shot0010_review_{version}");
+	TestEqual(TEXT("A version is written with three digits"), WithVersion(Named, 7), FString(TEXT("Harbour_shot0010_review_v007")));
+	TestEqual(TEXT("A name with no version in it stays as it is"), WithVersion(TEXT("Harbour_shot0010"), 7), FString(TEXT("Harbour_shot0010")));
+	TestEqual(TEXT("The version of a file on disk is read"), ReadVersion(Named, TEXT("Harbour_shot0010_review_v012")), 12);
+	TestEqual(TEXT("A version in the middle of a name is read"), ReadVersion(TEXT("Harbour_{version}_shot0010"), TEXT("Harbour_v003_shot0010")), 3);
+	TestEqual(TEXT("Another shot's file is not a version of this one"), ReadVersion(Named, TEXT("Harbour_shot0020_review_v012")), 0);
+	TestEqual(TEXT("A longer name is not a version of this one"), ReadVersion(Named, TEXT("Harbour_shot0010_review_v012_old")), 0);
+	TestEqual(TEXT("A name with no number is not a version"), ReadVersion(Named, TEXT("Harbour_shot0010_review_v")), 0);
+	TestEqual(TEXT("A name that holds no version has no versions on disk"), ReadVersion(TEXT("Harbour_shot0010"), TEXT("Harbour_shot0010")), 0);
 
 	TestTrue(TEXT("The default pattern is valid"), ValidateNamePattern(DefaultNamePattern).IsEmpty());
 	TestFalse(TEXT("An empty pattern is refused"), ValidateNamePattern(TEXT("  ")).IsEmpty());
@@ -249,7 +260,7 @@ bool FUEcineDeliverSidecarTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestEqual(TEXT("It says what kind of file it is"), Root->GetStringField(TEXT("schema")), FString(TEXT("uecine.sidecar/1")));
-	TestEqual(TEXT("It names the files it goes with"), Root->GetStringField(TEXT("files")), FString(TEXT("Harbour_Night_shot0010_vfx_{version}.{frame_number}.exr")));
+	TestEqual(TEXT("It names the files it goes with"), Root->GetStringField(TEXT("files")), FString(TEXT("Harbour_Night_shot0010_vfx_{version}.####.exr")));
 	TestEqual(TEXT("It gives the picture's width"), Root->GetIntegerField(TEXT("width")), 4608);
 	TestEqual(TEXT("It gives the frame rate"), Root->GetNumberField(TEXT("framesPerSecond")), 24.0);
 	TestEqual(TEXT("It repeats the metadata"), Root->GetObjectField(TEXT("metadata"))->GetStringField(TEXT("uecine/camera/body")), FString(TEXT("ARRI ALEXA 35")));
@@ -285,6 +296,12 @@ bool FUEcineDeliverPreflightTest::RunTest(const FString& Parameters)
 	Findings = RunPreflight(Facts);
 	TestTrue(TEXT("A VFX handoff outside ACEScg is found, can be delivered, and can be put right"),
 		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::WorkingColourSpace && !Findings[0].bStopsRender && !Findings[0].FixLabel.IsEmpty() && Findings[0].Shot.IsEmpty());
+
+	Facts.bAcesCgWaitsForRestart = true;
+	Findings = RunPreflight(Facts);
+	TestTrue(TEXT("Once ACEScg is chosen the finding says to restart, and has nothing left to put right"),
+		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::WorkingColourSpace && Findings[0].FixLabel.IsEmpty());
+	Facts.bAcesCgWaitsForRestart = false;
 
 	// A second shot with everything wrong that can be wrong with a camera, and a third with none.
 	FUEcinePreflightShot& Second = Facts.Shots.AddDefaulted_GetRef();
@@ -325,6 +342,16 @@ bool FUEcineDeliverPreflightTest::RunTest(const FString& Parameters)
 	Findings = RunPreflight(Facts);
 	TestTrue(TEXT("A camera with no camera package is one finding, and its frame rate is not asked about"),
 		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::CameraWithoutPackage && !Findings[0].bStopsRender);
+
+	Facts = MakeCleanPreflightFacts(EUEcineDeliverIntent::Master);
+	Facts.Shots[0].CameraCutCount = 2;
+	const FUEcinePreflightShot SameAgain = Facts.Shots[0];
+	Facts.Shots.Add(SameAgain);
+	Facts.Shots.Add(SameAgain);
+	Findings = RunPreflight(Facts);
+	TestEqual(TEXT("Three shots of one name are found once, and each shot that cuts between cameras is found"), Findings.Num(), 4);
+	TestTrue(TEXT("A name used twice stops the render"), Findings.Num() == 4 && Findings[0].Check == EUEcinePreflightCheck::DuplicateShotName && Findings[0].bStopsRender);
+	TestTrue(TEXT("Cutting between cameras in a shot stops the render"), Findings.Num() == 4 && Findings[1].Check == EUEcinePreflightCheck::SeveralCameraCuts && Findings[1].bStopsRender);
 	return true;
 }
 
