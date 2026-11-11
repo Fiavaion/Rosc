@@ -1,0 +1,109 @@
+{
+	"schema": 1,
+	"bodies": [
+		{
+			"id": "arri-alexa-35",
+			"manufacturer": "ARRI",
+			"model": "ALEXA 35",
+			"mount": "LPL",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "4.6k-3x2-open-gate", "name": "4.6K 3:2 Open Gate", "sensorMm": [27.99, 19.22], "resolution": [4608, 3164] },
+				{ "id": "4.6k-16x9", "name": "4.6K 16:9", "sensorMm": [27.99, 15.75], "resolution": [4608, 2592] },
+				{ "id": "4k-16x9", "name": "4K 16:9", "sensorMm": [24.88, 14.00], "resolution": [4096, 2304] },
+				{ "id": "4k-2x1", "name": "4K 2:1", "sensorMm": [24.88, 12.44], "resolution": [4096, 2048] },
+				{ "id": "3.8k-16x9", "name": "3.8K 16:9 UHD", "sensorMm": [23.33, 13.12], "resolution": [3840, 2160] },
+				{ "id": "3.3k-6x5", "name": "3.3K 6:5 (2x anamorphic)", "sensorMm": [20.22, 16.95], "resolution": [3328, 2790] },
+				{ "id": "3k-1x1", "name": "3K 1:1", "sensorMm": [18.66, 18.66], "resolution": [3072, 3072] },
+				{ "id": "2k-16x9-s16", "name": "2K 16:9 S16", "sensorMm": [12.44, 7.00], "resolution": [2048, 1152] }
+			]
+		},
+		{
+			"id": "arri-alexa-mini-lf",
+			"manufacturer": "ARRI",
+			"model": "ALEXA Mini LF",
+			"mount": "LPL",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "4.5k-3x2-open-gate", "name": "4.5K 3:2 Open Gate", "sensorMm": [36.70, 25.54], "resolution": [4448, 3096] },
+				{ "id": "4.5k-2.39x1", "name": "4.5K 2.39:1", "sensorMm": [36.70, 15.31], "resolution": [4448, 1856] },
+				{ "id": "3.8k-16x9", "name": "3.8K 16:9 UHD", "sensorMm": [31.68, 17.82], "resolution": [3840, 2160] },
+				{ "id": "3.4k-3x2-s35", "name": "3.4K 3:2 S35", "sensorMm": [28.25, 18.17], "resolution": [3424, 2202] },
+				{ "id": "2.8k-1x1", "name": "2.8K 1:1", "sensorMm": [23.76, 23.76], "resolution": [2880, 2880] }
+			]
+		},
+		{
+			"id": "arri-alexa-mini",
+			"manufacturer": "ARRI",
+			"model": "ALEXA Mini",
+			"mount": "PL",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "3.4k-3x2-open-gate", "name": "3.4K 3:2 Open Gate", "sensorMm": [28.25, 18.17], "resolution": [3424, 2202] },
+				{ "id": "3.2k-16x9", "name": "3.2K 16:9", "sensorMm": [26.40, 14.85], "resolution": [3200, 1800] },
+				{ "id": "2.8k-4x3", "name": "2.8K 4:3 (2x anamorphic)", "sensorMm": [23.76, 17.82], "resolution": [2880, 2160] },
+				{ "id": "2.8k-16x9", "name": "2.8K 16:9", "sensorMm": [23.76, 13.37], "resolution": [2880, 1620] }
+			]
+		},
+		{
+			"id": "arri-alexa-65",
+			"manufacturer": "ARRI",
+			"model": "ALEXA 65",
+			"mount": "XPL",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "6.5k-open-gate", "name": "6.5K Open Gate", "sensorMm": [54.12, 25.58], "resolution": [6560, 3100] },
+				{ "id": "5.1k-16x9", "name": "5.1K 16:9", "sensorMm": [42.24, 23.76], "resolution": [5120, 2880] },
+				{ "id": "4.3k-3x2", "name": "4.3K 3:2", "sensorMm": [35.64, 23.76], "resolution": [4320, 2880] }
+			]
+		}
+	],
+	"lensKits": [
+		{
+			"id": "arri-signature-prime",
+			"manufacturer": "ARRI",
+			"name": "Signature Prime",
+			"imageCircleMm": 46.0,
+			"minApertureTStop": 22,
+			"irisBlades": 11,
+			"lenses": [
+				{ "focalMm": 12, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 15, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 18, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 21, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 25, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 29, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 35, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 40, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 47, "tStop": 1.8, "closeFocusM": 0.45 },
+				{ "focalMm": 58, "tStop": 1.8, "closeFocusM": 0.45 },
+				{ "focalMm": 75, "tStop": 1.8, "closeFocusM": 0.65 },
+				{ "focalMm": 95, "tStop": 1.8, "closeFocusM": 0.85 },
+				{ "focalMm": 125, "tStop": 1.8, "closeFocusM": 1.0 },
+				{ "focalMm": 150, "tStop": 1.8, "closeFocusM": 1.5 },
+				{ "focalMm": 200, "tStop": 2.5, "closeFocusM": 1.8 },
+				{ "focalMm": 280, "tStop": 2.8, "closeFocusM": 2.5 }
+			]
+		},
+		{
+			"id": "arri-master-anamorphic",
+			"manufacturer": "ARRI",
+			"name": "Master Anamorphic",
+			"squeeze": 2.0,
+			"imageCircleMm": 31.5,
+			"minApertureTStop": 22,
+			"irisBlades": 15,
+			"lenses": [
+				{ "focalMm": 28, "tStop": 1.9, "closeFocusM": 0.7 },
+				{ "focalMm": 35, "tStop": 1.9, "closeFocusM": 0.75 },
+				{ "focalMm": 40, "tStop": 1.9, "closeFocusM": 0.7 },
+				{ "focalMm": 50, "tStop": 1.9, "closeFocusM": 0.75 },
+				{ "focalMm": 60, "tStop": 1.9, "closeFocusM": 0.9 },
+				{ "focalMm": 75, "tStop": 1.9, "closeFocusM": 0.9 },
+				{ "focalMm": 100, "tStop": 1.9, "closeFocusM": 0.95 },
+				{ "focalMm": 135, "tStop": 1.9, "closeFocusM": 1.2 },
+				{ "focalMm": 180, "tStop": 2.8, "closeFocusM": 1.5 }
+			]
+		}
+	]
+}

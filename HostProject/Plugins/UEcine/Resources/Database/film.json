@@ -1,0 +1,38 @@
+{
+	"schema": 1,
+	"bodies": [
+		{
+			"id": "film-35mm",
+			"manufacturer": "Film",
+			"model": "35mm",
+			"mount": "PL",
+			"formats": [
+				{ "id": "super-35-4-perf", "name": "Super 35 4-perf full aperture", "sensorMm": [24.89, 18.66] },
+				{ "id": "super-35-3-perf", "name": "Super 35 3-perf", "sensorMm": [24.89, 13.87] },
+				{ "id": "academy", "name": "Academy", "sensorMm": [21.95, 16.00] },
+				{ "id": "anamorphic-scope", "name": "Anamorphic scope (2x)", "sensorMm": [21.95, 18.59] },
+				{ "id": "vistavision-8-perf", "name": "VistaVision 8-perf", "sensorMm": [37.72, 24.92] }
+			]
+		},
+		{
+			"id": "film-16mm",
+			"manufacturer": "Film",
+			"model": "16mm",
+			"mount": "PL",
+			"formats": [
+				{ "id": "super-16", "name": "Super 16", "sensorMm": [12.52, 7.41] },
+				{ "id": "standard-16", "name": "Standard 16", "sensorMm": [10.26, 7.49] }
+			]
+		},
+		{
+			"id": "film-65mm",
+			"manufacturer": "Film",
+			"model": "65mm",
+			"mount": "",
+			"formats": [
+				{ "id": "65mm-5-perf", "name": "65mm 5-perf", "sensorMm": [52.63, 23.01] },
+				{ "id": "imax-15-perf", "name": "IMAX 15-perf", "sensorMm": [70.41, 52.63] }
+			]
+		}
+	]
+}

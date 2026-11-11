@@ -1,0 +1,41 @@
+{
+	"schema": 1,
+	"bodies": [
+		{
+			"id": "red-v-raptor-8k-vv",
+			"manufacturer": "RED",
+			"model": "V-RAPTOR 8K VV",
+			"mount": "RF",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "8k-17x9", "name": "8K 17:9", "sensorMm": [40.96, 21.60], "resolution": [8192, 4320] },
+				{ "id": "8k-2.4x1", "name": "8K 2.4:1", "sensorMm": [40.96, 17.28], "resolution": [8192, 3456] },
+				{ "id": "7k-17x9", "name": "7K 17:9", "sensorMm": [35.84, 18.90], "resolution": [7168, 3780] },
+				{ "id": "6k-17x9", "name": "6K 17:9 S35", "sensorMm": [30.72, 16.20], "resolution": [6144, 3240] },
+				{ "id": "4k-17x9", "name": "4K 17:9", "sensorMm": [20.48, 10.80], "resolution": [4096, 2160] }
+			]
+		},
+		{
+			"id": "red-v-raptor-8k-s35",
+			"manufacturer": "RED",
+			"model": "V-RAPTOR 8K S35",
+			"mount": "RF",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "8k-17x9", "name": "8K 17:9", "sensorMm": [26.21, 13.82], "resolution": [8192, 4320] },
+				{ "id": "6k-17x9", "name": "6K 17:9", "sensorMm": [19.66, 10.37], "resolution": [6144, 3240] }
+			]
+		},
+		{
+			"id": "red-komodo-6k",
+			"manufacturer": "RED",
+			"model": "KOMODO 6K",
+			"mount": "RF",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "6k-17x9", "name": "6K 17:9", "sensorMm": [27.03, 14.26], "resolution": [6144, 3240] },
+				{ "id": "4k-17x9", "name": "4K 17:9", "sensorMm": [18.02, 9.50], "resolution": [4096, 2160] }
+			]
+		}
+	]
+}

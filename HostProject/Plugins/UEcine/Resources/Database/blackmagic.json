@@ -1,0 +1,42 @@
+{
+	"schema": 1,
+	"bodies": [
+		{
+			"id": "blackmagic-ursa-cine-12k-lf",
+			"manufacturer": "Blackmagic Design",
+			"model": "URSA Cine 12K LF",
+			"mount": "PL",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "12k-3x2-open-gate", "name": "12K 3:2 Open Gate", "sensorMm": [35.64, 23.32], "resolution": [12288, 8040] },
+				{ "id": "12k-16x9", "name": "12K 16:9", "sensorMm": [35.64, 20.04], "resolution": [12288, 6912] },
+				{ "id": "12k-17x9", "name": "12K 17:9", "sensorMm": [35.64, 18.79], "resolution": [12288, 6480] },
+				{ "id": "12k-2.4x1", "name": "12K 2.4:1", "sensorMm": [35.64, 14.82], "resolution": [12288, 5112] }
+			]
+		},
+		{
+			"id": "blackmagic-cinema-camera-6k",
+			"manufacturer": "Blackmagic Design",
+			"model": "Cinema Camera 6K",
+			"mount": "L",
+			"baseIso": [400, 3200],
+			"formats": [
+				{ "id": "6k-3x2-open-gate", "name": "6K 3:2 Open Gate", "sensorMm": [36.00, 24.00], "resolution": [6048, 4032] },
+				{ "id": "6k-17x9", "name": "6K 17:9", "sensorMm": [36.00, 19.05], "resolution": [6048, 3200] },
+				{ "id": "6k-2.4x1", "name": "6K 2.4:1", "sensorMm": [36.00, 15.00], "resolution": [6048, 2520] }
+			]
+		},
+		{
+			"id": "blackmagic-pocket-6k",
+			"manufacturer": "Blackmagic Design",
+			"model": "Pocket Cinema Camera 6K",
+			"mount": "EF",
+			"baseIso": [400, 3200],
+			"formats": [
+				{ "id": "6k-16x9", "name": "6K 16:9", "sensorMm": [23.10, 12.99], "resolution": [6144, 3456] },
+				{ "id": "6k-2.4x1", "name": "6K 2.4:1", "sensorMm": [23.10, 9.63], "resolution": [6144, 2560] },
+				{ "id": "5.7k-17x9", "name": "5.7K 17:9", "sensorMm": [21.60, 11.37], "resolution": [5744, 3024] }
+			]
+		}
+	]
+}

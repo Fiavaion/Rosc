@@ -1,0 +1,25 @@
+{
+	"schema": 1,
+	"bodies": [
+		{
+			"id": "canon-eos-c500-mark-ii",
+			"manufacturer": "Canon",
+			"model": "EOS C500 Mark II",
+			"mount": "EF",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "5.9k-17x9", "name": "5.9K 17:9 Full Frame", "sensorMm": [38.1, 20.1], "resolution": [5952, 3140] }
+			]
+		},
+		{
+			"id": "canon-eos-c70",
+			"manufacturer": "Canon",
+			"model": "EOS C70",
+			"mount": "RF",
+			"baseIso": [800],
+			"formats": [
+				{ "id": "4k-17x9", "name": "4K 17:9 S35", "sensorMm": [26.2, 13.8], "resolution": [4096, 2160] }
+			]
+		}
+	]
+}

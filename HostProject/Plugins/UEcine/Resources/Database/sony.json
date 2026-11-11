@@ -1,0 +1,54 @@
+{
+	"schema": 1,
+	"bodies": [
+		{
+			"id": "sony-venice-2-8k",
+			"manufacturer": "Sony",
+			"model": "VENICE 2 8K",
+			"mount": "PL",
+			"baseIso": [800, 3200],
+			"formats": [
+				{ "id": "8.6k-3x2", "name": "8.6K 3:2 Full Frame", "sensorMm": [35.9, 24.0], "resolution": [8640, 5760] },
+				{ "id": "8.6k-17x9", "name": "8.6K 17:9", "sensorMm": [35.9, 18.9], "resolution": [8640, 4556] },
+				{ "id": "8.2k-17x9", "name": "8.2K 17:9", "sensorMm": [34.1, 18.0], "resolution": [8192, 4320] },
+				{ "id": "8.2k-2.39x1", "name": "8.2K 2.39:1", "sensorMm": [34.1, 14.3], "resolution": [8192, 3432] },
+				{ "id": "5.8k-6x5", "name": "5.8K 6:5 S35 (2x anamorphic)", "sensorMm": [24.1, 20.2], "resolution": [5792, 4854] },
+				{ "id": "5.8k-4x3", "name": "5.8K 4:3 S35", "sensorMm": [24.1, 17.8], "resolution": [5792, 4276] },
+				{ "id": "5.8k-17x9", "name": "5.8K 17:9 S35", "sensorMm": [24.1, 12.7], "resolution": [5792, 3056] }
+			]
+		},
+		{
+			"id": "sony-burano",
+			"manufacturer": "Sony",
+			"model": "BURANO",
+			"mount": "PL",
+			"baseIso": [800, 3200],
+			"formats": [
+				{ "id": "8.6k-16x9", "name": "8.6K 16:9 Full Frame", "sensorMm": [35.9, 20.2], "resolution": [8632, 4856] },
+				{ "id": "8.6k-17x9", "name": "8.6K 17:9 Full Frame", "sensorMm": [35.9, 18.9], "resolution": [8632, 4552] },
+				{ "id": "5.8k-16x9-s35", "name": "5.8K 16:9 S35", "sensorMm": [24.0, 13.5], "resolution": [5760, 3240] }
+			]
+		},
+		{
+			"id": "sony-fx6",
+			"manufacturer": "Sony",
+			"model": "FX6",
+			"mount": "E",
+			"baseIso": [800, 12800],
+			"formats": [
+				{ "id": "4k-17x9", "name": "4K 17:9 Full Frame", "sensorMm": [35.7, 18.8], "resolution": [4096, 2160] },
+				{ "id": "uhd-16x9", "name": "UHD 16:9 Full Frame", "sensorMm": [33.5, 18.8], "resolution": [3840, 2160] }
+			]
+		},
+		{
+			"id": "sony-fx3",
+			"manufacturer": "Sony",
+			"model": "FX3",
+			"mount": "E",
+			"baseIso": [800, 12800],
+			"formats": [
+				{ "id": "uhd-16x9", "name": "UHD 16:9 Full Frame", "sensorMm": [35.6, 20.0], "resolution": [3840, 2160] }
+			]
+		}
+	]
+}

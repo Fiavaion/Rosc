@@ -6,5 +6,6 @@ public class UEcineCore : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "Projects" });
 	}
 }
