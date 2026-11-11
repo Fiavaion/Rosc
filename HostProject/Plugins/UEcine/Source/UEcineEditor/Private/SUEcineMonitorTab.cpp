@@ -122,15 +122,6 @@ namespace
 	}
 
 	/** A line of explanation. Takes no space while it has nothing to say. */
-	TSharedRef<SWidget> MakeNote(TAttribute<FText> Text)
-	{
-		return SNew(STextBlock)
-			.TextStyle(&TextStyle("UEcine.Body"))
-			.AutoWrapText(true)
-			.Visibility_Lambda([Text] { return Text.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
-			.Text(Text);
-	}
-
 	/**
 	 * What each false colour means, in words, brightest first as the legend over the picture lists
 	 * them. Shown while false colour is on.

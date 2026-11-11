@@ -24,6 +24,9 @@ namespace UEcine::Widgets
 	/** A centred message with one action, shown when there is nothing to edit yet. */
 	TSharedRef<SWidget> MakeEmptyState(const FText& Message, const FText& ButtonLabel, const FText& ButtonToolTip, FOnClicked OnClicked);
 
+	/** A line or two of guidance in the body text. Takes no space while the text is empty. */
+	TSharedRef<SWidget> MakeNote(TAttribute<FText> Text);
+
 	/** A warning icon beside the message. Takes no space while the message is empty. */
 	TSharedRef<SWidget> MakeWarning(TAttribute<FText> Message);
 
@@ -31,7 +34,7 @@ namespace UEcine::Widgets
 	TSharedRef<SWidget> MakeButton(TAttribute<FText> Label, TAttribute<FText> ToolTip, FOnClicked OnClicked, TAttribute<bool> IsEnabled = true);
 
 	/** A button that stays lit while its state is on: one lens of a kit, one tab of the panel. */
-	TSharedRef<SWidget> MakeToggleButton(const FText& Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled);
+	TSharedRef<SWidget> MakeToggleButton(TAttribute<FText> Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled);
 
 	/** A square button showing only an icon. The tooltip is also its name for screen readers. */
 	TSharedRef<SWidget> MakeIconButton(FName IconName, const FText& ToolTip, FOnClicked OnClicked);

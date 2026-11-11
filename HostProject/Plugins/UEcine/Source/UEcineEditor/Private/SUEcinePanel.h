@@ -12,7 +12,8 @@ enum class EUEcineDepartment : uint8
 	Camera,
 	Grip,
 	Focus,
-	Monitor
+	Monitor,
+	Shots
 };
 
 /**
@@ -37,6 +38,8 @@ private:
 	FText GetCameraName() const;
 
 	bool HasCamera() const;
+	/** The slot of the switcher to show: the active department, or the invitation to make a camera when it needs one. */
+	int32 GetShownSlot() const;
 	bool IsLookingThrough() const;
 	void OnLookThroughChanged(bool bLookThrough);
 	FReply OnNewCameraClicked();

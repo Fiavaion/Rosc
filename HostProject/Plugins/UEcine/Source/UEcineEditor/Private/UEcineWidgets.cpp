@@ -196,7 +196,16 @@ TSharedRef<SWidget> UEcine::Widgets::MakeButton(TAttribute<FText> Label, TAttrib
 		];
 }
 
-TSharedRef<SWidget> UEcine::Widgets::MakeToggleButton(const FText& Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled)
+TSharedRef<SWidget> UEcine::Widgets::MakeNote(TAttribute<FText> Text)
+{
+	return SNew(STextBlock)
+		.TextStyle(&TextStyle("UEcine.Body"))
+		.AutoWrapText(true)
+		.Visibility_Lambda([Text] { return Text.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
+		.Text(Text);
+}
+
+TSharedRef<SWidget> UEcine::Widgets::MakeToggleButton(TAttribute<FText> Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled)
 {
 	return SNew(SBox)
 		.MinDesiredWidth(36.0f)
@@ -213,7 +222,7 @@ TSharedRef<SWidget> UEcine::Widgets::MakeToggleButton(const FText& Label, const 
 				SNew(STextBlock)
 				.TextStyle(&TextStyle("UEcine.Label"))
 				.ColorAndOpacity(FSlateColor::UseForeground())
-				.Text(Label)
+				.Text(MoveTemp(Label))
 			]
 		];
 }

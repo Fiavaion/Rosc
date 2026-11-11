@@ -160,9 +160,15 @@ bool FUEcineShotsThreeShotsTest::RunTest(const FString& Parameters)
 	const int32 ShotFrames = FMath::RoundToInt32(SequencerSettings->DefaultDuration * 24.0f);
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
-		const FString ExpectedName = MovieSceneToolHelpers::ComposeShotName(SequencerSettings->ShotPrefix, SequencerSettings->FirstShotNumber + Index * SequencerSettings->ShotIncrement,
-			SequencerSettings->FirstTakeNumber, SequencerSettings->ShotNumDigits, SequencerSettings->TakeNumDigits);
-		TestEqual(*FString::Printf(TEXT("Shot %d is named by Sequencer's settings"), Index + 1), Shots[Index].Name, ExpectedName);
+		// The take number is left out of the check: it goes up when an earlier run in this editor session used the name.
+		FString Prefix;
+		uint32 ShotNumber = 0;
+		uint32 TakeNumber = 0;
+		uint32 ShotNumberDigits = 0;
+		uint32 TakeNumberDigits = 0;
+		const bool bNamedAsShot = MovieSceneToolHelpers::ParseShotName(Shots[Index].Name, Prefix, ShotNumber, TakeNumber, ShotNumberDigits, TakeNumberDigits);
+		TestTrue(*FString::Printf(TEXT("Shot %d is named and numbered by Sequencer's settings"), Index + 1), bNamedAsShot && Prefix == SequencerSettings->ShotPrefix
+			&& ShotNumber == SequencerSettings->FirstShotNumber + Index * SequencerSettings->ShotIncrement && ShotNumberDigits == SequencerSettings->ShotNumDigits);
 		TestEqual(*FString::Printf(TEXT("Shot %d follows the one before"), Index + 1), Shots[Index].StartFrame.Value, Index * ShotFrames);
 		TestEqual(*FString::Printf(TEXT("Shot %d runs for Sequencer's default duration"), Index + 1), Shots[Index].DurationFrames, ShotFrames);
 		TestNotNull(*FString::Printf(TEXT("Shot %d is a section of the Shot track"), Index + 1), Shots[Index].Section);

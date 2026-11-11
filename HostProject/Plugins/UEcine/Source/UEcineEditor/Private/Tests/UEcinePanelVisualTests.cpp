@@ -3,10 +3,14 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "ImageUtils.h"
+#include "LevelSequence.h"
+#include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "MovieSceneSequencePlayer.h"
+#include "ObjectTools.h"
 #include "RenderingThread.h"
 #include "SUEcinePanel.h"
 #include "Slate/WidgetRenderer.h"
@@ -19,6 +23,7 @@
 #include "UEcineGripEditing.h"
 #include "UEcineMonitorSubsystem.h"
 #include "UEcineRig.h"
+#include "UEcineShotEditing.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -391,6 +396,116 @@ bool FUEcineMonitorTabStatesVisualTest::RunTest(const FString& Parameters)
 		UUEcineMonitorSubsystem::Get()->SetSettings(SettingsBefore);
 		return true;
 	}));
+	return true;
+}
+
+/**
+ * Pictures of the Shots tab with a three-shot sequence open: the list, the first shot's fields,
+ * two storyboard frames, the overhead plan of a dolly move, and the paperwork buttons.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineShotsTabVisualTest, "UEcine.Editor.Visual.ShotsTab", VisualTestFlags)
+
+bool FUEcineShotsTabVisualTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::ShotEditing;
+
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	ACineCameraActor* CameraActor = UEcine::CameraEditing::SpawnCamera(World, FTransform(FRotator::ZeroRotator, FVector(0.0, -200.0, 150.0)));
+	AStaticMeshActor* Hero = World->SpawnActor<AStaticMeshActor>(FVector(700.0, -100.0, 0.0), FRotator::ZeroRotator);
+	if (!TestNotNull(TEXT("A camera to show"), CameraActor) || !TestNotNull(TEXT("A subject to show"), Hero))
+	{
+		return false;
+	}
+	Hero->SetActorLabel(TEXT("Hero"));
+	UEcine::FocusEditing::FollowActor(CameraActor, Hero);
+
+	AUEcineRig* Dolly = UEcine::GripEditing::PutCameraOnRig(CameraActor, *UEcine::Rig::FindPreset(TEXT("dolly")));
+	if (!TestNotNull(TEXT("The camera is put on a dolly"), Dolly))
+	{
+		return false;
+	}
+	UEcine::GripEditing::AddMark(Dolly);
+	UEcine::GripEditing::EditRig(Dolly, FText::FromString(TEXT("Move Rig")), [](AUEcineRig& Rig)
+	{
+		FUEcineRigPose Pose = Rig.GetPose();
+		Pose.Travel += 350.0;
+		Pose.Pan = 20.0;
+		Rig.SetPose(Pose);
+	});
+	UEcine::GripEditing::AddMark(Dolly);
+	UEcine::GripEditing::EditRig(Dolly, FText::FromString(TEXT("Time Move")), [](AUEcineRig& Rig) { Rig.Marks[1].Arrival.DurationSeconds = 4.0; });
+	UEcine::GripEditing::GoToMark(Dolly, 0);
+
+	FText Error;
+	const bool bShotsAdded = AddShot(CameraActor, Error) && AddShot(CameraActor, Error) && AddShot(CameraActor, Error);
+	TArray<ULevelSequence*> CreatedSequences;
+	if (ULevelSequence* OpenSequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence())
+	{
+		CreatedSequences.Add(OpenSequence);
+	}
+	const TArray<FShot> Shots = GetShots();
+	for (const FShot& Shot : Shots)
+	{
+		CreatedSequences.AddUnique(Shot.Sequence);
+	}
+
+	if (TestTrue(TEXT("Three shots to show"), bShotsAdded && Shots.Num() == 3))
+	{
+		SetScene(Shots[0].Sequence, TEXT("12"));
+		SetSize(Shots[0].Sequence, EUEcineShotSize::Wide);
+		SetMove(Shots[0].Sequence, TEXT("Track in on Hero, pan right"));
+		SetNotes(Shots[0].Sequence, TEXT("Dawn light, haze. Hold two beats before the move."));
+		SetScene(Shots[1].Sequence, TEXT("12"));
+		SetSize(Shots[1].Sequence, EUEcineShotSize::CloseUp);
+		SetScene(Shots[2].Sequence, TEXT("12A"));
+		SetSize(Shots[2].Sequence, EUEcineShotSize::OverTheShoulder);
+
+		GoToShot(Shots[0]);
+		TestTrue(TEXT("The dolly move is baked into the first shot"), UEcine::GripEditing::BakeMoveToSequencer(Dolly, Error) == Shots[0].Sequence);
+		for (const int32 Frame : { 80, 0 })
+		{
+			ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(Frame), EUpdatePositionMethod::Scrub));
+			TestTrue(TEXT("A storyboard frame is grabbed"), GrabStoryboardFrame(Shots[0], Error));
+		}
+		QueuePanelCaptures(*this, CameraActor, TEXT("shots-tab"), EUEcineDepartment::Shots, 1500.0f);
+	}
+
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, CreatedSequences, WeakHero = TWeakObjectPtr<AStaticMeshActor>(Hero)]
+	{
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+		GEditor->ResetTransaction(FText::FromString(TEXT("UEcine shots tab visual test")));
+		for (ULevelSequence* Sequence : CreatedSequences)
+		{
+			TestTrue(TEXT("The test's sequence asset is removed"), ObjectTools::DeleteSingleObject(Sequence, false));
+		}
+		if (AStaticMeshActor* HeroToRemove = WeakHero.Get())
+		{
+			HeroToRemove->GetWorld()->EditorDestroyActor(HeroToRemove, false);
+		}
+		return true;
+	}));
+	return true;
+}
+
+/** A picture of the Shots tab with no sequence open and no camera: it invites the first shot. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineShotsTabStatesVisualTest, "UEcine.Editor.Visual.ShotsTabStates", VisualTestFlags)
+
+bool FUEcineShotsTabStatesVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	GEditor->SelectNone(false, true, false);
+	QueuePanelCaptures(*this, nullptr, TEXT("shots-tab-no-sequence"), EUEcineDepartment::Shots, 420.0f, NarrowOnly);
 	return true;
 }
 

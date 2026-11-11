@@ -9,6 +9,7 @@
 #include "SUEcineFocusTab.h"
 #include "SUEcineGripTab.h"
 #include "SUEcineMonitorTab.h"
+#include "SUEcineShotsTab.h"
 #include "Styling/AppStyle.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraTarget.h"
@@ -116,6 +117,11 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 					MakeDepartmentTab(EUEcineDepartment::Monitor, LOCTEXT("MonitorDepartment", "Monitor"),
 						LOCTEXT("MonitorDepartmentToolTip", "Monitor: false colour, zebras, waveform, histogram, focus peaking, frame lines and camera data over the viewport picture."))
 				]
+				+ SWrapBox::Slot()
+				[
+					MakeDepartmentTab(EUEcineDepartment::Shots, LOCTEXT("ShotsDepartment", "Shots"),
+						LOCTEXT("ShotsDepartmentToolTip", "Shots: the shot list of the sequence in Sequencer, storyboard frames, overhead plans, and the shot list and camera report to hand out."))
+				]
 			]
 		]
 		+ SVerticalBox::Slot()
@@ -126,12 +132,8 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 			.Padding(0.0f)
 			[
 				// Slot 0 invites the user to make a camera; the departments follow in tab order.
-				// The monitor's tools work on any view, so its tab does not wait for a camera.
 				SNew(SWidgetSwitcher)
-				.WidgetIndex_Lambda([this]
-				{
-					return HasCamera() || ActiveDepartment == EUEcineDepartment::Monitor ? 1 + static_cast<int32>(ActiveDepartment) : 0;
-				})
+				.WidgetIndex(this, &SUEcinePanel::GetShownSlot)
 				+ SWidgetSwitcher::Slot()
 				.Padding(FUEcineStyle::PanelPadding)
 				[
@@ -156,6 +158,10 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				+ SWidgetSwitcher::Slot()
 				[
 					SNew(SUEcineMonitorTab, Target.ToSharedRef())
+				]
+				+ SWidgetSwitcher::Slot()
+				[
+					SNew(SUEcineShotsTab, Target.ToSharedRef())
 				]
 			]
 		]
@@ -219,6 +225,13 @@ FText SUEcinePanel::GetCameraName() const
 bool SUEcinePanel::HasCamera() const
 {
 	return Target->GetCamera() != nullptr;
+}
+
+int32 SUEcinePanel::GetShownSlot() const
+{
+	// The monitor's tools work on any view and the shot list is Sequencer's, so neither waits for a camera.
+	const bool bWorksWithoutCamera = ActiveDepartment == EUEcineDepartment::Monitor || ActiveDepartment == EUEcineDepartment::Shots;
+	return HasCamera() || bWorksWithoutCamera ? 1 + static_cast<int32>(ActiveDepartment) : 0;
 }
 
 bool SUEcinePanel::IsLookingThrough() const
