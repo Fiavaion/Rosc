@@ -22,6 +22,12 @@
 			"PlatformAllowList": [ "Win64" ]
 		},
 		{
+			"Name": "UEcineRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
+		},
+		{
 			"Name": "UEcineEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default",
