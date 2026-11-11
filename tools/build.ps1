@@ -10,7 +10,10 @@ New-Item -ItemType Directory -Force $logDir | Out-Null
 $log = Join-Path $logDir "build.log"
 
 $buildBat = Join-Path $ueRoot "Engine\Build\BatchFiles\Build.bat"
-cmd /c "`"$buildBat`" UEcineHostEditor Win64 $Configuration -project=`"$uproject`" -waitmutex > `"$log`" 2>&1"
+# -NoHotReloadFromIDE: UnrealBuildTool otherwise refuses to build while any editor of this engine
+# install has Live Coding on, even one running a different project (LESSON-BUILD-002). If the
+# UEcine host project itself is open, the link step still fails because its DLLs are in use.
+cmd /c "`"$buildBat`" UEcineHostEditor Win64 $Configuration -project=`"$uproject`" -waitmutex -NoHotReloadFromIDE > `"$log`" 2>&1"
 $code = $LASTEXITCODE
 
 # Show only compiler and linker diagnostics; the full log stays on disk.
