@@ -83,6 +83,27 @@ bool FUEcineExposureTest::RunTest(const FString& Parameters)
 	// Opening one stop (f/16 to f/11.3) also suits a scene one stop darker.
 	TestEqual(TEXT("Opening the iris a stop lowers EV100 by one"), EV100(16.0 / FMath::Sqrt(2.0), 1.0 / 125.0, 100.0), 13.966, 0.001);
 
+	// A T1.9 lens that closes to T22: the widest aperture leads, then third stops above it.
+	const TArray<double> Ladder = TStopLadder(1.9, 22.0);
+	TestEqual(TEXT("The ladder starts at the widest aperture"), Ladder[0], 1.9);
+	TestEqual(TEXT("then the next third stop"), Ladder[1], 2.0);
+	TestEqual(TEXT("and ends at the minimum aperture"), Ladder.Last(), 22.0);
+	TestEqual(TEXT("A T2 lens does not list T2 twice"), TStopLadder(2.0, 16.0)[1], 2.2);
+
+	TestEqual(TEXT("Stepping up from a ladder value"), StepOnLadder(Ladder, 2.8, 1).Get(0.0), 3.2);
+	TestEqual(TEXT("Stepping down from a ladder value"), StepOnLadder(Ladder, 2.8, -1).Get(0.0), 2.5);
+	TestEqual(TEXT("Stepping up from an off-ladder value goes to the next mark"), StepOnLadder(Ladder, 3.0, 1).Get(0.0), 3.2);
+	TestEqual(TEXT("Stepping down from an off-ladder value goes to the previous mark"), StepOnLadder(Ladder, 3.0, -1).Get(0.0), 2.8);
+	TestFalse(TEXT("There is nothing wider than the widest aperture"), StepOnLadder(Ladder, 1.9, -1).IsSet());
+	TestFalse(TEXT("There is nothing smaller than the minimum aperture"), StepOnLadder(Ladder, 22.0, 1).IsSet());
+	// A float round trip (2.8f) must still count as being on the 2.8 mark.
+	TestEqual(TEXT("A value within rounding of a mark steps from that mark"), StepOnLadder(Ladder, 2.8f, 1).Get(0.0), 3.2);
+
+	// Neighbouring frame rates differ by a tenth of a percent and must stay separate steps.
+	TestEqual(TEXT("24 fps steps down to 23.976"), StepOnLadder(StandardFrameRates(), 24.0f, -1).Get(0.0), 23.976);
+	TestEqual(TEXT("23.976 fps steps up to 24"), StepOnLadder(StandardFrameRates(), 23.976f, 1).Get(0.0), 24.0);
+	TestFalse(TEXT("23.976 and 24 are different settings"), IsSameSetting(23.976, 24.0));
+
 	return true;
 }
 
