@@ -63,6 +63,27 @@ Not measured: a heavy scene drawing in a real viewport while the model runs. The
 does not wait for the model, so the picture rate may dip but the editor should not hitch;
 this is a hand check.
 
+Measured at the Phase 7 gate (2026-11-12), with a level viewport drawing while the three models
+ran one after another in the editor: the editor's longest pause was 0.03 s and under during the
+depth map and the lens estimate, and 11 to 14 s during the matte. Loading a model does not hold
+the editor; the matte's run itself does. Run in the helper with a Python that works on the
+processor, the same three jobs paused the editor for under a second.
+
+The cause is graphics memory. BiRefNet Lite at 1024 x 1024 under DirectML takes about 10 GB:
+the whole card read 4.4 GB before the matte, 15.0 GB while it ran and 3.9 GB after, on a 16 GB
+card. The game thread does not wait for the model, but the viewport waits for the graphics
+card, and the card is full. The first version of the backend kept the last model loaded for
+the next job. With the matte's model left loaded the editor's own graphics memory read 26.7 GB
+against a budget of 14.1 GB, and the next movie render at 4608 x 3164 lost the graphics device
+and took the editor down. The backend now loads a model for its job and releases it when the
+job ends, at the cost of loading again for the next picture (about a second for the depth
+model).
+
+Rule 3 is met for the depth map, which is what the spike and the roadmap asked of the
+in-editor backend, and not for the matte. `UEcine.AI.Editor.Pictures` measures the pause for
+each job and requires under a second for the depth map and the lens estimate; the Matte button
+and the user guide say what to expect; the pause that remains is logged as TD-002.
+
 ## Consequences
 - `UEcineAI` depends on the engine plugin NNERuntimeORT (Beta) and its module `NNE`. The
   in-engine backend makes the session and runs on a worker thread, one job at a time.

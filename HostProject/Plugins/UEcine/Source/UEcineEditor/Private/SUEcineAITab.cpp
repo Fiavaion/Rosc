@@ -695,7 +695,7 @@ void SUEcineAITab::RebuildPictures()
 		AddJob(EUEcineAITask::Depth, LOCTEXT("DepthButton", "Depth Map"),
 			LOCTEXT("DepthToolTip", "Depth map: a grey picture of how near things are in the picture, near being bright. It is relative depth, not distances."));
 		AddJob(EUEcineAITask::Matte, LOCTEXT("MatteButton", "Matte"),
-			LOCTEXT("MatteToolTip", "Matte: a grey picture that is white where the picture's subject is."));
+			LOCTEXT("MatteToolTip", "Matte: a grey picture that is white where the picture's subject is. It is heavy work for a graphics card: run in the editor, the viewport can stand still for ten seconds or more while the matte is made."));
 		AddJob(EUEcineAITask::FocalLength, LOCTEXT("EstimateLensButton", "Estimate Lens"),
 			LOCTEXT("EstimateLensToolTip", "Estimate lens: work out the field of view the picture was taken with, and the lens of this camera's kit that matches it. It is an estimate; check it against the picture."));
 		Add(FUEcineStyle::ButtonRowPadding, Jobs);

@@ -33,9 +33,35 @@ namespace
 		TArray<FUEcineAIResult> Results;
 		FDelegateHandle FinishedHandle;
 
+		/**
+		 * The longest time between two ticks of the editor while each job was worked on. The jobs
+		 * run in the order they were given, so with three left it is the depth map, with two the
+		 * lens estimate and with one the matte.
+		 */
+		double LastTick = FPlatformTime::Seconds();
+		int32 JobsLeftAtLastTick = 3;
+		double LongestPause[4] = {};
+
 		const FUEcineAIResult* Find(EUEcineAITask Task) const
 		{
 			return Results.FindByPredicate([Task](const FUEcineAIResult& Result) { return Result.Request.Task == Task; });
+		}
+
+		/** Called every tick while the jobs run. True when none is left. */
+		bool TickUntilDone(const UUEcineAISubsystem& Jobs)
+		{
+			// A pause belongs to the job that was being worked on when it began: that job is often over by the tick that ends it.
+			const double Now = FPlatformTime::Seconds();
+			double& Pause = LongestPause[JobsLeftAtLastTick];
+			Pause = FMath::Max(Pause, Now - LastTick);
+			LastTick = Now;
+			JobsLeftAtLastTick = FMath::Clamp(Jobs.GetJobsLeft(), 0, 3);
+			return JobsLeftAtLastTick == 0;
+		}
+
+		FString DescribePauses() const
+		{
+			return FString::Printf(TEXT("The editor's longest pause: %.2f s during the depth map, %.2f s during the matte, %.2f s during the lens estimate"), LongestPause[3], LongestPause[1], LongestPause[2]);
 		}
 	};
 
@@ -53,7 +79,8 @@ namespace
 		UUEcineAISubsystem* Jobs = GEditor->GetEditorSubsystem<UUEcineAISubsystem>();
 		State->FinishedHandle = Jobs->OnJobFinished().AddLambda([State](const FUEcineAIResult& Result) { State->Results.Add(Result); });
 		const FString Still = WriteTestStill();
-		for (const EUEcineAITask Task : { EUEcineAITask::Depth, EUEcineAITask::Matte, EUEcineAITask::FocalLength })
+		// The matte goes last: its model fills the graphics card while it runs (TD-002), and the two light jobs are measured before it.
+		for (const EUEcineAITask Task : { EUEcineAITask::Depth, EUEcineAITask::FocalLength, EUEcineAITask::Matte })
 		{
 			FText Error;
 			if (!Test.TestTrue(*FString::Printf(TEXT("The %s job is taken (%s)"), UEcine::AI::GetTaskId(Task), *Error.ToString()), Jobs->Submit({ Task, Still }, Error)))
@@ -199,9 +226,15 @@ bool FUEcineAIEditorPicturesTest::RunTest(const FString& Parameters)
 	Jobs->GetProgress(Stage, Fraction);
 	TestFalse(TEXT("A running job says what it is doing"), Stage.IsEmpty());
 
-	WaitThen(*this, TEXT("the picture jobs in the editor"), 300.0, [Jobs] { return Jobs->GetJobsLeft() == 0; }, [this, State, Jobs, StartedAt]
+	// The editor's own home screen checks the connection now and then. A check in flight while the matte holds the graphics card times out, and says so in the log.
+	AddExpectedMessage(TEXT("HTTP request timed out"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, -1, false);
+	WaitThen(*this, TEXT("the picture jobs in the editor"), 300.0, [State, Jobs] { return State->TickUntilDone(*Jobs); }, [this, State, Jobs, StartedAt]
 	{
-		AddInfo(FString::Printf(TEXT("Three jobs in the editor took %.1f s"), FPlatformTime::Seconds() - StartedAt));
+		AddInfo(FString::Printf(TEXT("Three jobs in the editor took %.1f s. %s"), FPlatformTime::Seconds() - StartedAt, *State->DescribePauses()));
+		// The editor stays live while a model loads and runs (ADR-006, rule 3). The spike measured 14 ms on an idle editor; a second leaves room for a busy test run.
+		TestTrue(TEXT("The editor does not stand still while a depth map is made"), State->LongestPause[3] < 1.0);
+		TestTrue(TEXT("The editor does not stand still while a lens is estimated"), State->LongestPause[2] < 1.0);
+		// The matte's model holds the graphics card for seconds at a time and the viewport waits for it (TD-002): reported, not required.
 		Jobs->OnJobFinished().Remove(State->FinishedHandle);
 		CheckTestStillResults(*this, *State);
 		State->SettingsBefore.PutBack();
@@ -231,8 +264,10 @@ bool FUEcineAIHelperPicturesTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	WaitThen(*this, TEXT("the picture jobs in the helper"), 300.0, [Jobs] { return Jobs->GetJobsLeft() == 0; }, [this, State, Jobs, StartedAt]
+	// The editor's pauses are reported, not required: whether the helper's Python works on the processor or on the graphics card the viewport also needs is the user's choice of packages.
+	WaitThen(*this, TEXT("the picture jobs in the helper"), 300.0, [State, Jobs] { return State->TickUntilDone(*Jobs); }, [this, State, Jobs, StartedAt]
 	{
+		AddInfo(State->DescribePauses());
 		Jobs->OnJobFinished().Remove(State->FinishedHandle);
 		const FText HelperStatus = Jobs->GetHelperStatus();
 		AddInfo(FString::Printf(TEXT("Helper: %s"), *HelperStatus.ToString()));

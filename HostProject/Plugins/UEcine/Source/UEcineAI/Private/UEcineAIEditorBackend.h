@@ -41,15 +41,18 @@ private:
 
 	/** The whole of a job, on the worker thread. */
 	FUEcineAIOutput Work(const FUEcineAIModel& Model, const FString& PictureFile);
-	/** Brings the model into memory when it is not the one already there. */
+	/** Brings the model into memory, checked against its hash and compiled for the graphics card. */
 	bool LoadModel(const FUEcineAIModel& Model, FText& OutError);
 	bool RunModel(const FUEcineAIModel& Model, const FImage& Picture, FUEcineAIOutput& Output);
+	/** Gives back the memory the model holds, on the graphics card and off it. */
+	void ReleaseModel();
 
 	/**
-	 * The model in memory: one at a time, as each takes a few hundred megabytes. Used by the
-	 * worker, and by the game thread only while the worker waits for it.
+	 * The model, in memory only while its job runs. The matte's model takes about 10 GB of
+	 * graphics memory, and an editor left holding it lost its graphics device at the next render
+	 * (LESSON-API-020). Used by the worker, and by the game thread only while the worker
+	 * waits for it.
 	 */
-	FString LoadedModelId;
 	TStrongObjectPtr<UNNEModelData> ModelData;
 	TSharedPtr<UE::NNE::IModelGPU> LoadedModel;
 	TSharedPtr<UE::NNE::IModelInstanceGPU> ModelInstance;

@@ -35,7 +35,7 @@ namespace
 FUEcineAIEditorBackend::~FUEcineAIEditorBackend()
 {
 	bCancel = true;
-	// The worker may be waiting for the game thread to make its model: let it.
+	// The worker may be waiting for the game thread to make its model or let go of it: let it.
 	while (Worker.IsValid() && !Worker.IsReady())
 	{
 		FTaskGraphInterface::Get().ProcessThreadUntilIdle(ENamedThreads::GameThread);
@@ -116,38 +116,38 @@ FUEcineAIOutput FUEcineAIEditorBackend::Work(const FUEcineAIModel& Model, const 
 	}
 
 	Stage = EStage::Loading;
-	if (!LoadModel(Model, Output.Error) || bCancel)
+	if (LoadModel(Model, Output.Error) && !bCancel)
 	{
-		return Output;
-	}
-
-	Stage = EStage::Working;
-	if (!RunModel(Model, Picture, Output))
-	{
-		// A model that failed once is made afresh for the next job.
-		LoadedModelId.Reset();
-		ModelInstance.Reset();
-		LoadedModel.Reset();
-		if (Output.Error.IsEmpty())
+		Stage = EStage::Working;
+		if (RunModel(Model, Picture, Output))
+		{
+			Output.bSuccess = !bCancel;
+		}
+		else if (Output.Error.IsEmpty())
 		{
 			Output.Error = FText::Format(LOCTEXT("RunFailed", "{0} could not be run on this machine's graphics card. The log says why. The helper can run it instead."), FText::FromString(Model.Name));
 		}
-		return Output;
 	}
-	Output.bSuccess = !bCancel;
+	ReleaseModel();
 	return Output;
+}
+
+void FUEcineAIEditorBackend::ReleaseModel()
+{
+	ModelInstance.Reset();
+	LoadedModel.Reset();
+	// The engine's model object goes the way it came: on the game thread.
+	TPromise<void> Released;
+	AsyncTask(ENamedThreads::GameThread, [this, &Released]
+	{
+		ModelData.Reset();
+		Released.SetValue();
+	});
+	Released.GetFuture().Wait();
 }
 
 bool FUEcineAIEditorBackend::LoadModel(const FUEcineAIModel& Model, FText& OutError)
 {
-	if (LoadedModelId == Model.Id)
-	{
-		return true;
-	}
-	LoadedModelId.Reset();
-	ModelInstance.Reset();
-	LoadedModel.Reset();
-
 	if (!UEcine::AIModelStore::Verify(Model, OutError))
 	{
 		return false;
@@ -159,33 +159,35 @@ bool FUEcineAIEditorBackend::LoadModel(const FUEcineAIModel& Model, FText& OutEr
 		return false;
 	}
 
-	// The engine's model object is made on the game thread, like any other object.
+	// The engine's model object is made on the game thread, like any other object. Filling it
+	// and preparing the model for the runtime is done here, off the game thread: for the larger
+	// models that is a tenth of a second or two, a hitch the editor does not need.
+	INNERuntimeGPU* Runtime = nullptr;
 	TPromise<void> Made;
-	AsyncTask(ENamedThreads::GameThread, [this, &Bytes, &Made]
+	AsyncTask(ENamedThreads::GameThread, [this, &Runtime, &Made]
 	{
-		if (INNERuntimeGPU* Runtime = GetEditorBackendRuntime().Get())
-		{
-			ModelData.Reset(NewObject<UNNEModelData>());
-			ModelData->Init(TEXT("onnx"), Bytes);
-			if (Runtime->CanCreateModelGPU(ModelData.Get()) == INNERuntimeGPU::ECanCreateModelGPUStatus::Ok)
-			{
-				LoadedModel = Runtime->CreateModelGPU(ModelData.Get());
-			}
-		}
+		Runtime = GetEditorBackendRuntime().Get();
+		ModelData.Reset(Runtime != nullptr ? NewObject<UNNEModelData>() : nullptr);
 		Made.SetValue();
 	});
 	Made.GetFuture().Wait();
+	if (Runtime != nullptr)
+	{
+		ModelData->Init(TEXT("onnx"), Bytes);
+		if (Runtime->CanCreateModelGPU(ModelData.Get()) == INNERuntimeGPU::ECanCreateModelGPUStatus::Ok)
+		{
+			LoadedModel = Runtime->CreateModelGPU(ModelData.Get());
+		}
+	}
 	Bytes.Empty();
 
 	// Making the instance compiles the model for the graphics card: the slow part of a first run.
 	ModelInstance = LoadedModel.IsValid() ? LoadedModel->CreateModelInstanceGPU() : nullptr;
 	if (!ModelInstance.IsValid())
 	{
-		LoadedModel.Reset();
 		OutError = FText::Format(LOCTEXT("CannotLoad", "{0} could not be loaded on this machine's graphics card. The helper can run it instead."), FText::FromString(Model.Name));
 		return false;
 	}
-	LoadedModelId = Model.Id;
 	return true;
 }
 
