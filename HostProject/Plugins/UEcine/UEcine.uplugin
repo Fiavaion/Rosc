@@ -40,6 +40,12 @@
 			"PlatformAllowList": [ "Win64" ]
 		},
 		{
+			"Name": "UEcineAI",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
+		},
+		{
 			"Name": "UEcineEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default",
@@ -65,6 +71,10 @@
 		},
 		{
 			"Name": "SequencerScripting",
+			"Enabled": true
+		},
+		{
+			"Name": "NNERuntimeORT",
 			"Enabled": true
 		}
 	]

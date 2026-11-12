@@ -25,3 +25,6 @@ Packaged/
 # Claude Code local setup
 .claude/
 CLAUDE.local.md
+
+# Python caches
+__pycache__/

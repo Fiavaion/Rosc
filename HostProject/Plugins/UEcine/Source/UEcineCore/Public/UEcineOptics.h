@@ -17,6 +17,9 @@ namespace UEcine::Optics
 	 */
 	UECINECORE_API double HorizontalFieldOfViewDeg(double SensorWidthMm, double FocalLengthMm, double Squeeze = 1.0);
 
+	/** The focal length that gives a horizontal angle of view: HorizontalFieldOfViewDeg the other way round. */
+	UECINECORE_API double FocalLengthForFieldOfViewMm(double SensorWidthMm, double HorizontalFieldOfViewDeg, double Squeeze = 1.0);
+
 	/** Vertical angle of view in degrees. Anamorphic squeeze does not affect the vertical axis. */
 	UECINECORE_API double VerticalFieldOfViewDeg(double SensorHeightMm, double FocalLengthMm);
 

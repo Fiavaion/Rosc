@@ -7,143 +7,12 @@
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "UEcineJsonEntry.h"
 #include "UEcineLog.h"
 #include "UEcineOptics.h"
 
 namespace
 {
-	/** Reads fields from one JSON object and records what is wrong, with the path to the field. */
-	class FEntryReader
-	{
-	public:
-		FEntryReader(const TSharedPtr<FJsonObject>& InObject, const FString& InPath, TArray<FString>& InErrors)
-			: Object(InObject), Path(InPath), Errors(InErrors)
-		{
-		}
-
-		bool IsValid() const { return bValid; }
-
-		FString RequiredString(const TCHAR* Field)
-		{
-			FString Value;
-			if (!Object->TryGetStringField(Field, Value) || Value.IsEmpty())
-			{
-				Fail(Field, TEXT("is required and must be a non-empty string"));
-			}
-			return Value;
-		}
-
-		FString OptionalString(const TCHAR* Field)
-		{
-			FString Value;
-			Object->TryGetStringField(Field, Value);
-			return Value;
-		}
-
-		double RequiredPositive(const TCHAR* Field)
-		{
-			double Value = 0.0;
-			if (!Object->TryGetNumberField(Field, Value) || Value <= 0.0)
-			{
-				Fail(Field, TEXT("is required and must be a number greater than zero"));
-			}
-			return Value;
-		}
-
-		/** Returns Default when the field is absent; fails when present but below Minimum. */
-		double OptionalAtLeast(const TCHAR* Field, double Minimum, double Default)
-		{
-			if (!Object->HasField(Field))
-			{
-				return Default;
-			}
-			double Value = 0.0;
-			if (!Object->TryGetNumberField(Field, Value) || Value < Minimum)
-			{
-				Fail(Field, *FString::Printf(TEXT("must be a number of at least %g"), Minimum));
-				return Default;
-			}
-			return Value;
-		}
-
-		/** Reads an array of exactly two positive numbers, such as a sensor size. */
-		bool RequiredPositivePair(const TCHAR* Field, double& OutFirst, double& OutSecond)
-		{
-			const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
-			if (!Object->TryGetArrayField(Field, Values) || Values->Num() != 2
-				|| !(*Values)[0]->TryGetNumber(OutFirst) || !(*Values)[1]->TryGetNumber(OutSecond)
-				|| OutFirst <= 0.0 || OutSecond <= 0.0)
-			{
-				Fail(Field, TEXT("is required and must be two numbers greater than zero"));
-				return false;
-			}
-			return true;
-		}
-
-		/** Returns the objects of an array field; non-object elements are reported. */
-		TArray<TSharedPtr<FJsonObject>> ObjectArray(const TCHAR* Field, bool bRequireNonEmpty)
-		{
-			TArray<TSharedPtr<FJsonObject>> Result;
-			const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
-			if (Object->TryGetArrayField(Field, Values))
-			{
-				for (const TSharedPtr<FJsonValue>& Value : *Values)
-				{
-					const TSharedPtr<FJsonObject>* Element = nullptr;
-					if (Value->TryGetObject(Element))
-					{
-						Result.Add(*Element);
-					}
-					else
-					{
-						Fail(Field, TEXT("must contain only objects"));
-					}
-				}
-			}
-			if (bRequireNonEmpty && Result.IsEmpty())
-			{
-				Fail(Field, TEXT("is required and must contain at least one entry"));
-			}
-			return Result;
-		}
-
-		TArray<int32> OptionalPositiveIntArray(const TCHAR* Field)
-		{
-			TArray<int32> Result;
-			const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
-			if (Object->TryGetArrayField(Field, Values))
-			{
-				for (const TSharedPtr<FJsonValue>& Value : *Values)
-				{
-					int32 Number = 0;
-					if (Value->TryGetNumber(Number) && Number > 0)
-					{
-						Result.Add(Number);
-					}
-					else
-					{
-						Fail(Field, TEXT("must contain only whole numbers greater than zero"));
-					}
-				}
-			}
-			return Result;
-		}
-
-		void Fail(const TCHAR* Field, const TCHAR* Problem)
-		{
-			Errors.Add(FString::Printf(TEXT("%s: \"%s\" %s."), *Path, Field, Problem));
-			bValid = false;
-		}
-
-		void MarkInvalid() { bValid = false; }
-
-	private:
-		TSharedPtr<FJsonObject> Object;
-		FString Path;
-		TArray<FString>& Errors;
-		bool bValid = true;
-	};
-
 	FString FormatNumber(double Value)
 	{
 		return FString::SanitizeFloat(Value, 0);
@@ -223,13 +92,13 @@ bool FUEcineCameraDatabase::AddFromJson(const FString& JsonText, const FString& 
 		return false;
 	}
 
-	FEntryReader RootReader(Root, SourceName, OutErrors);
+	FUEcineJsonEntryReader RootReader(Root, SourceName, OutErrors);
 
 	const TArray<TSharedPtr<FJsonObject>> BodyObjects = RootReader.ObjectArray(TEXT("bodies"), false);
 	for (int32 BodyIndex = 0; BodyIndex < BodyObjects.Num(); ++BodyIndex)
 	{
 		const FString BodyPath = FString::Printf(TEXT("%s bodies[%d]"), *SourceName, BodyIndex);
-		FEntryReader BodyReader(BodyObjects[BodyIndex], BodyPath, OutErrors);
+		FUEcineJsonEntryReader BodyReader(BodyObjects[BodyIndex], BodyPath, OutErrors);
 
 		FUEcineCameraBody Body;
 		Body.Id = BodyReader.RequiredString(TEXT("id"));
@@ -241,7 +110,7 @@ bool FUEcineCameraDatabase::AddFromJson(const FString& JsonText, const FString& 
 		const TArray<TSharedPtr<FJsonObject>> FormatObjects = BodyReader.ObjectArray(TEXT("formats"), true);
 		for (int32 FormatIndex = 0; FormatIndex < FormatObjects.Num(); ++FormatIndex)
 		{
-			FEntryReader FormatReader(FormatObjects[FormatIndex], FString::Printf(TEXT("%s formats[%d]"), *BodyPath, FormatIndex), OutErrors);
+			FUEcineJsonEntryReader FormatReader(FormatObjects[FormatIndex], FString::Printf(TEXT("%s formats[%d]"), *BodyPath, FormatIndex), OutErrors);
 
 			FUEcineRecordingFormat Format;
 			Format.Id = FormatReader.RequiredString(TEXT("id"));
@@ -285,7 +154,7 @@ bool FUEcineCameraDatabase::AddFromJson(const FString& JsonText, const FString& 
 	for (int32 KitIndex = 0; KitIndex < KitObjects.Num(); ++KitIndex)
 	{
 		const FString KitPath = FString::Printf(TEXT("%s lensKits[%d]"), *SourceName, KitIndex);
-		FEntryReader KitReader(KitObjects[KitIndex], KitPath, OutErrors);
+		FUEcineJsonEntryReader KitReader(KitObjects[KitIndex], KitPath, OutErrors);
 
 		FUEcineLensKit Kit;
 		Kit.Id = KitReader.RequiredString(TEXT("id"));
@@ -299,7 +168,7 @@ bool FUEcineCameraDatabase::AddFromJson(const FString& JsonText, const FString& 
 		const TArray<TSharedPtr<FJsonObject>> LensObjects = KitReader.ObjectArray(TEXT("lenses"), true);
 		for (int32 LensIndex = 0; LensIndex < LensObjects.Num(); ++LensIndex)
 		{
-			FEntryReader LensReader(LensObjects[LensIndex], FString::Printf(TEXT("%s lenses[%d]"), *KitPath, LensIndex), OutErrors);
+			FUEcineJsonEntryReader LensReader(LensObjects[LensIndex], FString::Printf(TEXT("%s lenses[%d]"), *KitPath, LensIndex), OutErrors);
 
 			FUEcineLens Lens;
 			Lens.FocalLengthMm = LensReader.RequiredPositive(TEXT("focalMm"));

@@ -8,6 +8,12 @@ namespace UEcine::Optics
 		return FMath::RadiansToDegrees(2.0 * FMath::Atan(SensorWidthMm * Squeeze / (2.0 * FocalLengthMm)));
 	}
 
+	double FocalLengthForFieldOfViewMm(double SensorWidthMm, double HorizontalFieldOfViewDeg, double Squeeze)
+	{
+		check(HorizontalFieldOfViewDeg > 0.0 && HorizontalFieldOfViewDeg < 180.0);
+		return SensorWidthMm * Squeeze / (2.0 * FMath::Tan(FMath::DegreesToRadians(HorizontalFieldOfViewDeg) / 2.0));
+	}
+
 	double VerticalFieldOfViewDeg(double SensorHeightMm, double FocalLengthMm)
 	{
 		check(FocalLengthMm > 0.0);

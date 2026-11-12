@@ -14,6 +14,9 @@ bool FUEcineOpticsFieldOfViewTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("50mm on full frame, horizontal"), HorizontalFieldOfViewDeg(36.0, 50.0), 39.598, 0.001);
 	TestEqual(TEXT("50mm on full frame, vertical"), VerticalFieldOfViewDeg(24.0, 50.0), 26.991, 0.001);
 
+	TestEqual(TEXT("The focal length for an angle of view is the lens that gives it"), FocalLengthForFieldOfViewMm(36.0, HorizontalFieldOfViewDeg(36.0, 50.0)), 50.0, 1e-9);
+	TestEqual(TEXT("And through a 2x anamorphic lens"), FocalLengthForFieldOfViewMm(20.22, HorizontalFieldOfViewDeg(20.22, 50.0, 2.0), 2.0), 50.0, 1e-9);
+
 	// A 2x anamorphic lens sees twice the sensor width horizontally and the same height.
 	TestEqual(TEXT("50mm 2x anamorphic matches a spherical lens on a sensor twice as wide"),
 		HorizontalFieldOfViewDeg(20.22, 50.0, 2.0), HorizontalFieldOfViewDeg(40.44, 50.0), 1e-9);
