@@ -42,7 +42,7 @@ consent means, and how the shot assistant acts on the scene.
    Both implementations read one recipe per model from the model list (input size, mean and
    deviation, outputs), so a picture gives the same result wherever it is worked on.
 4. **Consent.** A backend that sends anything off the machine cannot be given a job until the
-   user has agreed, for this project and that host, in a dialog that names what is sent (the
+   user has agreed, for this project and that host, in the AI tab beside text that names what is sent (the
    picture; or for the assistant the words typed and a description of the cameras and shots,
    never pictures) and where. Agreement is kept in per-user project settings and can be
    withdrawn in the AI tab. The check is in the subsystem, not the tab, so no caller can skip
