@@ -14,6 +14,10 @@
 		{
 			"Name": "UEcine",
 			"Enabled": true
+		},
+		{
+			"Name": "AndroidFileServer",
+			"Enabled": false
 		}
 	]
 }
