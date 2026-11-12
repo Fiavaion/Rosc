@@ -111,6 +111,11 @@ AUEcineRig* UEcine::GripEditing::FindRig(const ACineCameraActor* Camera)
 	return Rig != nullptr && Rig->GetMountedCamera() == Camera ? Rig : nullptr;
 }
 
+FUEcineRigPose UEcine::GripEditing::GetPoseOnRig(const ACineCameraActor* Camera, const FUEcineRigPreset& Preset)
+{
+	return Camera != nullptr ? SeatRigUnderCamera(Camera, Preset).Pose : Preset.DefaultPose;
+}
+
 AUEcineRig* UEcine::GripEditing::PutCameraOnRig(ACineCameraActor* Camera, const FUEcineRigPreset& Preset)
 {
 	if (Camera == nullptr)

@@ -17,6 +17,9 @@ namespace UEcine::GripEditing
 	/** The rig a camera is mounted on, or null when it is on nothing. */
 	UECINEEDITOR_API AUEcineRig* FindRig(const ACineCameraActor* Camera);
 
+	/** How a support would be set to hold the camera where it is: the pose PutCameraOnRig stands it up in. */
+	UECINEEDITOR_API FUEcineRigPose GetPoseOnRig(const ACineCameraActor* Camera, const FUEcineRigPreset& Preset);
+
 	/**
 	 * Puts a camera on a support without moving the camera: the rig is stood up underneath it,
 	 * on the floor when there is one within reach. A camera already on a rig keeps that rig
