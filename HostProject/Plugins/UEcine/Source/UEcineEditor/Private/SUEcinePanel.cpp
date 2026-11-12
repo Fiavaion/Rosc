@@ -5,6 +5,7 @@
 #include "EngineUtils.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "LevelEditorSubsystem.h"
+#include "SUEcineAITab.h"
 #include "SUEcineCameraTab.h"
 #include "SUEcineDeliverTab.h"
 #include "SUEcineFocusTab.h"
@@ -128,6 +129,11 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 					MakeDepartmentTab(EUEcineDepartment::Deliver, LOCTEXT("DeliverDepartment", "Deliver"),
 						LOCTEXT("DeliverDepartmentToolTip", "Deliver: render the sequence in Sequencer for review, for visual effects or as a master, after a preflight check."))
 				]
+				+ SWrapBox::Slot()
+				[
+					MakeDepartmentTab(EUEcineDepartment::AI, LOCTEXT("AIDepartment", "AI"),
+						LOCTEXT("AIDepartmentToolTip", "AI, all of it optional: describe a shot in words and get a plan to apply; a depth map, a matte or a lens estimate from a still or plate. Nothing leaves this machine until you agree to it."))
+				]
 			]
 		]
 		+ SVerticalBox::Slot()
@@ -172,6 +178,10 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				+ SWidgetSwitcher::Slot()
 				[
 					SNew(SUEcineDeliverTab)
+				]
+				+ SWidgetSwitcher::Slot()
+				[
+					SAssignNew(AITab, SUEcineAITab, Target.ToSharedRef())
 				]
 			]
 		]
@@ -239,8 +249,8 @@ bool SUEcinePanel::HasCamera() const
 
 int32 SUEcinePanel::GetShownSlot() const
 {
-	// The monitor's tools work on any view, and the shot list and deliveries are of the sequence in Sequencer, so none of them waits for a camera.
-	const bool bWorksWithoutCamera = ActiveDepartment == EUEcineDepartment::Monitor || ActiveDepartment == EUEcineDepartment::Shots || ActiveDepartment == EUEcineDepartment::Deliver;
+	// The monitor's tools work on any view, the shot list and deliveries are of the sequence in Sequencer, and picture jobs are of a file, so none of them waits for a camera.
+	const bool bWorksWithoutCamera = ActiveDepartment == EUEcineDepartment::Monitor || ActiveDepartment == EUEcineDepartment::Shots || ActiveDepartment == EUEcineDepartment::Deliver || ActiveDepartment == EUEcineDepartment::AI;
 	return HasCamera() || bWorksWithoutCamera ? 1 + static_cast<int32>(ActiveDepartment) : 0;
 }
 

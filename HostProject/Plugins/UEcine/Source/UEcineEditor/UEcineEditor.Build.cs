@@ -32,6 +32,7 @@ public class UEcineEditor : ModuleRules
 			"MovieSceneTracks",
 			"SceneDepthPickerMode",
 			"SequencerScriptingEditor",
+			"Settings",
 			"Slate",
 			"SlateCore",
 			"UnrealEd",

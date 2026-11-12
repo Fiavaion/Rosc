@@ -1,5 +1,6 @@
 #include "CineCameraActor.h"
 #include "Editor.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "HAL/FileManager.h"
@@ -15,12 +16,15 @@
 #include "MovieSceneToolsProjectSettings.h"
 #include "ObjectTools.h"
 #include "RenderingThread.h"
+#include "SUEcineAITab.h"
 #include "SUEcinePanel.h"
 #include "Slate/WidgetRenderer.h"
 #include "TextureResource.h"
 #include "Tests/UEcineDeliverChoicesBefore.h"
 #include "Tests/UEcineRenderedFiles.h"
 #include "UObject/StrongObjectPtr.h"
+#include "UEcineAISettings.h"
+#include "UEcineAISubsystem.h"
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
@@ -91,8 +95,10 @@ namespace
 	 * width, and at 150% application scale. The panel is drawn off screen, tall enough to show the whole tab:
 	 * a window would be cut to the height of the display (LESSON-TEST-001). The camera, and any
 	 * rig it is on, is removed afterwards.
+	 * @param Prepare Called for each picture's panel when it has been made, to give it what a tab
+	 *        would be handed while the user works: a plan from the assistant, a job's result.
 	 */
-	void QueuePanelCaptures(FAutomationTestBase& Test, ACineCameraActor* Camera, const TCHAR* NamePrefix, EUEcineDepartment Department, float Height, TConstArrayView<FPanelCapture> Captures = AllSizes)
+	void QueuePanelCaptures(FAutomationTestBase& Test, ACineCameraActor* Camera, const TCHAR* NamePrefix, EUEcineDepartment Department, float Height, TConstArrayView<FPanelCapture> Captures = AllSizes, TFunction<void(SUEcinePanel&)> Prepare = nullptr)
 	{
 		const TSharedRef<FPanelCaptureState> State = MakeShared<FPanelCaptureState>();
 		State->Camera = Camera;
@@ -110,10 +116,14 @@ namespace
 			// (preflight is run, a plan is drawn). A second lays that out, learns where its text
 			// wraps and asks for its glyphs and icons at this scale. The editor makes those ready
 			// between frames, so the picture is the third pass, a moment later.
-			ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([State, Department, DrawSize, Draw]
+			ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([State, Department, DrawSize, Draw, Prepare]
 			{
 				State->Panel = SNew(SUEcinePanel);
 				State->Panel->ShowDepartment(Department);
+				if (Prepare)
+				{
+					Prepare(*State->Panel);
+				}
 				State->Target.Reset(FWidgetRenderer::CreateTargetFor(DrawSize, TF_Bilinear, false));
 				Draw();
 				return true;
@@ -162,6 +172,35 @@ namespace
 			return true;
 		}));
 	}
+
+	/** The AI settings as a test found them, to be put back, in their file too, when it has changed them. */
+	struct FVisualAISettingsBefore
+	{
+		FVisualAISettingsBefore()
+		{
+			const UUEcineAISettings* Settings = GetDefault<UUEcineAISettings>();
+			Backend = Settings->Backend;
+			ServerUrl = Settings->ServerUrl;
+			AssistantKey = Settings->AssistantKey;
+			ConsentedHosts = Settings->ConsentedHosts;
+		}
+
+		void PutBack() const
+		{
+			UUEcineAISettings* Settings = GetMutableDefault<UUEcineAISettings>();
+			Settings->Backend = Backend;
+			Settings->ServerUrl = ServerUrl;
+			Settings->AssistantKey = AssistantKey;
+			Settings->ConsentedHosts = ConsentedHosts;
+			// Should anything have saved the settings while the values of the test were in them.
+			Settings->SaveConfig();
+		}
+
+		EUEcineAIBackend Backend;
+		FString ServerUrl;
+		FString AssistantKey;
+		TArray<FString> ConsentedHosts;
+	};
 }
 
 /** Pictures of the Camera tab. Needs a renderer: run with tools/test.ps1 -Rendering; otherwise it reports itself skipped. */
@@ -671,6 +710,117 @@ bool FUEcineDeliverTabStatesVisualTest::RunTest(const FString& Parameters)
 	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([ChoicesBefore]
 	{
 		ChoicesBefore.PutBack();
+		return true;
+	}));
+	return true;
+}
+
+/**
+ * Pictures of the AI tab at its busiest: a plan from the assistant being read, with what the
+ * gear makes of it; a lens estimate with the lens to put on; and the models.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineAITabVisualTest, "UEcine.Editor.Visual.AITab", VisualTestFlags)
+
+bool FUEcineAITabVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	AStaticMeshActor* Anna = World->SpawnActor<AStaticMeshActor>(FVector(600.0, 80.0, 90.0), FRotator::ZeroRotator);
+	Anna->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+	Anna->SetActorLabel(TEXT("Anna"));
+	ACineCameraActor* CameraActor = UEcine::CameraEditing::SpawnCamera(World, FTransform(FVector(0.0, 0.0, 160.0)));
+
+	// The assistant can be asked, as far as the tab can tell: a key that is no key, and an agreement to its host.
+	const FVisualAISettingsBefore SettingsBefore;
+	UUEcineAISettings* Settings = GetMutableDefault<UUEcineAISettings>();
+	Settings->Backend = EUEcineAIBackend::Editor;
+	Settings->AssistantKey = TEXT("not-a-key");
+	Settings->ConsentedHosts = { TEXT("api.anthropic.com") };
+
+	FUEcineShotPlanResult Plan;
+	Plan.InputTokens = 6120;
+	Plan.OutputTokens = 412;
+	Plan.PlanJson = TEXT(R"({ "summary": "On the 30 ft crane with the Venice and the Cooke 32, the camera rises over the table to find Anna and then swings round her, with the focus following her throughout. The crane has no track, so the push forward is left out.", "steps": [
+		{ "step": "choose_camera", "bodyId": "sony-venice-2-8k", "formatId": "8.6k-17x9" },
+		{ "step": "choose_lens", "lensKitId": "cooke-s4i", "focalLengthMm": 30 },
+		{ "step": "set_exposure", "tStop": 1.4, "iso": 1600, "shutterAngleDeg": 172.8, "ndStops": 2 },
+		{ "step": "put_on_support", "supportId": "crane-30ft" },
+		{ "step": "move_to_mark", "travelM": 2, "sidewaysM": 0, "liftM": 0, "swingDeg": 0, "boomDeg": 20, "extensionM": 1.5,
+		  "panDeg": 0, "tiltDeg": -10, "rollDeg": 0, "durationSeconds": 8, "easeIn": 0.25, "easeOut": 0.25 },
+		{ "step": "move_to_mark", "travelM": 0, "sidewaysM": 0, "liftM": 0, "swingDeg": 90, "boomDeg": 0, "extensionM": 0,
+		  "panDeg": 0, "tiltDeg": 0, "rollDeg": 0, "durationSeconds": 1, "easeIn": 0.25, "easeOut": 0.25 },
+		{ "step": "focus_on", "subject": "Anna", "follow": true },
+		{ "step": "focus_on", "subject": "Ben", "follow": false } ] })");
+	FString Fault;
+	Plan.bSuccess = UEcine::ShotPlan::Parse(Plan.PlanJson, Plan.Plan, Fault);
+	TestTrue(*FString::Printf(TEXT("The plan to show is a plan (%s)"), *Fault), Plan.bSuccess);
+
+	FUEcineAIResult Lens;
+	Lens.Request.Task = EUEcineAITask::FocalLength;
+	Lens.bSuccess = true;
+	Lens.FieldOfViewDeg = 26.0;
+
+	QueuePanelCaptures(*this, CameraActor, TEXT("ai-tab"), EUEcineDepartment::AI, 1750.0f, AllSizes, [Plan, Lens](SUEcinePanel& Panel)
+	{
+		Panel.GetAITab()->ShowPlan(Plan);
+		Panel.GetAITab()->ShowJobResult(Lens);
+	});
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([SettingsBefore, WeakAnna = TWeakObjectPtr<AStaticMeshActor>(Anna)]
+	{
+		SettingsBefore.PutBack();
+		if (AStaticMeshActor* AnnaToRemove = WeakAnna.Get())
+		{
+			AnnaToRemove->GetWorld()->EditorDestroyActor(AnnaToRemove, false);
+		}
+		return true;
+	}));
+	return true;
+}
+
+/**
+ * Pictures of the AI tab before it can be used: asking for agreement before anything is sent to
+ * the assistant or to a server, a job that was not taken, and then with no key at all.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineAITabStatesVisualTest, "UEcine.Editor.Visual.AITabStates", VisualTestFlags)
+
+bool FUEcineAITabStatesVisualTest::RunTest(const FString& Parameters)
+{
+	if (!CanDrawPanel(*this))
+	{
+		return true;
+	}
+
+	const FVisualAISettingsBefore SettingsBefore;
+	UUEcineAISettings* Settings = GetMutableDefault<UUEcineAISettings>();
+	Settings->Backend = EUEcineAIBackend::Server;
+	Settings->ServerUrl = TEXT("https://render01.studio.example:8750");
+	Settings->AssistantKey = TEXT("not-a-key");
+	Settings->ConsentedHosts.Reset();
+
+	FUEcineAIResult NotTaken;
+	NotTaken.Request.Task = EUEcineAITask::Depth;
+	NotTaken.Error = FText::FromString(TEXT("Choose the picture to work on first."));
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	QueuePanelCaptures(*this, UEcine::CameraEditing::SpawnCamera(World, FTransform::Identity), TEXT("ai-tab-agreement"), EUEcineDepartment::AI, 1300.0f, NarrowOnly, [NotTaken](SUEcinePanel& Panel)
+	{
+		Panel.GetAITab()->ShowJobResult(NotTaken);
+	});
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, SettingsBefore]
+	{
+		UUEcineAISettings* NoKeySettings = GetMutableDefault<UUEcineAISettings>();
+		NoKeySettings->Backend = EUEcineAIBackend::Helper;
+		NoKeySettings->AssistantKey.Reset();
+		QueuePanelCaptures(*this, UEcine::CameraEditing::SpawnCamera(World, FTransform::Identity), TEXT("ai-tab-no-key"), EUEcineDepartment::AI, 1100.0f, NarrowOnly);
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([SettingsBefore]
+		{
+			SettingsBefore.PutBack();
+			return true;
+		}));
 		return true;
 	}));
 	return true;

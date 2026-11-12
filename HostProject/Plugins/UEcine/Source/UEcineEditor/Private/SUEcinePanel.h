@@ -5,6 +5,7 @@
 #include "Widgets/SCompoundWidget.h"
 
 class FUEcineCameraTarget;
+class SUEcineAITab;
 
 /** The departments of the panel, in tab order. */
 enum class EUEcineDepartment : uint8
@@ -14,7 +15,8 @@ enum class EUEcineDepartment : uint8
 	Focus,
 	Monitor,
 	Shots,
-	Deliver
+	Deliver,
+	AI
 };
 
 /**
@@ -32,6 +34,9 @@ public:
 	/** Brings a department's tab to the front. */
 	void ShowDepartment(EUEcineDepartment Department) { ActiveDepartment = Department; }
 
+	/** The AI department's tab, which is handed what the assistant and the picture jobs give back. */
+	TSharedRef<SUEcineAITab> GetAITab() const { return AITab.ToSharedRef(); }
+
 private:
 	TSharedRef<SWidget> MakeDepartmentTab(EUEcineDepartment Department, const FText& Label, const FText& ToolTip);
 
@@ -46,5 +51,6 @@ private:
 	FReply OnNewCameraClicked();
 
 	TSharedPtr<FUEcineCameraTarget> Target;
+	TSharedPtr<SUEcineAITab> AITab;
 	EUEcineDepartment ActiveDepartment = EUEcineDepartment::Camera;
 };
