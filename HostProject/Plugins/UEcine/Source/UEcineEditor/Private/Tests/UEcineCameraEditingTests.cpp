@@ -5,6 +5,7 @@
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
+#include "UEcineOptics.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -78,6 +79,23 @@ bool FUEcineCameraEditingTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("The rejection says why"), Error.IsEmpty());
 	TestEqual(TEXT("The package is unchanged after a rejected edit"), *Component->Package.BodyId, *BodyIdBefore);
 	TestEqual(TEXT("The camera is unchanged after a rejected edit"), Camera->CurrentFocalLength, NewFocal, 0.001f);
+
+	// A field of view, such as the one a reference picture was taken with, matched to the kit:
+	// the angle a 60 mm lens sees on this format, which the Signature Primes come nearest with the 58.
+	const double FieldOfViewDeg = UEcine::Optics::HorizontalFieldOfViewDeg(Format->SensorWidthMm, 60.0);
+	UEcine::CameraEditing::FLensMatch Match;
+	if (TestTrue(TEXT("A field of view is matched to a lens"), UEcine::CameraEditing::MatchLensToFieldOfView(CameraActor, FieldOfViewDeg, Match)))
+	{
+		TestEqual(TEXT("The focal length that sees it on this format"), Match.FocalLengthMm, 60.0, 0.01);
+		TestEqual(TEXT("The kit's nearest lens"), *Match.LensName, TEXT("58mm T1.8"));
+		TestEqual(TEXT("And its focal length"), Match.LensFocalLengthMm, 58.0, 0.01);
+	}
+	TestEqual(TEXT("Finding the lens does not put it on"), Camera->CurrentFocalLength, NewFocal, 0.001f);
+	TestFalse(TEXT("An angle no lens has is not matched"), UEcine::CameraEditing::MatchLensToFieldOfView(CameraActor, 180.0, Match));
+	TestTrue(TEXT("The matched lens is put on"), UEcine::CameraEditing::PutOnLensForFieldOfView(CameraActor, FieldOfViewDeg, Error));
+	TestEqual(TEXT("The camera has it"), Camera->CurrentFocalLength, 58.0f, 0.001f);
+	TestTrue(TEXT("Putting it on can be undone"), GEditor->UndoTransaction());
+	TestEqual(TEXT("Undo puts the lens before back"), Camera->CurrentFocalLength, NewFocal, 0.001f);
 
 	GEditor->SelectNone(false, true, false);
 	World->EditorDestroyActor(CameraActor, false);

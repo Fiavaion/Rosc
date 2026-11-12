@@ -9,6 +9,7 @@
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraPackageComponent.h"
 #include "UEcineLog.h"
+#include "UEcineOptics.h"
 
 #define LOCTEXT_NAMESPACE "UEcineEditor"
 
@@ -150,6 +151,46 @@ bool UEcine::CameraEditing::EditPackage(UUEcineCameraPackageComponent* Component
 
 	GEditor->RedrawLevelEditingViewports();
 	return true;
+}
+
+bool UEcine::CameraEditing::MatchLensToFieldOfView(const ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FLensMatch& OutMatch)
+{
+	const UUEcineCameraPackageComponent* Component = UUEcineCameraPackageComponent::Find(Camera);
+	if (Component == nullptr || HorizontalFieldOfViewDeg <= 0.0 || HorizontalFieldOfViewDeg >= 180.0)
+	{
+		return false;
+	}
+	const FUEcineCameraDatabase& Database = FUEcineCameraDatabase::Get();
+	FUEcineCameraPackage Package = Component->Package;
+	FUEcineResolvedCamera Resolved;
+	FText Error;
+	const FUEcineLensKit* Kit = Database.FindLensKit(Package.LensKitId);
+	if (Kit == nullptr || !ResolveCameraPackage(Database, Package, Resolved, Error))
+	{
+		return false;
+	}
+
+	OutMatch.FocalLengthMm = Optics::FocalLengthForFieldOfViewMm(Resolved.SensorWidthMm, HorizontalFieldOfViewDeg, Resolved.Squeeze);
+	Package.FocalLengthMm = static_cast<float>(OutMatch.FocalLengthMm);
+	Package.SelectLensKit(*Kit);
+	OutMatch.LensName = Kit->Lenses[Package.LensIndex].GetDisplayName();
+	OutMatch.LensFocalLengthMm = Package.FocalLengthMm;
+	return true;
+}
+
+bool UEcine::CameraEditing::PutOnLensForFieldOfView(ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FText& OutError)
+{
+	FLensMatch Match;
+	if (!MatchLensToFieldOfView(Camera, HorizontalFieldOfViewDeg, Match))
+	{
+		OutError = LOCTEXT("NoLensMatch", "No lens of this camera's kit could be matched to the picture.");
+		return false;
+	}
+	return EditPackage(UUEcineCameraPackageComponent::Find(Camera), LOCTEXT("MatchLens", "Match Lens to Picture"), [&Match](FUEcineCameraPackage& Package)
+	{
+		Package.FocalLengthMm = static_cast<float>(Match.FocalLengthMm);
+		Package.SelectLensKit(*FUEcineCameraDatabase::Get().FindLensKit(Package.LensKitId));
+	}, OutError);
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -39,4 +39,24 @@ namespace UEcine::CameraEditing
 	 *         edited package cannot be applied.
 	 */
 	UECINEEDITOR_API bool EditPackage(UUEcineCameraPackageComponent* Component, const FText& Description, TFunctionRef<void(FUEcineCameraPackage&)> Edit, FText& OutError, TArray<FText>* OutWarnings = nullptr);
+
+	/** What a field of view comes to on a camera, and the lens of its kit that comes nearest. */
+	struct FLensMatch
+	{
+		/** The focal length that gives the field of view on the camera's recording format, with the kit's squeeze. */
+		double FocalLengthMm = 0.0;
+		/** The kit's nearest lens, as the kit names it, and the focal length it would be at: a zoom is set between its ends. */
+		FString LensName;
+		double LensFocalLengthMm = 0.0;
+	};
+
+	/**
+	 * Finds the lens that would see a horizontal field of view on the camera, such as the one a
+	 * reference picture was taken with.
+	 * @return false when the camera has no package that can be worked out, or the angle is not one a lens has.
+	 */
+	UECINEEDITOR_API bool MatchLensToFieldOfView(const ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FLensMatch& OutMatch);
+
+	/** Puts the lens MatchLensToFieldOfView finds on the camera, as one undoable step. */
+	UECINEEDITOR_API bool PutOnLensForFieldOfView(ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FText& OutError);
 }
