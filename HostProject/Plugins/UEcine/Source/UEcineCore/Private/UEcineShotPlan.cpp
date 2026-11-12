@@ -504,10 +504,28 @@ bool UEcine::ShotPlan::Parse(const FString& JsonText, FUEcineShotPlan& OutPlan, 
 	return true;
 }
 
+TSharedRef<FJsonValue> UEcine::ShotPlan::MakeNumber(double Value, int32 Decimals)
+{
+	FString Text = FString::Printf(TEXT("%.*f"), Decimals, Value);
+	if (Text.Contains(TEXT(".")))
+	{
+		while (Text.EndsWith(TEXT("0")))
+		{
+			Text.LeftChopInline(1);
+		}
+		Text.RemoveFromEnd(TEXT("."));
+	}
+	if (Text == TEXT("-0"))
+	{
+		Text = TEXT("0");
+	}
+	return MakeShared<FJsonValueNumberString>(Text);
+}
+
 FString UEcine::ShotPlan::DescribeEquipment(const FUEcineCameraDatabase& Database)
 {
 	// Rounded as a crew would say them: a model has no use for the fifth decimal of a rail length.
-	const auto Round = [](double Value) { return FMath::RoundToDouble(Value * 100.0) / 100.0; };
+	const auto Round = [](double Value) { return MakeNumber(Value, 2); };
 
 	TArray<TSharedPtr<FJsonValue>> Bodies;
 	for (const FUEcineCameraBody& Body : Database.GetBodies())
@@ -518,7 +536,7 @@ FString UEcine::ShotPlan::DescribeEquipment(const FUEcineCameraDatabase& Databas
 			const TSharedRef<FJsonObject> FormatObject = MakeShared<FJsonObject>();
 			FormatObject->SetStringField(TEXT("id"), Format.Id);
 			FormatObject->SetStringField(TEXT("name"), Format.Name);
-			const TArray<TSharedPtr<FJsonValue>> SensorSize = { MakeShared<FJsonValueNumber>(Format.SensorWidthMm), MakeShared<FJsonValueNumber>(Format.SensorHeightMm) };
+			const TArray<TSharedPtr<FJsonValue>> SensorSize = { Round(Format.SensorWidthMm), Round(Format.SensorHeightMm) };
 			FormatObject->SetArrayField(TEXT("sensorMm"), SensorSize);
 			Formats.Add(MakeShared<FJsonValueObject>(FormatObject));
 		}
@@ -542,9 +560,9 @@ FString UEcine::ShotPlan::DescribeEquipment(const FUEcineCameraDatabase& Databas
 		KitObject->SetStringField(TEXT("name"), Kit.GetDisplayName());
 		if (Kit.IsAnamorphic())
 		{
-			KitObject->SetNumberField(TEXT("anamorphicSqueeze"), Kit.Squeeze);
+			KitObject->SetField(TEXT("anamorphicSqueeze"), Round(Kit.Squeeze));
 		}
-		KitObject->SetNumberField(TEXT("imageCircleMm"), Kit.ImageCircleMm);
+		KitObject->SetField(TEXT("imageCircleMm"), Round(Kit.ImageCircleMm));
 		KitObject->SetArrayField(TEXT("lenses"), Lenses);
 		LensKits.Add(MakeShared<FJsonValueObject>(KitObject));
 	}
@@ -565,8 +583,8 @@ FString UEcine::ShotPlan::DescribeEquipment(const FUEcineCameraDatabase& Databas
 			const TSharedRef<FJsonObject> AxisObject = MakeShared<FJsonObject>();
 			if (FMath::Abs(Limits.Min) < FarthestWorthTelling && FMath::Abs(Limits.Max) < FarthestWorthTelling)
 			{
-				AxisObject->SetNumberField(TEXT("from"), Round(ToPlanUnits(Axis.Axis, Limits.Min)));
-				AxisObject->SetNumberField(TEXT("to"), Round(ToPlanUnits(Axis.Axis, Limits.Max)));
+				AxisObject->SetField(TEXT("from"), Round(ToPlanUnits(Axis.Axis, Limits.Min)));
+				AxisObject->SetField(TEXT("to"), Round(ToPlanUnits(Axis.Axis, Limits.Max)));
 			}
 			if (Limits.IsFixedDuringShot())
 			{
@@ -574,7 +592,7 @@ FString UEcine::ShotPlan::DescribeEquipment(const FUEcineCameraDatabase& Databas
 			}
 			else
 			{
-				AxisObject->SetNumberField(TEXT("topSpeedPerSecond"), Round(ToPlanUnits(Axis.Axis, Limits.MaxSpeed)));
+				AxisObject->SetField(TEXT("topSpeedPerSecond"), Round(ToPlanUnits(Axis.Axis, Limits.MaxSpeed)));
 			}
 			Axes->SetObjectField(Axis.Id, AxisObject);
 		}

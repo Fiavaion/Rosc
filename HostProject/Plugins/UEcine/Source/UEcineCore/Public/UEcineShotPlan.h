@@ -5,6 +5,7 @@
 #include "UEcineRigTypes.h"
 #include "UEcineShotTypes.h"
 
+class FJsonValue;
 class FUEcineCameraDatabase;
 
 /** The kinds of step a shot plan is made of. Each is something a UEcine tab can already do. */
@@ -95,6 +96,12 @@ namespace UEcine::ShotPlan
 
 	/** An axis value as a written plan gives it: metres for lengths, degrees for angles. */
 	UECINECORE_API double ToPlanUnits(EUEcineRigAxis Axis, double Value);
+
+	/**
+	 * A number for JSON a language model reads, rounded as a crew would say it and written as
+	 * "2.8", where the engine would write the nearest number a computer holds: 2.7999999999999998.
+	 */
+	UECINECORE_API TSharedRef<FJsonValue> MakeNumber(double Value, int32 Decimals);
 
 	/**
 	 * The JSON Schema of a written plan, for a language model that is held to a schema. Every

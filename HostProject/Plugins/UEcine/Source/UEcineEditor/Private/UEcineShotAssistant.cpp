@@ -85,14 +85,9 @@ namespace
 	}
 
 	/** Metres to two decimals, as a crew would say them. */
-	double ToMetres(double Centimetres)
+	TSharedRef<FJsonValue> ToMetres(double Centimetres)
 	{
-		return FMath::RoundToDouble(Centimetres) / 100.0;
-	}
-
-	double RoundTo(double Value, double Step)
-	{
-		return FMath::RoundToDouble(Value / Step) * Step;
+		return UEcine::ShotPlan::MakeNumber(Centimetres / 100.0, 2);
 	}
 
 	/**
@@ -422,15 +417,15 @@ namespace
 		if (UEcine::ResolveCameraPackage(FUEcineCameraDatabase::Get(), Package, Resolved, Error))
 		{
 			Object->SetStringField(TEXT("lens"), FUEcineCameraDatabase::Get().FindLensKit(Package.LensKitId)->Lenses[Package.LensIndex].GetDisplayName());
-			Object->SetNumberField(TEXT("focalLengthMm"), RoundTo(Resolved.FocalLengthMm, 0.1));
-			Object->SetNumberField(TEXT("horizontalFieldOfViewDeg"), RoundTo(UEcine::Optics::HorizontalFieldOfViewDeg(Resolved.SensorWidthMm, Resolved.FocalLengthMm, Resolved.Squeeze), 0.1));
+			Object->SetField(TEXT("focalLengthMm"), UEcine::ShotPlan::MakeNumber(Resolved.FocalLengthMm, 1));
+			Object->SetField(TEXT("horizontalFieldOfViewDeg"), UEcine::ShotPlan::MakeNumber(UEcine::Optics::HorizontalFieldOfViewDeg(Resolved.SensorWidthMm, Resolved.FocalLengthMm, Resolved.Squeeze), 1));
 		}
-		Object->SetNumberField(TEXT("tStop"), RoundTo(Package.TStop, 0.1));
+		Object->SetField(TEXT("tStop"), UEcine::ShotPlan::MakeNumber(Package.TStop, 1));
 		Object->SetNumberField(TEXT("iso"), Package.Iso);
-		Object->SetNumberField(TEXT("shutterAngleDeg"), RoundTo(Package.ShutterAngleDeg, 0.1));
-		Object->SetNumberField(TEXT("ndStops"), RoundTo(UEcine::Exposure::NdStops(Package.NdDensity), 0.1));
-		Object->SetNumberField(TEXT("framesPerSecond"), RoundTo(Package.FramesPerSecond, 0.001));
-		Object->SetNumberField(TEXT("tiltDeg"), RoundTo(Camera->GetActorRotation().Pitch, 0.1));
+		Object->SetField(TEXT("shutterAngleDeg"), UEcine::ShotPlan::MakeNumber(Package.ShutterAngleDeg, 1));
+		Object->SetField(TEXT("ndStops"), UEcine::ShotPlan::MakeNumber(UEcine::Exposure::NdStops(Package.NdDensity), 1));
+		Object->SetField(TEXT("framesPerSecond"), UEcine::ShotPlan::MakeNumber(Package.FramesPerSecond, 3));
+		Object->SetField(TEXT("tiltDeg"), UEcine::ShotPlan::MakeNumber(Camera->GetActorRotation().Pitch, 1));
 
 		// How high the lens is, when there is a floor under it to measure from.
 		const FVector Location = Camera->GetCineCameraComponent()->GetComponentLocation();
@@ -438,11 +433,11 @@ namespace
 		const FCollisionQueryParams Query(SCENE_QUERY_STAT(UEcineAssistantFloor), true, Camera);
 		if (Camera->GetWorld()->LineTraceSingleByChannel(Floor, Location, Location - FVector(0.0, 0.0, 2000.0), ECC_Visibility, Query))
 		{
-			Object->SetNumberField(TEXT("heightAboveFloorM"), ToMetres(Location.Z - Floor.ImpactPoint.Z));
+			Object->SetField(TEXT("heightAboveFloorM"), ToMetres(Location.Z - Floor.ImpactPoint.Z));
 		}
 
 		const TSharedRef<FJsonObject> Focus = MakeShared<FJsonObject>();
-		Focus->SetNumberField(TEXT("distanceM"), ToMetres(UEcine::FocusEditing::GetFocusDistance(Camera)));
+		Focus->SetField(TEXT("distanceM"), ToMetres(UEcine::FocusEditing::GetFocusDistance(Camera)));
 		if (const AActor* Followed = UEcine::FocusEditing::GetFollowedActor(Camera))
 		{
 			Focus->SetStringField(TEXT("following"), Followed->GetActorLabel());
@@ -461,7 +456,7 @@ namespace
 			const EUEcineRigAxis Axis = static_cast<EUEcineRigAxis>(AxisIndex);
 			if (Spec.GetAxis(Axis).bUsed)
 			{
-				Position->SetNumberField(UEcine::ShotPlan::GetAxisId(Axis), RoundTo(UEcine::ShotPlan::ToPlanUnits(Axis, Pose.Get(Axis)), 0.01));
+				Position->SetField(UEcine::ShotPlan::GetAxisId(Axis), UEcine::ShotPlan::MakeNumber(UEcine::ShotPlan::ToPlanUnits(Axis, Pose.Get(Axis)), 2));
 			}
 		}
 		const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
@@ -471,7 +466,7 @@ namespace
 		Object->SetNumberField(TEXT("marks"), Rig->Marks.Num());
 		if (Spec.Type == EUEcineRigType::Dolly)
 		{
-			Object->SetNumberField(TEXT("trackLengthM"), ToMetres(Rig->GetTrackLength()));
+			Object->SetField(TEXT("trackLengthM"), ToMetres(Rig->GetTrackLength()));
 		}
 		return Object;
 	}
@@ -496,11 +491,11 @@ FString UEcine::ShotAssistant::DescribeSet(const ACineCameraActor* Camera)
 			const FVector Seen = CameraTransform.InverseTransformPositionNoScale(Subject.Centre);
 			const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
 			Object->SetStringField(TEXT("name"), Subject.Name);
-			Object->SetNumberField(TEXT("aheadM"), ToMetres(Seen.X));
-			Object->SetNumberField(TEXT("rightM"), ToMetres(Seen.Y));
-			Object->SetNumberField(TEXT("upM"), ToMetres(Seen.Z));
-			Object->SetNumberField(TEXT("heightM"), ToMetres(Subject.Size.Z));
-			Object->SetNumberField(TEXT("widthM"), ToMetres(FMath::Max(Subject.Size.X, Subject.Size.Y)));
+			Object->SetField(TEXT("aheadM"), ToMetres(Seen.X));
+			Object->SetField(TEXT("rightM"), ToMetres(Seen.Y));
+			Object->SetField(TEXT("upM"), ToMetres(Seen.Z));
+			Object->SetField(TEXT("heightM"), ToMetres(Subject.Size.Z));
+			Object->SetField(TEXT("widthM"), ToMetres(FMath::Max(Subject.Size.X, Subject.Size.Y)));
 			SubjectValues.Add(MakeShared<FJsonValueObject>(Object));
 		}
 		Set->SetArrayField(TEXT("subjects"), SubjectValues);

@@ -95,6 +95,7 @@ bool FUEcineShotAssistantTest::RunTest(const FString& Parameters)
 		TSharedPtr<FJsonObject> Set;
 		const FString Description = DescribeSet(Camera);
 		AddInfo(FString::Printf(TEXT("The set: %s"), *Description));
+		TestTrue(TEXT("Numbers are written as a crew would say them"), Description.Contains(TEXT("\"tStop\":2.8,")));
 		if (TestTrue(TEXT("The set's description is JSON"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Description), Set) && Set.IsValid()))
 		{
 			const TSharedPtr<FJsonObject> CameraObject = Set->GetObjectField(TEXT("camera"));

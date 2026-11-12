@@ -201,7 +201,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineShotPlanEquipmentTest, "UEcine.Core.Shot
 
 bool FUEcineShotPlanEquipmentTest::RunTest(const FString& Parameters)
 {
+	// Numbers are written as a crew would say them, whatever a computer makes of 2.8.
+	using UEcine::ShotPlan::MakeNumber;
+	TestEqual(TEXT("A T-stop held as a float"), *MakeNumber(2.8f, 1)->AsString(), TEXT("2.8"));
+	TestEqual(TEXT("A whole number has no decimals"), *MakeNumber(6.0, 2)->AsString(), TEXT("6"));
+	TestEqual(TEXT("A hundred keeps its zeros"), *MakeNumber(100.0, 2)->AsString(), TEXT("100"));
+	TestEqual(TEXT("Rounded to the decimals asked for"), *MakeNumber(1234.5678, 2)->AsString(), TEXT("1234.57"));
+	TestEqual(TEXT("Small numbers keep their place"), *MakeNumber(0.05, 2)->AsString(), TEXT("0.05"));
+	TestEqual(TEXT("Nothing is not minus nothing"), *MakeNumber(-0.001, 2)->AsString(), TEXT("0"));
+	TestEqual(TEXT("Negative numbers stay negative"), *MakeNumber(-12.5, 1)->AsString(), TEXT("-12.5"));
+
 	const FString Text = UEcine::ShotPlan::DescribeEquipment(FUEcineCameraDatabase::Get());
+	TestFalse(TEXT("No number of the equipment list trails a computer's rounding after it"), Text.Contains(TEXT("00000")) || Text.Contains(TEXT("99999")));
 	const TSharedPtr<FJsonObject> Equipment = ReadShotPlanTestJson(Text);
 	if (!TestTrue(TEXT("The equipment list is JSON"), Equipment.IsValid()))
 	{
