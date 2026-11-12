@@ -14,6 +14,10 @@ compiled from manufacturers' own published specifications. Manufacturer and prod
 are the trademarks of their owners and are used only to say which equipment a figure describes.
 UEcine is not made, endorsed or sponsored by any camera or lens manufacturer.
 
+The sample stage (`Content/Sample/UEcineSampleStage`) is built from shapes, a floor and a sky
+that ship with Unreal Engine. It refers to them; it does not contain them. The pictures in the
+user guide (`Docs/`) are of UEcine and of that stage.
+
 ## Unreal Engine plugins UEcine builds on
 
 These ship with Unreal Engine and are used under the Unreal Engine EULA. UEcine turns them on;
