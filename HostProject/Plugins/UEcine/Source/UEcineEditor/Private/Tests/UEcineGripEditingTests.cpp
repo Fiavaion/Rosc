@@ -291,8 +291,12 @@ bool FUEcineGripDollyTrackTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Laying track can be undone"), GEditor->UndoTransaction());
 	TestEqual(TEXT("After undo the track is its old length"), Rig->GetTrackLength(), 600.0f, 0.1f);
 
+	// A support deleted by hand in the level lets go of its camera.
 	GEditor->SelectNone(false, true, false);
-	TakeCameraOffRig(Camera);
+	TestTrue(TEXT("On the dolly the camera is held in place"), Camera->IsLockLocation());
+	World->EditorDestroyActor(Rig, false);
+	TestNull(TEXT("With its support deleted the camera is on nothing"), FindRig(Camera));
+	TestFalse(TEXT("With its support deleted the camera is free again"), Camera->IsLockLocation());
 	World->EditorDestroyActor(Camera, false);
 	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine grip test")));
 	return true;

@@ -105,6 +105,7 @@ public:
 	bool HasChangedSinceBake() const;
 
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void Destroyed() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostEditUndo() override;

@@ -241,6 +241,20 @@ void AUEcineRig::PostEditUndo()
 }
 #endif
 
+void AUEcineRig::Destroyed()
+{
+#if WITH_EDITOR
+	// A camera is held in place while it is on a support (UEcine::GripEditing::PutCameraOnRig).
+	// A support deleted in the level lets go of it, or nothing could move the camera again.
+	if (ACineCameraActor* Camera = GetMountedCamera())
+	{
+		Camera->Modify();
+		Camera->SetLockLocation(false);
+	}
+#endif
+	Super::Destroyed();
+}
+
 void AUEcineRig::UpdateRig()
 {
 	const FUEcineRigPose Pose = GetPose();
