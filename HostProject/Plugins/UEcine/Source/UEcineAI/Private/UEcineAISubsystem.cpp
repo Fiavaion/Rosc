@@ -3,6 +3,7 @@
 #include "HAL/FileManager.h"
 #include "ImageUtils.h"
 #include "Misc/Paths.h"
+#include "UEcineAIAssistant.h"
 #include "UEcineAIBackend.h"
 #include "UEcineAIConsent.h"
 #include "UEcineAIEditorBackend.h"
@@ -19,6 +20,7 @@ void UUEcineAISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Helper = MakeShared<FUEcineAIHelper>();
 	HelperBackend = MakeShared<FUEcineAIServerBackend>(Helper.ToSharedRef());
 	ServerBackend = MakeShared<FUEcineAIServerBackend>(MakeShared<FUEcineAIRemoteServer>());
+	AssistantModel = MakeShared<FUEcineClaudeModel>();
 }
 
 void UUEcineAISubsystem::Deinitialize()
@@ -26,6 +28,7 @@ void UUEcineAISubsystem::Deinitialize()
 	Waiting.Reset();
 	bRunning = false;
 	++RunNumber;
+	AssistantModel.Reset();
 	Download.Reset();
 	ServerBackend.Reset();
 	HelperBackend.Reset();
@@ -208,6 +211,71 @@ FText UUEcineAISubsystem::GetHelperStatus() const
 void UUEcineAISubsystem::CheckServer(TFunction<void(bool, const FText&)> OnChecked)
 {
 	ServerBackend->CheckHealth(MoveTemp(OnChecked));
+}
+
+bool UUEcineAISubsystem::CanPlanShot(FText& OutWhyNot) const
+{
+	return AssistantModel->CanAsk(OutWhyNot);
+}
+
+FString UUEcineAISubsystem::GetAssistantHostNeedingConsent() const
+{
+	const FString Host = AssistantModel->GetHost();
+	return Host.IsEmpty() || UEcine::AIConsent::IsGiven(Host) ? FString() : Host;
+}
+
+bool UUEcineAISubsystem::PlanShot(const FString& Words, const FString& SetDescription, FText& OutError, TFunction<void(const FUEcineShotPlanResult&)> OnDone)
+{
+	if (Words.TrimStartAndEnd().IsEmpty())
+	{
+		OutError = LOCTEXT("NoWords", "Describe the shot first.");
+		return false;
+	}
+	if (AssistantModel->IsAsking())
+	{
+		OutError = LOCTEXT("AlreadyPlanning", "The shot assistant is still working on the last request.");
+		return false;
+	}
+	if (!AssistantModel->CanAsk(OutError))
+	{
+		return false;
+	}
+	// The consent gate: the user's words and the set's description stop here until the user has agreed to that host.
+	const FString Host = AssistantModel->GetHost();
+	if (!UEcine::AIConsent::IsGiven(Host))
+	{
+		OutError = FText::Format(LOCTEXT("NoAssistantConsent", "You have not agreed to send shot descriptions to {0}."), FText::FromString(Host));
+		return false;
+	}
+
+	AssistantModel->Ask(UEcine::AIAssistant::MakeShotQuestion(Words, SetDescription), [OnDone = MoveTemp(OnDone)](FUEcineAssistantAnswer&& Answer)
+	{
+		FUEcineShotPlanResult Result;
+		Result.Error = Answer.Error;
+		Result.InputTokens = Answer.InputTokens;
+		Result.OutputTokens = Answer.OutputTokens;
+		if (Answer.bSuccess)
+		{
+			FString Fault;
+			Result.bSuccess = UEcine::ShotPlan::Parse(Answer.Json, Result.Plan, Fault);
+			if (!Result.bSuccess)
+			{
+				Result.Error = FText::Format(LOCTEXT("OddPlan", "The plan that came back could not be read. {0}"), FText::FromString(Fault));
+			}
+		}
+		OnDone(Result);
+	});
+	return true;
+}
+
+bool UUEcineAISubsystem::IsPlanningShot() const
+{
+	return AssistantModel->IsAsking();
+}
+
+void UUEcineAISubsystem::CancelShotPlan()
+{
+	AssistantModel->Cancel();
 }
 
 #undef LOCTEXT_NAMESPACE

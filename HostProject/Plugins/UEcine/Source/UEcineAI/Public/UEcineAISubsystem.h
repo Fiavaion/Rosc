@@ -4,12 +4,14 @@
 #include "EditorSubsystem.h"
 #include "UEcineAIModels.h"
 #include "UEcineAISettings.h"
+#include "UEcineShotPlan.h"
 #include "UEcineAISubsystem.generated.h"
 
 class FUEcineAIHelper;
 class FUEcineAIModelDownload;
 class FUEcineAIServerBackend;
 class IUEcineAIBackend;
+class IUEcineAssistantModel;
 
 /** A picture job: one task on one still or frame of a plate. */
 struct FUEcineAIRequest
@@ -32,11 +34,24 @@ struct FUEcineAIResult
 	double FieldOfViewDeg = 0.0;
 };
 
+/** How a request to the shot assistant ended. */
+struct FUEcineShotPlanResult
+{
+	bool bSuccess = false;
+	/** Why there is no plan. Empty for a request the user gave up. */
+	FText Error;
+	FUEcineShotPlan Plan;
+	/** What the request and the plan came to, as the model's keeper counts and bills them. */
+	int32 InputTokens = 0;
+	int32 OutputTokens = 0;
+};
+
 /**
  * Runs UEcine's picture jobs (depth, matte, focal length) one at a time, in the order asked,
  * on the backend chosen in the user's settings: in the editor, in the helper on this machine,
- * or on a server elsewhere. Nothing is sent to a server elsewhere until the user has agreed to
- * that host (UEcine::AIConsent); the check is made here, for every job.
+ * or on a server elsewhere; and asks the shot assistant's language model for shot plans.
+ * Nothing is sent to another machine until the user has agreed to that host
+ * (UEcine::AIConsent); the check is made here, for every job and every request.
  */
 UCLASS()
 class UECINEAI_API UUEcineAISubsystem : public UEditorSubsystem
@@ -102,6 +117,29 @@ public:
 	 */
 	void CheckServer(TFunction<void(bool bReachable, const FText& Message)> OnChecked);
 
+	/** Whether the shot assistant's model can be asked; when not, why, in words. */
+	bool CanPlanShot(FText& OutWhyNot) const;
+
+	/**
+	 * The host the shot assistant would send the user's words and the set's description to and
+	 * the user has not agreed to yet. Empty when nothing stands in the way.
+	 */
+	FString GetAssistantHostNeedingConsent() const;
+
+	/**
+	 * Asks the shot assistant's model to turn a shot described in words into a plan; one request
+	 * at a time. A plan changes nothing: applying it is the caller's business, and the user's.
+	 * @param SetDescription The camera, its support, what is in the level and the open sequence, as JSON.
+	 * @param OnDone Called on the game thread when the request ends, also when it is given up.
+	 * @return false with the reason in OutError when the request cannot be made.
+	 */
+	bool PlanShot(const FString& Words, const FString& SetDescription, FText& OutError, TFunction<void(const FUEcineShotPlanResult&)> OnDone);
+
+	bool IsPlanningShot() const;
+
+	/** Gives up the request being made. */
+	void CancelShotPlan();
+
 private:
 	struct FWaitingJob
 	{
@@ -129,4 +167,6 @@ private:
 
 	TSharedPtr<FUEcineAIModelDownload> Download;
 	FText DownloadError;
+
+	TSharedPtr<IUEcineAssistantModel> AssistantModel;
 };
