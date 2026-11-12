@@ -41,6 +41,8 @@ struct FUEcineShotPlanResult
 	/** Why there is no plan. Empty for a request the user gave up. */
 	FText Error;
 	FUEcineShotPlan Plan;
+	/** The plan as the model wrote it. */
+	FString PlanJson;
 	/** What the request and the plan came to, as the model's keeper counts and bills them. */
 	int32 InputTokens = 0;
 	int32 OutputTokens = 0;

@@ -1,9 +1,11 @@
 # Runs UEcine automation tests in a headless editor and prints pass/fail counts.
-# Usage: powershell -File tools/test.ps1 [-Filter UEcine.Core.Optics] [-Rendering]
-#   -Rendering  start the editor with a real GPU device (needed by tests that render frames).
+# Usage: powershell -File tools/test.ps1 [-Filter UEcine.Core.Optics] [-Rendering] [-EditorArgs "..."]
+#   -Rendering   start the editor with a real GPU device (needed by tests that render frames).
+#   -EditorArgs  more arguments for the editor's command line (tools/evals.ps1 uses this).
 param(
 	[string]$Filter = "UEcine",
-	[switch]$Rendering
+	[switch]$Rendering,
+	[string]$EditorArgs = ""
 )
 
 $ueRoot = if ($env:UE_ROOT) { $env:UE_ROOT } else { "D:\Program Files\Epic Games\UE_5.8" }
@@ -18,7 +20,7 @@ $log = Join-Path $logDir "test.log"
 $editor = Join-Path $ueRoot "Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
 $rhi = if ($Rendering) { "-RenderOffscreen" } else { "-nullrhi" }
 $execCmds = "Automation RunTests $Filter; Quit"
-cmd /c "`"$editor`" `"$uproject`" -ExecCmds=`"$execCmds`" -TestExit=`"Automation Test Queue Empty`" -ReportExportPath=`"$reportDir`" -unattended -nopause -nosplash -nosound $rhi -stdout -FullStdOutLogOutput > `"$log`" 2>&1"
+cmd /c "`"$editor`" `"$uproject`" -ExecCmds=`"$execCmds`" -TestExit=`"Automation Test Queue Empty`" -ReportExportPath=`"$reportDir`" -unattended -nopause -nosplash -nosound $rhi $EditorArgs -stdout -FullStdOutLogOutput > `"$log`" 2>&1"
 
 $reportFile = Join-Path $reportDir "index.json"
 if (-not (Test-Path $reportFile)) {

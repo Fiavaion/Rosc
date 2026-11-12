@@ -257,6 +257,7 @@ bool UUEcineAISubsystem::PlanShot(const FString& Words, const FString& SetDescri
 		if (Answer.bSuccess)
 		{
 			FString Fault;
+			Result.PlanJson = Answer.Json;
 			Result.bSuccess = UEcine::ShotPlan::Parse(Answer.Json, Result.Plan, Fault);
 			if (!Result.bSuccess)
 			{
