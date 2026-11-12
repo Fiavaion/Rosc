@@ -75,11 +75,8 @@ private:
 
 	/** Changes the user's choices for deliveries and has preflight look again. */
 	void EditChoices(TFunctionRef<void(UUEcineEditorSettings&)> Edit);
-	/** Takes the folder deliveries go under from what was typed or picked. Empty goes back to the project's own. */
-	void ChooseFolder(const FString& Folder);
 	void ChooseNamePattern(const FString& Pattern);
 
-	FReply OnBrowseFolderClicked();
 	FReply OnFixClicked(FFindingGroup Group);
 	FReply OnRenderClicked();
 	FReply OnStopClicked();

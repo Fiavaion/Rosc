@@ -321,6 +321,11 @@ bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FF
 		}
 	}
 
+	// What was baked, so that the Grip tab can say when the marks have moved on since.
+	Rig->Modify();
+	Rig->BakedMarks = Rig->Marks;
+	Rig->BakedOperator = Rig->Operator;
+
 	IncludeInPlaybackRange(MovieScene, MoveRange);
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;

@@ -36,7 +36,7 @@ namespace UEcine::Widgets
 	/** A push button with a text label. */
 	TSharedRef<SWidget> MakeButton(TAttribute<FText> Label, TAttribute<FText> ToolTip, FOnClicked OnClicked, TAttribute<bool> IsEnabled = true);
 
-	/** A button that stays lit while its state is on: one lens of a kit, one tab of the panel. */
+	/** A button that stays lit, and ringed, while its state is on: one lens of a kit, one tab of the panel. */
 	TSharedRef<SWidget> MakeToggleButton(TAttribute<FText> Label, const FText& ToolTip, TAttribute<bool> IsOn, TFunction<void(bool bTurnOn)> OnToggled);
 
 	/** A square button showing only an icon. The tooltip is also its name for screen readers. */
@@ -94,6 +94,38 @@ namespace UEcine::Widgets
 	 * The value itself stays in centimetres.
 	 */
 	TSharedRef<INumericTypeInterface<float>> MakeDistanceInterface();
+
+	/**
+	 * A box holding a folder's whole path, and a button that opens the folder dialog. The box
+	 * shows the folder in use. What the user types or picks is handed to ChooseFolder when it
+	 * is a whole path and not the folder already in use; an empty path asks for the folder the
+	 * project keeps for the purpose.
+	 */
+	TSharedRef<SWidget> MakeFolderControl(const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, TFunction<FString()> GetFolder, TFunction<void(const FString& Folder)> ChooseFolder);
+
+	/**
+	 * Keeps keyboard focus in a list whose rows are rebuilt when one is removed. Without it the
+	 * focus goes with the removed row's button, and a keyboard user starts again from the top.
+	 */
+	class FRowFocus
+	{
+	public:
+		/** Called by a row's remove button with the row's place in the list. */
+		void RowRemoved(int32 Index) { RemovedIndex = Index; }
+
+		/**
+		 * Called when the rows have been rebuilt. After a removal the row that took the removed
+		 * one's place is to get the focus, or the last row, or WhenEmpty when no row is left.
+		 */
+		void RowsRebuilt(TConstArrayView<TSharedRef<SWidget>> Rows, const TSharedPtr<SWidget>& WhenEmpty);
+
+		/** Called each tick: moves the focus once the new rows have been laid out. */
+		void Tick();
+
+	private:
+		TOptional<int32> RemovedIndex;
+		TWeakPtr<SWidget> Pending;
+	};
 
 	/** Tells the user how something they asked for turned out, in a toast with a tick or a cross. */
 	void Notify(const FText& Message, bool bSucceeded);

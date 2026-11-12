@@ -19,6 +19,7 @@
 #include "ObjectTools.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
+#include "UEcineEditorSettings.h"
 #include "UEcineFocusEditing.h"
 #include "UEcineGripEditing.h"
 #include "UEcineRig.h"
@@ -143,6 +144,17 @@ bool FUEcineShotsThreeShotsTest::RunTest(const FString& Parameters)
 	};
 	RememberShotSequences();
 	TestTrue(TEXT("The new sequence is an asset under the UEcine folder"), OpenSequence->GetPathName().StartsWith(TEXT("/Game/UEcine/Sequences/")));
+
+	// Paperwork goes under the project's own folder until the user chooses another.
+	{
+		const FString FolderBefore = GetDefault<UUEcineEditorSettings>()->PaperworkFolder.Path;
+		SetPaperworkFolder(FString());
+		TestTrue(TEXT("With no folder chosen, paperwork goes under the project's Saved folder"), GetPaperworkFolder().EndsWith(TEXT("Saved/UEcine/Paperwork")));
+		const FString Elsewhere = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("UEcine/PaperworkElsewhere"));
+		SetPaperworkFolder(Elsewhere);
+		TestEqual(TEXT("A sequence's paperwork goes in a folder of its own under the chosen one"), GetPaperworkDirectory(OpenSequence), Elsewhere / OpenSequence->GetName());
+		SetPaperworkFolder(FolderBefore);
+	}
 	TestTrue(TEXT("The new sequence runs at the camera's frame rate"), OpenSequence->GetMovieScene()->GetDisplayRate() == FFrameRate(24, 1));
 	TestTrue(TEXT("The second shot is added"), AddShot(CameraB, Error));
 	RememberShotSequences();
@@ -224,14 +236,18 @@ bool FUEcineShotsThreeShotsTest::RunTest(const FString& Parameters)
 	GoToShot(Shots[0]);
 	TestEqual(TEXT("The playhead is in shot 1"), FindShotAtPlayhead(Shots), 0);
 	TestTrue(TEXT("Sequencer is inside shot 1"), ULevelSequenceEditorBlueprintLibrary::GetFocusedLevelSequence() == Shots[0].Sequence);
+	const FGuid ShotBeforeBake = GetShotSignature(Shots[0].Sequence);
 	TestTrue(TEXT("A move blocked in a shot is baked into that shot"), UEcine::GripEditing::BakeMoveToSequencer(Dolly, Error) == Shots[0].Sequence);
+	TestTrue(TEXT("A bake into a shot is a change a plan drawn before it can be told of"), GetShotSignature(Shots[0].Sequence) != ShotBeforeBake);
 	GoToShot(Shots[1]);
 	TestEqual(TEXT("The playhead is in shot 2"), FindShotAtPlayhead(Shots), 1);
 	TestTrue(TEXT("Sequencer is inside shot 2"), ULevelSequenceEditorBlueprintLibrary::GetFocusedLevelSequence() == Shots[1].Sequence);
 	TestTrue(TEXT("From inside shot 2, shot 1 is still on the A camera"), FindShotCamera(Shots[0]) == CameraA);
 
 	// The overhead plan of the dolly shot, found by playing through it.
+	const FGuid ShotBeforePlan = GetShotSignature(Shots[0].Sequence);
 	const FUEcinePlan Plan = MakePlan(Shots[0]);
+	TestTrue(TEXT("Drawing the plan is not itself a change to the shot"), GetShotSignature(Shots[0].Sequence) == ShotBeforePlan);
 	if (TestTrue(TEXT("The plan follows the camera through the shot"), Plan.CameraPath.Num() > 2))
 	{
 		TestEqual(TEXT("The camera travels the length of the dolly move"), FVector2D::Distance(Plan.CameraPath[0].Position, Plan.CameraPath.Last().Position), DollyTravelCm, 1.0);

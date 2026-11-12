@@ -4,6 +4,7 @@
 #include "UEcinePaperwork.h"
 #include "UEcinePlan.h"
 #include "UEcineUnits.h"
+#include "UEcineWidgets.h"
 #include "UObject/WeakObjectPtr.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
@@ -62,6 +63,8 @@ private:
 
 	/** Plays through the current shot and draws where its camera goes. */
 	void RedrawPlan();
+	/** Says so when the shot has been changed since its plan was drawn. Empty when the plan is as the shot is. */
+	FText GetPlanAgeText() const;
 
 	FReply OnNewShotClicked();
 	FReply OnGrabFrameClicked();
@@ -82,6 +85,10 @@ private:
 	/** The plan as last drawn, and the shot it is of, so that it is drawn once per shot and not on every rebuild. */
 	FUEcinePlan CurrentPlan;
 	TWeakObjectPtr<ULevelSequence> PlanSequence;
+	/** The shot's sequence as it stood when the plan was drawn: it changes with every edit of the shot. */
+	FGuid PlanSignature;
+	/** Where the keyboard focus goes when a storyboard frame is removed. */
+	UEcine::Widgets::FRowFocus StoryboardFocus;
 	/** What the plan shows, in words. */
 	FText PlanCaption;
 

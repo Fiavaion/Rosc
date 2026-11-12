@@ -1,5 +1,6 @@
 #include "UEcineStyle.h"
 
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateStyleRegistry.h"
@@ -41,6 +42,16 @@ void FUEcineStyle::Register()
 	StyleSet->Set("UEcine.Body", FTextBlockStyle(NormalText)
 		.SetFont(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 		.SetColorAndOpacity(FStyleColors::Foreground));
+
+	// A button that stays lit while its state is on. The editor's own toggle tells on from off by
+	// its fill alone, blue against grey at 2.8:1; this one is also ringed in white while it is on,
+	// so the state can be read without telling the colours apart.
+	const float ToggleRadius = 4.0f;
+	const float ToggleRing = 1.5f;
+	StyleSet->Set("UEcine.Toggle", FCheckBoxStyle(FAppStyle::Get().GetWidgetStyle<FCheckBoxStyle>("DetailsView.SectionButton"))
+		.SetCheckedImage(FSlateRoundedBoxBrush(FStyleColors::Primary, ToggleRadius, FStyleColors::White, ToggleRing))
+		.SetCheckedHoveredImage(FSlateRoundedBoxBrush(FStyleColors::PrimaryHover, ToggleRadius, FStyleColors::White, ToggleRing))
+		.SetCheckedPressedImage(FSlateRoundedBoxBrush(FStyleColors::PrimaryHover, ToggleRadius, FStyleColors::White, ToggleRing)));
 
 	FSlateStyleRegistry::RegisterSlateStyle(*StyleSet);
 }

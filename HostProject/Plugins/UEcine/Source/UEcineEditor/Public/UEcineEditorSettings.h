@@ -49,6 +49,14 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Deliver", meta = (DisplayName = "Burn-ins on Review Movies"))
 	bool bDeliverBurnIn = true;
 
+	/**
+	 * The folder shot lists, camera reports and printable pages are written under; each
+	 * sequence has a folder of its own in it. Left empty, they go under UEcine/Paperwork in
+	 * the project's Saved folder.
+	 */
+	UPROPERTY(config, EditAnywhere, Category = "Shots", meta = (DisplayName = "Paperwork Folder"))
+	FDirectoryPath PaperworkFolder;
+
 	static EUEcineDistanceUnits GetDistanceUnits();
 
 	virtual FName GetContainerName() const override;

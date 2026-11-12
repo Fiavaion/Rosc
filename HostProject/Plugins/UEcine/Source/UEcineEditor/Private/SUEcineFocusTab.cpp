@@ -43,6 +43,7 @@ void SUEcineFocusTab::Construct(const FArguments& InArgs, const TSharedRef<FUEci
 
 void SUEcineFocusTab::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
+	MarkRowFocus.Tick();
 	const FLayoutKey NewKey = MakeLayoutKey();
 	if (!(NewKey == CurrentLayoutKey))
 	{
@@ -72,6 +73,7 @@ void SUEcineFocusTab::RebuildLayout()
 		Content->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
 	};
 	MarksBox.Reset();
+	MarkFocusButton.Reset();
 
 	if (CurrentLayoutKey.Camera.IsValid())
 	{
@@ -102,13 +104,15 @@ void SUEcineFocusTab::RebuildLayout()
 		{
 			Add(FUEcineStyle::RowPadding, BuildRackTimeRow());
 			Add(FMargin(0.0f), SAssignNew(MarksBox, SVerticalBox));
-			Add(FUEcineStyle::ButtonRowPadding, MakeButton(LOCTEXT("MarkFocusButton", "Mark Focus"),
+			const TSharedRef<SWidget> MarkFocus = MakeButton(LOCTEXT("MarkFocusButton", "Mark Focus"),
 				LOCTEXT("MarkFocusToolTip", "Store where the focus is now as the next focus mark."),
 				FOnClicked::CreateSPLambda(this, [this]
 				{
 					UEcine::FocusEditing::AddFocusMark(Target->GetCamera());
 					return FReply::Handled();
-				})));
+				}));
+			MarkFocusButton = MarkFocus;
+			Add(FUEcineStyle::ButtonRowPadding, MarkFocus);
 			Add(FUEcineStyle::ButtonRowPadding,
 				SNew(STextBlock)
 				.TextStyle(&TextStyle("UEcine.Body"))
@@ -161,10 +165,13 @@ void SUEcineFocusTab::RebuildMarks()
 			.Text(LOCTEXT("NoFocusMarksMessage", "No focus marks yet. Focus on the first subject and mark it, then do the same for the next. A rack then pulls focus from where it is to a mark."))
 		];
 	}
+	TArray<TSharedRef<SWidget>> MarkRows;
 	for (int32 MarkIndex = 0; MarkIndex < ShownMarkCount; ++MarkIndex)
 	{
-		MarksBox->AddSlot().AutoHeight().Padding(FUEcineStyle::ButtonRowPadding)[ BuildMarkRow(MarkIndex) ];
+		MarkRows.Add(BuildMarkRow(MarkIndex));
+		MarksBox->AddSlot().AutoHeight().Padding(FUEcineStyle::ButtonRowPadding)[ MarkRows.Last() ];
 	}
+	MarkRowFocus.RowsRebuilt(MarkRows, MarkFocusButton);
 }
 
 TSharedRef<SWidget> SUEcineFocusTab::BuildDistanceRow()
@@ -366,6 +373,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildMarkRow(int32 MarkIndex)
 		[
 			MakeIconButton("Icons.Delete", FText::Format(LOCTEXT("RemoveFocusMarkToolTip", "Remove focus mark {0}"), Number), FOnClicked::CreateSPLambda(this, [this, MarkIndex]
 			{
+				MarkRowFocus.RowRemoved(MarkIndex);
 				UEcine::FocusEditing::RemoveFocusMark(Target->GetCamera(), MarkIndex);
 				return FReply::Handled();
 			}))
@@ -448,8 +456,8 @@ FText SUEcineFocusTab::GetFocusWarning() const
 	}
 	const FText Reach = FormatDistanceMm(CloseFocus * 10.0);
 	return IsFollowing()
-		? FText::Format(LOCTEXT("SubjectTooCloseWarning", "Warning: the subject is nearer than this lens can focus, so it is soft. The lens stays at its close focus, {0}. Move the camera back or change to a lens that focuses closer."), Reach)
-		: FText::Format(LOCTEXT("FocusTooCloseWarning", "Warning: the focus is set nearer than this lens can focus. The lens stays at its close focus, {0}. Set the focus again or change to a lens that focuses closer."), Reach);
+		? FText::Format(LOCTEXT("SubjectTooCloseWarning", "The subject is nearer than this lens can focus, so it is soft. The lens stays at its close focus, {0}. Move the camera back or change to a lens that focuses closer."), Reach)
+		: FText::Format(LOCTEXT("FocusTooCloseWarning", "The focus is set nearer than this lens can focus. The lens stays at its close focus, {0}. Set the focus again or change to a lens that focuses closer."), Reach);
 }
 
 FText SUEcineFocusTab::GetRackStatus() const

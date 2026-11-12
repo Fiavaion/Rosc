@@ -76,4 +76,7 @@ private:
 
 	TSharedPtr<SVerticalBox> MarksBox;
 	int32 ShownMarkCount = 0;
+	/** Where the keyboard focus goes when a mark is removed. */
+	UEcine::Widgets::FRowFocus MarkRowFocus;
+	TSharedPtr<SWidget> MarkPositionButton;
 };

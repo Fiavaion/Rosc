@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UEcineUnits.h"
+#include "UEcineWidgets.h"
 #include "UObject/WeakObjectPtr.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
@@ -80,4 +81,7 @@ private:
 
 	TSharedPtr<SVerticalBox> MarksBox;
 	int32 ShownMarkCount = 0;
+	/** Where the keyboard focus goes when a focus mark is removed. */
+	UEcine::Widgets::FRowFocus MarkRowFocus;
+	TSharedPtr<SWidget> MarkFocusButton;
 };

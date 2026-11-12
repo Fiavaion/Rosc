@@ -60,7 +60,9 @@ namespace
 
 		virtual bool IsCharacterValid(TCHAR InChar) const override
 		{
-			return true;
+			// Every character but Tab. A text box types whatever its owner calls valid, Tab included,
+			// and Tab has to stay the key that moves on to the next control.
+			return InChar != TEXT('\t');
 		}
 
 	private:
@@ -91,6 +93,7 @@ void SUEcineGripTab::Construct(const FArguments& InArgs, const TSharedRef<FUEcin
 
 void SUEcineGripTab::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
+	MarkRowFocus.Tick();
 	const FLayoutKey NewKey = MakeLayoutKey();
 	if (!(NewKey == CurrentLayoutKey))
 	{
@@ -124,6 +127,7 @@ void SUEcineGripTab::RebuildLayout()
 		Content->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
 	};
 	MarksBox.Reset();
+	MarkPositionButton.Reset();
 
 	if (CurrentLayoutKey.Camera.IsValid())
 	{
@@ -149,14 +153,16 @@ void SUEcineGripTab::RebuildLayout()
 
 			Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("MarksSection", "Marks")));
 			Add(FMargin(0.0f), SAssignNew(MarksBox, SVerticalBox));
-			Add(FUEcineStyle::ButtonRowPadding,
+			const TSharedRef<SWidget> MarkPosition =
 				MakeButton(LOCTEXT("MarkPositionButton", "Mark Position"),
 					LOCTEXT("MarkPositionToolTip", "Store where the support is now as the next mark. A move runs from each mark to the one after it."),
 					FOnClicked::CreateSPLambda(this, [this]
 					{
 						UEcine::GripEditing::AddMark(GetRig());
 						return FReply::Handled();
-					})));
+					}));
+			MarkPositionButton = MarkPosition;
+			Add(FUEcineStyle::ButtonRowPadding, MarkPosition);
 
 			Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("OperatorSection", "Operator")));
 			Add(FUEcineStyle::RowPadding, BuildOperatorRows());
@@ -212,6 +218,7 @@ void SUEcineGripTab::RebuildMarks()
 	}
 
 	// In shooting order: a mark, then the move that leaves it for the next mark.
+	TArray<TSharedRef<SWidget>> MarkRows;
 	for (int32 MarkIndex = 0; MarkIndex < ShownMarkCount; ++MarkIndex)
 	{
 		if (MarkIndex > 0)
@@ -221,8 +228,10 @@ void SUEcineGripTab::RebuildMarks()
 			Add(FUEcineStyle::RowPadding, BuildEaseRow(MarkIndex, false));
 			Add(FUEcineStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineGripTab::GetMoveWarnings, MarkIndex)));
 		}
-		Add(FUEcineStyle::ButtonRowPadding, BuildMarkRow(MarkIndex));
+		MarkRows.Add(BuildMarkRow(MarkIndex));
+		Add(FUEcineStyle::ButtonRowPadding, MarkRows.Last());
 	}
+	MarkRowFocus.RowsRebuilt(MarkRows, MarkPositionButton);
 }
 
 TSharedRef<SWidget> SUEcineGripTab::BuildSupportRow()
@@ -331,6 +340,7 @@ TSharedRef<SWidget> SUEcineGripTab::BuildMarkRow(int32 MarkIndex)
 		[
 			MakeIconButton("Icons.Delete", FText::Format(LOCTEXT("RemoveMarkToolTip", "Remove mark {0}"), Number), FOnClicked::CreateSPLambda(this, [this, MarkIndex]
 			{
+				MarkRowFocus.RowRemoved(MarkIndex);
 				UEcine::GripEditing::RemoveMark(GetRig(), MarkIndex);
 				return FReply::Handled();
 			}))
@@ -490,6 +500,18 @@ TSharedRef<SWidget> SUEcineGripTab::BuildBakeRows()
 			.TextStyle(&TextStyle("UEcine.Body"))
 			.AutoWrapText(true)
 			.Text(this, &SUEcineGripTab::GetBakeStatus)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(FUEcineStyle::RowPadding)
+		[
+			MakeWarning(TAttribute<FText>::CreateSPLambda(this, [this]
+			{
+				const AUEcineRig* Rig = GetRig();
+				return Rig != nullptr && Rig->HasChangedSinceBake()
+					? LOCTEXT("BakeOutOfDate", "The marks or the operator have changed since the move was baked. Sequencer still plays the move as it was: bake again to replace it.")
+					: FText::GetEmpty();
+			}))
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
@@ -657,7 +679,7 @@ FText SUEcineGripTab::GetMoveWarnings(int32 MarkIndex) const
 	TArray<FText> Lines;
 	for (const FUEcineMoveFinding& Finding : UEcine::Move::MostLimiting(UEcine::Move::Check(Spec, From.Pose, To.Pose, To.Arrival)))
 	{
-		Lines.Add(FText::Format(LOCTEXT("WarningPrefix", "Warning: {0}"), UEcine::Move::Describe(Finding, Spec.Type, UUEcineEditorSettings::GetDistanceUnits())));
+		Lines.Add(UEcine::Move::Describe(Finding, Spec.Type, UUEcineEditorSettings::GetDistanceUnits()));
 	}
 	return FText::Join(FText::FromString(TEXT("\n")), Lines);
 }

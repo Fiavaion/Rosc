@@ -108,6 +108,19 @@ namespace UEcine::ShotEditing
 	 */
 	UECINEEDITOR_API bool ExportPaperwork(const FString& Directory, TArray<FString>& OutFiles, FText& OutError);
 
-	/** Where the panel writes a sequence's paperwork: a folder named after it under the project's Saved folder. */
-	UECINEEDITOR_API FString GetDefaultPaperworkDirectory(const ULevelSequence* Sequence);
+	/** The folder paperwork is written under: the one the user chose, or UEcine/Paperwork in the project's Saved folder. */
+	UECINEEDITOR_API FString GetPaperworkFolder();
+
+	/** Chooses the folder paperwork is written under, for this user and project. Empty goes back to the project's own. */
+	UECINEEDITOR_API void SetPaperworkFolder(const FString& Folder);
+
+	/** Where the panel writes a sequence's paperwork: a folder named after it in the paperwork folder. */
+	UECINEEDITOR_API FString GetPaperworkDirectory(const ULevelSequence* Sequence);
+
+	/**
+	 * A value that changes with every edit of a shot's sequence: a move baked into it, a key
+	 * moved, a camera changed. What was worked out from the shot is as old as the value it
+	 * was worked out at.
+	 */
+	UECINEEDITOR_API FGuid GetShotSignature(const ULevelSequence* Sequence);
 }

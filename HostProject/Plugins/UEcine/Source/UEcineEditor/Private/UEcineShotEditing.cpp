@@ -690,9 +690,28 @@ bool UEcine::ShotEditing::ExportPaperwork(const FString& Directory, TArray<FStri
 	return true;
 }
 
-FString UEcine::ShotEditing::GetDefaultPaperworkDirectory(const ULevelSequence* Sequence)
+FString UEcine::ShotEditing::GetPaperworkFolder()
 {
-	return FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("UEcine") / TEXT("Paperwork") / Sequence->GetName());
+	const FString& Chosen = GetDefault<UUEcineEditorSettings>()->PaperworkFolder.Path;
+	return FPaths::ConvertRelativePathToFull(Chosen.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("UEcine") / TEXT("Paperwork") : Chosen);
+}
+
+void UEcine::ShotEditing::SetPaperworkFolder(const FString& Folder)
+{
+	UUEcineEditorSettings* Choices = GetMutableDefault<UUEcineEditorSettings>();
+	Choices->PaperworkFolder.Path = Folder;
+	Choices->SaveConfig();
+}
+
+FString UEcine::ShotEditing::GetPaperworkDirectory(const ULevelSequence* Sequence)
+{
+	return GetPaperworkFolder() / Sequence->GetName();
+}
+
+FGuid UEcine::ShotEditing::GetShotSignature(const ULevelSequence* Sequence)
+{
+	const UMovieScene* MovieScene = Sequence != nullptr ? Sequence->GetMovieScene() : nullptr;
+	return MovieScene != nullptr ? MovieScene->GetSignature() : FGuid();
 }
 
 #undef LOCTEXT_NAMESPACE

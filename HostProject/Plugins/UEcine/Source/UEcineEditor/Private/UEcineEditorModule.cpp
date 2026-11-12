@@ -20,7 +20,7 @@ void FUEcineEditorModule::StartupModule()
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(PanelTabId, FOnSpawnTab::CreateRaw(this, &FUEcineEditorModule::SpawnPanelTab))
 		.SetDisplayName(LOCTEXT("PanelTabTitle", "UEcine"))
-		.SetTooltipText(LOCTEXT("PanelTabTooltip", "Open the UEcine camera department: camera, grip, focus, monitor, shots and delivery."))
+		.SetTooltipText(LOCTEXT("PanelTabTooltip", "Open the UEcine camera department: camera, grip, focus, monitor, shots, delivery and the optional AI tools."))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCinematicsCategory());
 }
 

@@ -142,7 +142,7 @@ void SUEcineCameraTab::RefreshResolvedCamera()
 			.AutoHeight()
 			.Padding(0.0f, FUEcineStyle::SectionSpacing, 0.0f, 0.0f)
 			[
-				MakeWarning(FText::Format(LOCTEXT("WarningPrefix", "Warning: {0}"), Message))
+				MakeWarning(Message)
 			];
 		}
 	}

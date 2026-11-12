@@ -1,8 +1,12 @@
 #include "UEcineWidgets.h"
 
+#include "DesktopPlatformModule.h"
 #include "Editor.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "IDesktopPlatform.h"
+#include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
 #include "UEcineEditorSettings.h"
 #include "UEcineStyle.h"
@@ -11,11 +15,14 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboButton.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
+
+#define LOCTEXT_NAMESPACE "UEcineEditor"
 
 namespace
 {
@@ -70,7 +77,9 @@ namespace
 
 		virtual bool IsCharacterValid(TCHAR InChar) const override
 		{
-			return true;
+			// Every character but Tab. A text box types whatever its owner calls valid, Tab included,
+			// and Tab has to stay the key that moves on to the next control.
+			return InChar != TEXT('\t');
 		}
 	};
 }
@@ -161,6 +170,11 @@ TSharedRef<SWidget> UEcine::Widgets::MakeEmptyState(const FText& Message, const 
 
 TSharedRef<SWidget> UEcine::Widgets::MakeStatusLine(const FName IconName, TAttribute<FText> Message)
 {
+	// What the icon's shape says, in a word, for a screen reader and for whoever points at it.
+	const FText Kind = IconName == FName("Icons.WarningWithColor") ? LOCTEXT("StatusWarning", "Warning")
+		: IconName == FName("Icons.ErrorWithColor") ? LOCTEXT("StatusProblem", "Problem")
+		: IconName == FName("Icons.SuccessWithColor") ? LOCTEXT("StatusDone", "Done")
+		: LOCTEXT("StatusNote", "Note");
 	return SNew(SHorizontalBox)
 		.Visibility_Lambda([Message] { return Message.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
 		+ SHorizontalBox::Slot()
@@ -170,6 +184,8 @@ TSharedRef<SWidget> UEcine::Widgets::MakeStatusLine(const FName IconName, TAttri
 		[
 			SNew(SImage)
 			.Image(FAppStyle::Get().GetBrush(IconName))
+			.ToolTipText(Kind)
+			.AccessibleText(Kind)
 		]
 		+ SHorizontalBox::Slot()
 		.FillWidth(1.0f)
@@ -217,7 +233,7 @@ TSharedRef<SWidget> UEcine::Widgets::MakeToggleButton(TAttribute<FText> Label, c
 		.MinDesiredHeight(FUEcineStyle::MinTargetSize)
 		[
 			SNew(SCheckBox)
-			.Style(&FAppStyle::Get().GetWidgetStyle<FCheckBoxStyle>("DetailsView.SectionButton"))
+			.Style(&FUEcineStyle::Get().GetWidgetStyle<FCheckBoxStyle>("UEcine.Toggle"))
 			.HAlign(HAlign_Center)
 			.ToolTipText(ToolTip)
 			.AccessibleText(ToolTip)
@@ -353,3 +369,109 @@ void UEcine::Widgets::Notify(const FText& Message, bool bSucceeded)
 		Notification->SetCompletionState(bSucceeded ? SNotificationItem::CS_Success : SNotificationItem::CS_Fail);
 	}
 }
+
+TSharedRef<SWidget> UEcine::Widgets::MakeFolderControl(const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, TFunction<FString()> GetFolder, TFunction<void(const FString& Folder)> ChooseFolder)
+{
+	const auto Choose = [GetFolder, ChooseFolder = MoveTemp(ChooseFolder)](const FString& Folder)
+	{
+		// The box shows the folder in use, which is the project's own until another is chosen.
+		if (Folder == GetFolder())
+		{
+			return;
+		}
+		if (!Folder.IsEmpty() && FPaths::IsRelative(Folder))
+		{
+			Notify(LOCTEXT("FolderNotWhole", "Give the whole path of the folder, from its drive on."), false);
+			return;
+		}
+		ChooseFolder(Folder);
+	};
+
+	return SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.FillWidth(1.0f)
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBox)
+			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
+			[
+				SNew(SEditableTextBox)
+				.ToolTipText(ToolTip)
+				.AccessibleText(Name)
+				.Text_Lambda([GetFolder] { return FText::FromString(GetFolder()); })
+				.OnTextCommitted_Lambda([Choose](const FText& Text, ETextCommit::Type CommitType)
+				{
+					// Escape gives up what was typed.
+					if (CommitType != ETextCommit::OnCleared)
+					{
+						Choose(Text.ToString().TrimStartAndEnd());
+					}
+				})
+			]
+		]
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+		[
+			MakeIconButton("Icons.FolderOpen", BrowseToolTip, FOnClicked::CreateLambda([BrowseToolTip, GetFolder, Choose]
+			{
+				FString Folder;
+				IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+				if (DesktopPlatform != nullptr && DesktopPlatform->OpenDirectoryDialog(
+					FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr), BrowseToolTip.ToString(), GetFolder(), Folder))
+				{
+					Choose(Folder);
+				}
+				return FReply::Handled();
+			}))
+		];
+}
+
+namespace
+{
+	/** The first widget inside another that takes keyboard focus and can be used now. */
+	TSharedPtr<SWidget> FindFirstControl(const TSharedRef<SWidget>& Widget)
+	{
+		if (!Widget->GetVisibility().IsVisible() || !Widget->IsEnabled())
+		{
+			return nullptr;
+		}
+		if (Widget->SupportsKeyboardFocus())
+		{
+			return Widget;
+		}
+		FChildren* Children = Widget->GetChildren();
+		for (int32 Index = 0; Index < Children->Num(); ++Index)
+		{
+			if (const TSharedPtr<SWidget> Found = FindFirstControl(Children->GetChildAt(Index)))
+			{
+				return Found;
+			}
+		}
+		return nullptr;
+	}
+}
+
+void UEcine::Widgets::FRowFocus::RowsRebuilt(TConstArrayView<TSharedRef<SWidget>> Rows, const TSharedPtr<SWidget>& WhenEmpty)
+{
+	if (RemovedIndex.IsSet())
+	{
+		Pending = Rows.IsEmpty() ? WhenEmpty : TSharedPtr<SWidget>(Rows[FMath::Min(*RemovedIndex, Rows.Num() - 1)]);
+		RemovedIndex.Reset();
+	}
+}
+
+void UEcine::Widgets::FRowFocus::Tick()
+{
+	if (const TSharedPtr<SWidget> Row = Pending.Pin())
+	{
+		if (const TSharedPtr<SWidget> Control = FindFirstControl(Row.ToSharedRef()))
+		{
+			FSlateApplication::Get().SetKeyboardFocus(Control, EFocusCause::SetDirectly);
+		}
+	}
+	Pending.Reset();
+}
+
+#undef LOCTEXT_NAMESPACE

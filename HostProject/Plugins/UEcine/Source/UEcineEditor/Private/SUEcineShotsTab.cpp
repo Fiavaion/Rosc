@@ -155,6 +155,7 @@ void SUEcineShotsTab::Construct(const FArguments& InArgs, const TSharedRef<FUEci
 
 void SUEcineShotsTab::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
+	StoryboardFocus.Tick();
 	const FLayoutKey NewKey = ReadShots();
 	if (!(NewKey == CurrentLayoutKey))
 	{
@@ -335,12 +336,10 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildStoryboard()
 {
 	const TWeakObjectPtr<ULevelSequence> ShotSequence = CurrentShotSequence;
 	const TSharedRef<SVerticalBox> Storyboard = SNew(SVerticalBox);
-	Storyboard->AddSlot().AutoHeight().Padding(FUEcineStyle::ButtonRowPadding)
-	[
-		MakeButton(LOCTEXT("GrabFrameButton", "Grab Frame"),
-			LOCTEXT("GrabFrameToolTip", "Grab frame: take a picture through the shot's camera at the playhead and keep it with the shot as a storyboard frame. Grabbing the same frame again replaces its picture."),
-			FOnClicked::CreateSP(this, &SUEcineShotsTab::OnGrabFrameClicked))
-	];
+	const TSharedRef<SWidget> GrabFrame = MakeButton(LOCTEXT("GrabFrameButton", "Grab Frame"),
+		LOCTEXT("GrabFrameToolTip", "Grab frame: take a picture through the shot's camera at the playhead and keep it with the shot as a storyboard frame. Grabbing the same frame again replaces its picture."),
+		FOnClicked::CreateSP(this, &SUEcineShotsTab::OnGrabFrameClicked));
+	Storyboard->AddSlot().AutoHeight().Padding(FUEcineStyle::ButtonRowPadding)[ GrabFrame ];
 
 	const TConstArrayView<FUEcineStoryboardFrame> Frames = ShotSequence.IsValid() ? GetStoryboardFrames(ShotSequence.Get()) : TConstArrayView<FUEcineStoryboardFrame>();
 	if (Frames.IsEmpty())
@@ -349,12 +348,14 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildStoryboard()
 		[
 			MakeNote(LOCTEXT("NoStoryboardFrames", "No storyboard frames yet. Move the playhead to a moment worth showing, then grab it."))
 		];
+		StoryboardFocus.RowsRebuilt({}, GrabFrame);
 		return Storyboard;
 	}
 
 	const TSharedRef<SWrapBox> Pictures = SNew(SWrapBox)
 		.UseAllottedSize(true)
 		.InnerSlotPadding(FVector2D(8.0, 6.0));
+	TArray<TSharedRef<SWidget>> FrameCells;
 	for (int32 FrameIndex = 0; FrameIndex < Frames.Num(); ++FrameIndex)
 	{
 		const FUEcineStoryboardFrame& Frame = Frames[FrameIndex];
@@ -398,10 +399,11 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildStoryboard()
 				.VAlign(VAlign_Center)
 				[
 					MakeIconButton("Icons.Delete", FText::Format(LOCTEXT("RemoveStoryboardFrameToolTip", "Remove storyboard frame {0}"), FrameNumber),
-						FOnClicked::CreateLambda([ShotSequence, FrameIndex]
+						FOnClicked::CreateSPLambda(this, [this, ShotSequence, FrameIndex]
 						{
 							if (ULevelSequence* Sequence = ShotSequence.Get())
 							{
+								StoryboardFocus.RowRemoved(FrameIndex);
 								RemoveStoryboardFrame(Sequence, FrameIndex);
 							}
 							return FReply::Handled();
@@ -410,7 +412,9 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildStoryboard()
 			]
 		];
 		Pictures->AddSlot()[ Picture ];
+		FrameCells.Add(Picture);
 	}
+	StoryboardFocus.RowsRebuilt(FrameCells, GrabFrame);
 	Storyboard->AddSlot().AutoHeight().Padding(FUEcineStyle::ButtonRowPadding)[ Pictures ];
 	return Storyboard;
 }
@@ -431,6 +435,12 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildPlan()
 			{
 				return PlanSequence == CurrentShotSequence ? PlanCaption : LOCTEXT("PlanWaitsForPlayback", "The plan of this shot is drawn when playback stops.");
 			}))
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(FUEcineStyle::RowPadding)
+		[
+			MakeStatusLine("Icons.InfoWithColor", TAttribute<FText>::CreateSP(this, &SUEcineShotsTab::GetPlanAgeText))
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
@@ -455,7 +465,17 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildPlan()
 
 TSharedRef<SWidget> SUEcineShotsTab::BuildPaperwork()
 {
+	const FText FolderLabel = LOCTEXT("PaperworkFolderLabel", "Folder");
+	const FText FolderToolTip = LOCTEXT("PaperworkFolderToolTip", "The folder paperwork is written under. Each sequence has a folder of its own in it. Clear the box to go back to the project's own folder, Saved/UEcine/Paperwork.");
 	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(FUEcineStyle::RowPadding)
+		[
+			MakeRow(FolderLabel, FolderToolTip, MakeFolderControl(FolderLabel, FolderToolTip, LOCTEXT("BrowsePaperworkFolderToolTip", "Choose the paperwork folder"),
+				[] { return GetPaperworkFolder(); },
+				[](const FString& Folder) { SetPaperworkFolder(Folder); }))
+		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FUEcineStyle::ButtonRowPadding)
@@ -491,6 +511,14 @@ TSharedRef<SWidget> SUEcineShotsTab::BuildPaperwork()
 		];
 }
 
+FText SUEcineShotsTab::GetPlanAgeText() const
+{
+	const ULevelSequence* Sequence = PlanSequence.Get();
+	return Sequence != nullptr && PlanSequence == CurrentShotSequence && GetShotSignature(Sequence) != PlanSignature
+		? LOCTEXT("PlanOutOfDate", "The shot has changed since this plan was drawn. Redraw the plan to see where the camera goes now.")
+		: FText::GetEmpty();
+}
+
 void SUEcineShotsTab::RedrawPlan()
 {
 	const TArray<FShot> Shots = GetShots();
@@ -502,6 +530,7 @@ void SUEcineShotsTab::RedrawPlan()
 
 	CurrentPlan = MakePlan(Shots[CurrentShot]);
 	PlanSequence = Shots[CurrentShot].Sequence;
+	PlanSignature = GetShotSignature(PlanSequence.Get());
 	PlanCaption = DescribePlan(CurrentPlan);
 	if (PlanView.IsValid())
 	{
@@ -548,7 +577,7 @@ FReply SUEcineShotsTab::OnExportClicked()
 		return FReply::Handled();
 	}
 
-	const FString Directory = GetDefaultPaperworkDirectory(OpenSequence);
+	const FString Directory = GetPaperworkDirectory(OpenSequence);
 	TArray<FString> Files;
 	FText Error;
 	if (ExportPaperwork(Directory, Files, Error))

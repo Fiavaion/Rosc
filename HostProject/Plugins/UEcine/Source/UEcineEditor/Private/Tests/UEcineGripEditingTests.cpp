@@ -137,7 +137,16 @@ bool FUEcineGripCraneMoveTest::RunTest(const FString& Parameters)
 	const int32 EndFrame = StartFrame + 240;
 
 	FText Error;
+	TestFalse(TEXT("Before any bake there is no baked move to be out of date"), Rig->HasChangedSinceBake());
 	TestTrue(TEXT("The move bakes"), BakeMove(Rig, Sequence, StartFrame, Error));
+
+	// The rig keeps what was baked, so that the tab can say when the marks have moved on since.
+	TestFalse(TEXT("Fresh from the bake, nothing has changed since"), Rig->HasChangedSinceBake());
+	const double BakedSeconds = Rig->Marks[1].Arrival.DurationSeconds;
+	Rig->Marks[1].Arrival.DurationSeconds = BakedSeconds + 1.0;
+	TestTrue(TEXT("A move retimed after the bake is a change since the bake"), Rig->HasChangedSinceBake());
+	Rig->Marks[1].Arrival.DurationSeconds = BakedSeconds;
+	TestFalse(TEXT("Put back as it was baked, it is no change"), Rig->HasChangedSinceBake());
 	TestTrue(TEXT("The playback range takes in the move"), MovieScene->GetPlaybackRange().Contains(ConvertFrameTime(FFrameTime(EndFrame), DisplayRate, TickResolution).RoundToFrame()));
 
 	// The keys: every axis the crane has is on a track, and each curve matches the solver.

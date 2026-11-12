@@ -192,7 +192,7 @@ void SUEcineAITab::Construct(const FArguments& InArgs, TSharedRef<FUEcineCameraT
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 			[
-				MakeNote(LOCTEXT("AssistantNote", "Describe the shot in your own words. The assistant plans it for this camera with the gear UEcine has. Nothing changes until you have read the plan and applied it."))
+				MakeNote(LOCTEXT("AssistantNote", "Describe the shot in your own words, such as \"Crane up over the table to reveal Anna, about eight seconds, and keep her sharp.\" The assistant plans it for this camera with the gear UEcine has. Nothing changes until you have read the plan and applied it."))
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(FUEcineStyle::RowPadding)
 			[
@@ -202,7 +202,6 @@ void SUEcineAITab::Construct(const FArguments& InArgs, TSharedRef<FUEcineCameraT
 					SNew(SMultiLineEditableTextBox)
 					.ToolTipText(RequestToolTip)
 					.AccessibleText(RequestName)
-					.HintText(LOCTEXT("RequestHint", "Crane up over the table to reveal Anna, about eight seconds, and keep her sharp."))
 					.AutoWrapText(true)
 					.ModiferKeyForNewLine(EModifierKey::Shift)
 					.Text_Lambda([this] { return Words; })

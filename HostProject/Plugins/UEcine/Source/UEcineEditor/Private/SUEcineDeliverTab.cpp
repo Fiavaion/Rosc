@@ -1,12 +1,9 @@
 #include "SUEcineDeliverTab.h"
 
-#include "DesktopPlatformModule.h"
 #include "Editor.h"
-#include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
-#include "IDesktopPlatform.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/Paths.h"
@@ -242,35 +239,9 @@ TSharedRef<SWidget> SUEcineDeliverTab::BuildFolderRow()
 	const FText Label = LOCTEXT("DeliverFolderLabel", "Folder");
 	const FText ToolTip = LOCTEXT("DeliverFolderToolTip", "The folder deliveries are written under. Each sequence has a folder of its own in it, with Review, VFX and Master inside. Clear the box to go back to the project's own folder, Saved/UEcine/Deliveries.");
 
-	const TSharedRef<SWidget> Folder = SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.FillWidth(1.0f)
-		.VAlign(VAlign_Center)
-		[
-			SNew(SBox)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SEditableTextBox)
-				.ToolTipText(ToolTip)
-				.AccessibleText(Label)
-				.Text_Lambda([] { return FText::FromString(GetDeliveryFolder()); })
-				.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type CommitType)
-				{
-					// Escape gives up what was typed.
-					if (CommitType != ETextCommit::OnCleared)
-					{
-						ChooseFolder(Text.ToString().TrimStartAndEnd());
-					}
-				})
-			]
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
-		[
-			MakeIconButton("Icons.FolderOpen", LOCTEXT("BrowseFolderToolTip", "Choose the delivery folder"), FOnClicked::CreateSP(this, &SUEcineDeliverTab::OnBrowseFolderClicked))
-		];
+	const TSharedRef<SWidget> Folder = MakeFolderControl(Label, ToolTip, LOCTEXT("BrowseFolderToolTip", "Choose the delivery folder"),
+		[] { return GetDeliveryFolder(); },
+		[this](const FString& Chosen) { EditChoices([&Chosen](UUEcineEditorSettings& Choices) { Choices.DeliverFolder.Path = Chosen; }); });
 	Folder->SetEnabled(!CurrentLayoutKey.bRendering);
 	return MakeRow(Label, ToolTip, Folder);
 }
@@ -549,21 +520,6 @@ void SUEcineDeliverTab::EditChoices(TFunctionRef<void(UUEcineEditorSettings&)> E
 	bCheckWanted = true;
 }
 
-void SUEcineDeliverTab::ChooseFolder(const FString& Folder)
-{
-	// The box shows the folder in use, which is the project's own until another is chosen.
-	if (Folder == GetDeliveryFolder())
-	{
-		return;
-	}
-	if (!Folder.IsEmpty() && FPaths::IsRelative(Folder))
-	{
-		Notify(LOCTEXT("DeliverFolderNotWhole", "Give the whole path of the delivery folder, from its drive on."), false);
-		return;
-	}
-	EditChoices([&Folder](UUEcineEditorSettings& Choices) { Choices.DeliverFolder.Path = Folder; });
-}
-
 void SUEcineDeliverTab::ChooseNamePattern(const FString& Pattern)
 {
 	const FText Problem = UEcine::Deliver::ValidateNamePattern(Pattern);
@@ -573,19 +529,6 @@ void SUEcineDeliverTab::ChooseNamePattern(const FString& Pattern)
 		return;
 	}
 	EditChoices([&Pattern](UUEcineEditorSettings& Choices) { Choices.DeliverNamePattern = Pattern; });
-}
-
-FReply SUEcineDeliverTab::OnBrowseFolderClicked()
-{
-	FString Folder;
-	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-	if (DesktopPlatform != nullptr && DesktopPlatform->OpenDirectoryDialog(
-		FSlateApplication::Get().FindBestParentWindowHandleForDialogs(AsShared()),
-		LOCTEXT("BrowseFolderTitle", "Choose the delivery folder").ToString(), GetDeliveryFolder(), Folder))
-	{
-		ChooseFolder(Folder);
-	}
-	return FReply::Handled();
 }
 
 FReply SUEcineDeliverTab::OnFixClicked(FFindingGroup Group)

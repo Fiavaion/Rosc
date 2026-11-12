@@ -148,6 +148,26 @@ float AUEcineRig::GetTrackLength() const
 	return Track->GetSplineLength();
 }
 
+bool AUEcineRig::HasChangedSinceBake() const
+{
+	if (BakedMarks.IsEmpty())
+	{
+		return false;
+	}
+	if (BakedMarks.Num() != Marks.Num() || !FUEcineOperator::StaticStruct()->CompareScriptStruct(&BakedOperator, &Operator, PPF_None))
+	{
+		return true;
+	}
+	for (int32 Index = 0; Index < Marks.Num(); ++Index)
+	{
+		if (!FUEcineRigMark::StaticStruct()->CompareScriptStruct(&BakedMarks[Index], &Marks[Index], PPF_None))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 ACineCameraActor* AUEcineRig::GetMountedCamera() const
 {
 	TArray<AActor*> AttachedActors;

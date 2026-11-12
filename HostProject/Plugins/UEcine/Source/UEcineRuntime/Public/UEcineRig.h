@@ -88,6 +88,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
 	FUEcineOperator Operator;
 
+	/**
+	 * The marks and the operator as they were when the move was last baked to Sequencer, kept
+	 * so that the Grip tab can say when the move has been changed since. No marks before the
+	 * first bake.
+	 */
+	UPROPERTY()
+	TArray<FUEcineRigMark> BakedMarks;
+
+	UPROPERTY()
+	FUEcineOperator BakedOperator;
+
+	/** True when a move has been baked and the marks or the operator have changed since. */
+	bool HasChangedSinceBake() const;
+
 	virtual void OnConstruction(const FTransform& Transform) override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
