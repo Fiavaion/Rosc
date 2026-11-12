@@ -17,6 +17,7 @@
 #include "Styling/AppStyle.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraTarget.h"
+#include "UEcineEditorModule.h"
 #include "UEcineStyle.h"
 #include "UEcineWidgets.h"
 #include "Widgets/Input/SComboButton.h"
@@ -36,7 +37,8 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 	Target = MakeShared<FUEcineCameraTarget>();
 
 	const FText CameraToolTip = LOCTEXT("CameraPickerToolTip", "The camera this panel is working on. Selecting a camera in the level also switches to it.");
-	const FText LookThroughToolTip = LOCTEXT("LookThroughToolTip", "Look through this camera in the viewport. Moving the viewport then moves the camera.");
+	const FText LookThroughToolTip = LOCTEXT("LookThroughToolTip", "Look through this camera in the viewport. Moving the viewport then moves the camera, unless it is on a support: a support holds the camera, and the Grip tab moves it.");
+	const FText UserGuideToolTip = LOCTEXT("UserGuideToolTip", "User guide: open the UEcine guide in your web browser.");
 	const FText NewCameraToolTip = LOCTEXT("PanelNewCameraToolTip", "New camera: create a Cine Camera Actor where the viewport is looking from, with a camera package ready to edit.");
 
 	const TSharedRef<SWidget> LookThrough = MakeToggleButton(LOCTEXT("LookThroughLabel", "Look Through"), LookThroughToolTip,
@@ -87,6 +89,13 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
 				[
 					MakeIconButton("Icons.Plus", NewCameraToolTip, FOnClicked::CreateSP(this, &SUEcinePanel::OnNewCameraClicked))
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					MakeIconButton("Icons.Help", UserGuideToolTip, FOnClicked::CreateSP(this, &SUEcinePanel::OnUserGuideClicked))
 				]
 			]
 		]
@@ -286,6 +295,12 @@ FReply SUEcinePanel::OnNewCameraClicked()
 	{
 		Target->SetCamera(NewCamera);
 	}
+	return FReply::Handled();
+}
+
+FReply SUEcinePanel::OnUserGuideClicked()
+{
+	FPlatformProcess::LaunchFileInDefaultExternalApplication(*FUEcineEditorModule::GetUserGuideFile());
 	return FReply::Handled();
 }
 

@@ -25,6 +25,7 @@
 #include "UEcineCameraPackageComponent.h"
 #include "UEcineFocusEditing.h"
 #include "UEcineGripEditing.h"
+#include "UEcineMonitorSubsystem.h"
 #include "UEcineMove.h"
 #include "UEcineRig.h"
 
@@ -155,7 +156,7 @@ namespace
 			AimSampleRig(Edited, *Camera, SubjectFace);
 		});
 		UEcine::GripEditing::AddMark(Rig);
-		UEcine::GripEditing::EditRig(Rig, FText::FromString(TEXT("Time Move")), [](AUEcineRig& Edited) { Edited.Marks[1].Arrival.DurationSeconds = 8.0; });
+		UEcine::GripEditing::EditRig(Rig, FText::FromString(TEXT("Time Move")), [](AUEcineRig& Edited) { Edited.Marks[1].Arrival.DurationSeconds = 4.0; });
 		Test.TestTrue(TEXT("On the second mark the camera still looks at the subject"), MeasureSampleAimErrorDeg(*Camera, SubjectFace) < 1.0);
 		UEcine::GripEditing::GoToMark(Rig, 0);
 
@@ -234,6 +235,18 @@ namespace
 			ViewportClient->Viewport->Draw(false);
 		}
 		ViewportClient->Viewport->ReadPixels(Pixels);
+
+		// The same picture in false colour, as the Monitor tab shows it.
+		UUEcineMonitorSubsystem* Monitor = UUEcineMonitorSubsystem::Get();
+		const FUEcineMonitorSettings MonitorBefore = Monitor->GetSettings();
+		FUEcineMonitorSettings Exposure;
+		Exposure.bFalseColour = true;
+		Monitor->SetSettings(Exposure);
+		Monitor->UpdateCameraOverlays();
+		TArray<FColor> FalseColour;
+		ViewportClient->Viewport->Draw(false);
+		ViewportClient->Viewport->ReadPixels(FalseColour);
+		Monitor->SetSettings(MonitorBefore);
 		LevelEditor->EjectPilotLevelActor();
 
 		if (!Test.TestTrue(TEXT("The picture through the camera is read back"), !Pixels.IsEmpty()))
@@ -255,9 +268,21 @@ namespace
 		Test.TestTrue(TEXT("The stage is exposed: neither dark nor burnt out"), Level > 0.2 && Level < 0.7 && ClippedShare < 0.1);
 
 		const FIntPoint Size = ViewportClient->Viewport->GetSizeXY();
-		TArray64<uint8> Png;
-		FImageUtils::PNGCompressImageArray(Size.X, Size.Y, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
-		Test.TestTrue(TEXT("The picture was saved"), FFileHelper::SaveArrayToFile(Png, *(FPaths::ProjectSavedDir() / TEXT("UEcine/Screenshots/sample-stage.png"))));
+		const auto Save = [&Test, Size](TArray<FColor>& Picture, const TCHAR* Name)
+		{
+			for (FColor& Pixel : Picture)
+			{
+				Pixel.A = 255;
+			}
+			TArray64<uint8> Png;
+			FImageUtils::PNGCompressImageArray(Size.X, Size.Y, TArrayView64<const FColor>(Picture.GetData(), Picture.Num()), Png);
+			Test.TestTrue(*FString::Printf(TEXT("The picture %s was saved"), Name), FFileHelper::SaveArrayToFile(Png, *(FPaths::ProjectSavedDir() / TEXT("UEcine/Screenshots") / Name)));
+		};
+		Save(Pixels, TEXT("sample-stage.png"));
+		if (Test.TestEqual(TEXT("The false colour picture is read back"), FalseColour.Num(), Pixels.Num()))
+		{
+			Save(FalseColour, TEXT("sample-stage-false-colour.png"));
+		}
 	}
 }
 

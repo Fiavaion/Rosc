@@ -3,6 +3,8 @@
 #include "UEcineEditorModule.h"
 
 #include "Framework/Docking/TabManager.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "SUEcinePanel.h"
 #include "UEcineDeliverEditing.h"
@@ -14,6 +16,11 @@
 #define LOCTEXT_NAMESPACE "UEcineEditor"
 
 const FName FUEcineEditorModule::PanelTabId(TEXT("UEcinePanel"));
+
+FString FUEcineEditorModule::GetUserGuideFile()
+{
+	return FPaths::ConvertRelativePathToFull(IPluginManager::Get().FindPlugin(TEXT("UEcine"))->GetBaseDir() / TEXT("Docs/UserGuide.html"));
+}
 
 void FUEcineEditorModule::StartupModule()
 {

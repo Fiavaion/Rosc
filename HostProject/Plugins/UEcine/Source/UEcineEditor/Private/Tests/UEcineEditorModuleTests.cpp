@@ -28,6 +28,7 @@ bool FUEcineEditorPanelRegisteredTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("UEcineCore module is loaded"), FModuleManager::Get().IsModuleLoaded(TEXT("UEcineCore")));
 	TestTrue(TEXT("UEcineEditor module is loaded"), FModuleManager::Get().IsModuleLoaded(TEXT("UEcineEditor")));
 	TestTrue(TEXT("The UEcine panel has a registered tab spawner"), FGlobalTabmanager::Get()->HasTabSpawner(FUEcineEditorModule::PanelTabId));
+	TestTrue(TEXT("The user guide the panel opens is in the plugin"), FPaths::FileExists(FUEcineEditorModule::GetUserGuideFile()));
 	return true;
 }
 

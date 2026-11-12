@@ -51,6 +51,7 @@ private:
 	bool IsLookingThrough() const;
 	void OnLookThroughChanged(bool bLookThrough);
 	FReply OnNewCameraClicked();
+	FReply OnUserGuideClicked();
 
 	TSharedPtr<FUEcineCameraTarget> Target;
 	TSharedPtr<SUEcineAITab> AITab;

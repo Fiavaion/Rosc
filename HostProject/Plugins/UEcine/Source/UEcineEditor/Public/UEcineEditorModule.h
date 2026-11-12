@@ -14,6 +14,9 @@ public:
 	/** Identifier of the dockable UEcine panel, for opening it from code or tests. */
 	UECINEEDITOR_API static const FName PanelTabId;
 
+	/** The user guide that ships with the plugin: a page a web browser opens. */
+	UECINEEDITOR_API static FString GetUserGuideFile();
+
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
