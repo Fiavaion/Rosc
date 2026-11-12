@@ -237,7 +237,7 @@ void SUEcineGripTab::RebuildMarks()
 TSharedRef<SWidget> SUEcineGripTab::BuildSupportRow()
 {
 	const FText Label = LOCTEXT("SupportLabel", "Camera on");
-	const FText ToolTip = LOCTEXT("SupportToolTip", "What the camera is mounted on. The support is stood up under the camera, so the camera does not move when you choose one.");
+	const FText ToolTip = LOCTEXT("SupportToolTip", "What the camera is mounted on. The support is stood up under the camera, so the camera does not move when you choose one. Once it is on a support the camera moves only as the support moves: it cannot be dragged or flown off it in the viewport.");
 	return MakeRow(Label, ToolTip,
 		SNew(SBox)
 		.MinDesiredHeight(FUEcineStyle::MinTargetSize)

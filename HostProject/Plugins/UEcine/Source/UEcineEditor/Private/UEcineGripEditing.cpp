@@ -138,6 +138,9 @@ AUEcineRig* UEcine::GripEditing::PutCameraOnRig(ACineCameraActor* Camera, const 
 		Rig->Operator.Style = UEcine::Operator::GetDefaultStyle(Preset.Spec.Type);
 		Camera->Modify();
 		Rig->MountCamera(Camera);
+		// The support holds the camera: looking through it and flying the viewport, or dragging
+		// it, would take it off its mount and leave the support's axes describing nothing.
+		Camera->SetLockLocation(true);
 	}
 	else
 	{
@@ -169,6 +172,7 @@ void UEcine::GripEditing::TakeCameraOffRig(ACineCameraActor* Camera)
 	const FScopedTransaction Transaction(LOCTEXT("TakeCameraOffRig", "Take Camera off Support"));
 	Camera->Modify();
 	Camera->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+	Camera->SetLockLocation(false);
 	GEditor->GetEditorSubsystem<UEditorActorSubsystem>()->DestroyActor(Rig);
 	GEditor->RedrawLevelEditingViewports();
 }

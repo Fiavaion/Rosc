@@ -1,6 +1,9 @@
 #include "UEcineStyle.h"
 
+#include "Brushes/SlateImageBrush.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/Paths.h"
 #include "Styling/AppStyle.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateStyleRegistry.h"
@@ -52,6 +55,10 @@ void FUEcineStyle::Register()
 		.SetCheckedImage(FSlateRoundedBoxBrush(FStyleColors::Primary, ToggleRadius, FStyleColors::White, ToggleRing))
 		.SetCheckedHoveredImage(FSlateRoundedBoxBrush(FStyleColors::PrimaryHover, ToggleRadius, FStyleColors::White, ToggleRing))
 		.SetCheckedPressedImage(FSlateRoundedBoxBrush(FStyleColors::PrimaryHover, ToggleRadius, FStyleColors::White, ToggleRing)));
+
+	// The panel's icon, on its tab and beside its name in the Window menu.
+	StyleSet->SetContentRoot(IPluginManager::Get().FindPlugin(TEXT("UEcine"))->GetBaseDir() / TEXT("Resources"));
+	StyleSet->Set("UEcine.Panel", new FSlateVectorImageBrush(StyleSet->RootToContentDir(TEXT("Icons/Panel"), TEXT(".svg")), FVector2f(16.0f, 16.0f)));
 
 	FSlateStyleRegistry::RegisterSlateStyle(*StyleSet);
 }

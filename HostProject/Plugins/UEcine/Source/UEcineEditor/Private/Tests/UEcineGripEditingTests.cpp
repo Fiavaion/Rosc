@@ -72,11 +72,13 @@ bool FUEcineGripCraneMoveTest::RunTest(const FString& Parameters)
 	// Put the camera on a crane. The camera must not move; the crane is built under it.
 	const FUEcineRigPreset& Crane = *UEcine::Rig::FindPreset(TEXT("crane-30ft"));
 	TestNull(TEXT("A new camera is on no rig"), FindRig(Camera));
+	TestFalse(TEXT("A free camera can be moved in the viewport"), Camera->IsLockLocation());
 	AUEcineRig* Rig = PutCameraOnRig(Camera, Crane);
 	if (!TestNotNull(TEXT("The camera is put on a crane"), Rig))
 	{
 		return false;
 	}
+	TestTrue(TEXT("On a support the camera is held: the viewport cannot move it off its mount"), Camera->IsLockLocation());
 	TestTrue(TEXT("The rig is found from the camera"), FindRig(Camera) == Rig);
 	TestTrue(TEXT("The camera did not move"), Camera->GetActorLocation().Equals(CameraStart.GetLocation(), 0.05));
 	TestTrue(TEXT("The camera did not turn"), Camera->GetActorQuat().Equals(CameraStart.GetRotation(), 1.e-4));
@@ -251,6 +253,7 @@ bool FUEcineGripCraneMoveTest::RunTest(const FString& Parameters)
 	GEditor->SelectNone(false, true, false);
 	TakeCameraOffRig(Camera);
 	TestNull(TEXT("The camera is off the rig"), FindRig(Camera));
+	TestFalse(TEXT("Off the support the camera is free again"), Camera->IsLockLocation());
 	TestTrue(TEXT("The camera stays where it was"), Camera->GetActorLocation().Equals(LocationOnRig, 0.05));
 
 	World->EditorDestroyActor(Camera, false);

@@ -30,6 +30,7 @@ public class UEcineEditor : ModuleRules
 			"MovieScene",
 			"MovieSceneTools",
 			"MovieSceneTracks",
+			"Projects",
 			"SceneDepthPickerMode",
 			"SequencerScriptingEditor",
 			"Settings",
