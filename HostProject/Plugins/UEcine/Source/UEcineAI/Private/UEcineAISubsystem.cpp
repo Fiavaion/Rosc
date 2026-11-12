@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineAISubsystem.h"
 
 #include "HAL/FileManager.h"

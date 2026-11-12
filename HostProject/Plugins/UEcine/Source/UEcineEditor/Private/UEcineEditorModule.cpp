@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineEditorModule.h"
 
 #include "Framework/Docking/TabManager.h"

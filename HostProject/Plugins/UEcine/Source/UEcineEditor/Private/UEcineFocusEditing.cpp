@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineFocusEditing.h"
 
 #include "Channels/MovieSceneFloatChannel.h"

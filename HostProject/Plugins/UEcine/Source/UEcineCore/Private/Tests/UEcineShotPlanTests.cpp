@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "Dom/JsonObject.h"
 #include "Misc/AutomationTest.h"
 #include "Serialization/JsonReader.h"

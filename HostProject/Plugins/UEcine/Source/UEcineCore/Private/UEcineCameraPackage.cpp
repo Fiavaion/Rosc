@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineCameraPackage.h"
 
 #include "UEcineCameraDatabase.h"

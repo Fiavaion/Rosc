@@ -1,3 +1,5 @@
+# Copyright 2026 Fiavaion. All rights reserved.
+
 """UEcine AI helper: runs UEcine's picture models outside the Unreal editor.
 
 The UEcine panel starts this on the same machine ("Helper on this machine"), or a studio runs

@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineCameraEditing.h"
 
 #include "CineCameraActor.h"

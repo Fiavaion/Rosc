@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #pragma once
 
 #include "Containers/Ticker.h"

@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineRenderSubsystem.h"
 
 #include "Containers/Ticker.h"

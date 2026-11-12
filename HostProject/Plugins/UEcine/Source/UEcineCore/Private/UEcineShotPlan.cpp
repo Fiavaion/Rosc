@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineShotPlan.h"
 
 #include "Dom/JsonObject.h"

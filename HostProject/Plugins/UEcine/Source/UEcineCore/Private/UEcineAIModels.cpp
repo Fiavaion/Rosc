@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineAIModels.h"
 
 #include "Algo/Find.h"

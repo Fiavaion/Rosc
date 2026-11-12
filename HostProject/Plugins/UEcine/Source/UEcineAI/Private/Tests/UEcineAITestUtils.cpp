@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineAITestUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

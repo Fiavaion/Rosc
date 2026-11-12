@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 // UEcine monitor tools: false colour, zebras, peaking, waveform and histogram.
 // Both shaders work on the picture after tone mapping, so every level here is a displayed
 // (gamma-encoded) signal level between 0 and 1.

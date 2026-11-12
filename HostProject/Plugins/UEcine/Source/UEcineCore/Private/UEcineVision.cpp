@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineVision.h"
 
 TArray<uint16> UEcine::Vision::NearnessToGrey16(TConstArrayView<float> Nearness)

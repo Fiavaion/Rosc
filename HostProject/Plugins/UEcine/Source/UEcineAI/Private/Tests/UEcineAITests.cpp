@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "Editor.h"
 #include "HAL/FileManager.h"
 #include "ImageCore.h"

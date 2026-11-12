@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineGripEditing.h"
 
 #include "Channels/MovieSceneChannelProxy.h"

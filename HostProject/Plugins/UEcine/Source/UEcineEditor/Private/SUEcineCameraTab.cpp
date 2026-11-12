@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "SUEcineCameraTab.h"
 
 #include "CineCameraActor.h"

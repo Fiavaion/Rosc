@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "Misc/AutomationTest.h"
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraPackage.h"

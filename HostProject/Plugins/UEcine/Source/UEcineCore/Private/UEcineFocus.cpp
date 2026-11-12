@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "UEcineFocus.h"
 
 FUEcineMoveTiming UEcine::Focus::MakeRackTiming(double DurationSeconds)

@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "Interfaces/IPluginManager.h"
 #include "Misc/AutomationTest.h"
 #include "UEcineCameraDatabase.h"

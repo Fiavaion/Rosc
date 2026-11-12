@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "SUEcineMonitorTab.h"
 
 #include "UEcineCameraEditing.h"

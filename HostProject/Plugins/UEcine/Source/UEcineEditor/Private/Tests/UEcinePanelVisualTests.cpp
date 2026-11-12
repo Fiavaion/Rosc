@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "CineCameraActor.h"
 #include "Editor.h"
 #include "Engine/StaticMesh.h"

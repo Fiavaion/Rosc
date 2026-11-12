@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 #include "Engine/TextureRenderTarget2D.h"
 #include "Framework/Docking/TabManager.h"
 #include "ImageUtils.h"

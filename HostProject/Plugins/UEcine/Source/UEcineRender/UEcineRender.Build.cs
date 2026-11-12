@@ -1,3 +1,5 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
 using UnrealBuildTool;
 
 public class UEcineRender : ModuleRules
