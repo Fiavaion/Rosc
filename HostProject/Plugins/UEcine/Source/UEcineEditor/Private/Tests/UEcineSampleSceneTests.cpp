@@ -36,6 +36,7 @@ namespace
 	const TCHAR* const SampleStagePackage = TEXT("/UEcine/Sample/UEcineSampleStage");
 	const TCHAR* const SampleCameraLabel = TEXT("A Cam");
 	const TCHAR* const SampleSubjectLabel = TEXT("Anna");
+	const TCHAR* const SampleForegroundLabel = TEXT("Lamp");
 
 	/** Full sun on a clear day, in lux: the camera in the sample is exposed like a real one. */
 	constexpr float SampleSunLux = 100000.0f;
@@ -107,10 +108,15 @@ namespace
 		AddSamplePiece(World, TEXT("Pillar right"), TEXT("Cube"), FVector(420.0, 320.0, 200.0), FVector(0.5, 0.5, 4.0));
 		AddSamplePiece(World, TEXT("Back wall"), TEXT("Cube"), FVector(760.0, 0.0, 175.0), FVector(0.3, 11.0, 3.5));
 		AddSamplePiece(World, TEXT("Crate"), TEXT("Cube"), FVector(-150.0, 190.0, 30.0), FVector(0.6, 0.6, 0.6));
+		// A floor lamp between the camera and the subject: something near to rack the focus to.
+		AStaticMeshActor* Lamp = AddSamplePiece(World, SampleForegroundLabel, TEXT("Cylinder"), FVector(-143.0, -45.0, 75.0), FVector(0.08, 0.08, 1.5));
+		AStaticMeshActor* Shade = AddSamplePiece(World, TEXT("Lamp shade"), TEXT("Cone"), FVector(-143.0, -45.0, 162.0), FVector(0.3, 0.3, 0.25));
+		Shade->AttachToActor(Lamp, FAttachmentTransformRules::KeepWorldTransform);
 
 		// Camera: a real body and lens, exposed for full sun the way a camera would be on the day.
+		// A long lens, open and close to the subject: what is sharp is a narrow slice of the set.
 		const FVector SubjectFace(130.0, 0.0, 150.0);
-		const FVector CameraLocation(-700.0, -200.0, 150.0);
+		const FVector CameraLocation(-330.0, -120.0, 150.0);
 		ACineCameraActor* Camera = UEcine::CameraEditing::SpawnCamera(World, FTransform((SubjectFace - CameraLocation).Rotation(), CameraLocation));
 		const FUEcineCameraDatabase& Database = FUEcineCameraDatabase::Get();
 		const FUEcineCameraBody* Body = Database.FindBody(TEXT("arri-alexa-35"));
@@ -121,15 +127,16 @@ namespace
 			return false;
 		}
 		Camera->SetActorLabel(SampleCameraLabel);
-		const int32 LensIndex = Kit->Lenses.IndexOfByPredicate([](const FUEcineLens& Lens) { return Lens.FocalLengthMm == 35.0; });
+		const int32 LensIndex = Kit->Lenses.IndexOfByPredicate([](const FUEcineLens& Lens) { return Lens.FocalLengthMm == 75.0; });
 		FText Error;
-		const bool bPackaged = Test.TestTrue(TEXT("The kit has a 35 mm"), LensIndex != INDEX_NONE)
+		const bool bPackaged = Test.TestTrue(TEXT("The kit has a 75 mm"), LensIndex != INDEX_NONE)
 			&& UEcine::CameraEditing::EditPackage(Package, FText::FromString(TEXT("Build Camera Package")), [Body, Kit, LensIndex](FUEcineCameraPackage& Edited)
 			{
 				Edited.SelectBody(*Body);
 				Edited.SelectLensKit(*Kit);
 				Edited.SelectLens(*Kit, LensIndex);
-				Edited.TStop = 5.6f;
+				Edited.TStop = 2.8f;
+				Edited.Iso = 400;
 				Edited.ShutterAngleDeg = 180.0f;
 				Edited.NdDensity = 2.1f;
 				Edited.DeliveryAspect = 2.39f;
@@ -179,7 +186,8 @@ namespace
 			return;
 		}
 		Test.TestEqual(TEXT("The camera is an ALEXA 35"), Package->Package.BodyId, FString(TEXT("arri-alexa-35")));
-		Test.TestEqual(TEXT("The camera has the 35 mm on"), Camera->GetCineCameraComponent()->CurrentFocalLength, 35.0f, 0.001f);
+		Test.TestEqual(TEXT("The camera has the 75 mm on"), Camera->GetCineCameraComponent()->CurrentFocalLength, 75.0f, 0.001f);
+		Test.TestNotNull(TEXT("The stage has something in the foreground to rack to"), FindSampleActor<AStaticMeshActor>(World, SampleForegroundLabel));
 		Test.TestTrue(TEXT("The camera is exposed like a real one"), Package->Package.bPhysicalExposure);
 		Test.TestTrue(TEXT("The focus follows the subject"), UEcine::FocusEditing::GetFollowedActor(Camera) == Subject);
 
@@ -228,6 +236,8 @@ namespace
 		}
 		LevelEditor->PilotLevelActor(Camera);
 		ViewportClient->SetGameView(true);
+		// The viewport takes the camera's exposure and focus when it ticks; the pictures are taken before it has.
+		ViewportClient->UpdateViewForLockedActor();
 		TArray<FColor> Pixels;
 		// The sky's light settles over a few frames.
 		for (int32 Frame = 0; Frame < 8; ++Frame)
@@ -246,6 +256,15 @@ namespace
 		TArray<FColor> FalseColour;
 		ViewportClient->Viewport->Draw(false);
 		ViewportClient->Viewport->ReadPixels(FalseColour);
+
+		// And with focus peaking: the colour belongs on the subject, which is what is sharp.
+		FUEcineMonitorSettings Sharpness;
+		Sharpness.bPeaking = true;
+		Monitor->SetSettings(Sharpness);
+		Monitor->UpdateCameraOverlays();
+		TArray<FColor> Peaking;
+		ViewportClient->Viewport->Draw(false);
+		ViewportClient->Viewport->ReadPixels(Peaking);
 		Monitor->SetSettings(MonitorBefore);
 		LevelEditor->EjectPilotLevelActor();
 
@@ -253,21 +272,28 @@ namespace
 		{
 			return;
 		}
+		const FIntPoint Size = ViewportClient->Viewport->GetSizeXY();
+		// The camera's picture sits in the middle of a wider viewport, with black to either side.
+		const FCameraFilmbackSettings& Filmback = Camera->GetCineCameraComponent()->Filmback;
+		const int32 PictureWidth = FMath::Min(Size.X, FMath::RoundToInt32(Size.Y * Filmback.SensorWidth / Filmback.SensorHeight));
+		const int32 PictureLeft = (Size.X - PictureWidth) / 2;
 		double Level = 0.0;
 		int32 Clipped = 0;
-		for (FColor& Pixel : Pixels)
+		for (int32 Y = 0; Y < Size.Y; ++Y)
 		{
-			const double Luma = (0.2126 * Pixel.R + 0.7152 * Pixel.G + 0.0722 * Pixel.B) / 255.0;
-			Level += Luma;
-			Clipped += Luma > 0.98 ? 1 : 0;
-			Pixel.A = 255;
+			for (int32 X = PictureLeft; X < PictureLeft + PictureWidth; ++X)
+			{
+				const FColor& Pixel = Pixels[Y * Size.X + X];
+				const double Luma = (0.2126 * Pixel.R + 0.7152 * Pixel.G + 0.0722 * Pixel.B) / 255.0;
+				Level += Luma;
+				Clipped += Luma > 0.98 ? 1 : 0;
+			}
 		}
-		Level /= Pixels.Num();
-		const double ClippedShare = static_cast<double>(Clipped) / Pixels.Num();
+		Level /= PictureWidth * Size.Y;
+		const double ClippedShare = static_cast<double>(Clipped) / (PictureWidth * Size.Y);
 		Test.AddInfo(FString::Printf(TEXT("Through the stage's camera the picture averages %.2f of full signal, with %.1f %% of it clipped"), Level, ClippedShare * 100.0));
 		Test.TestTrue(TEXT("The stage is exposed: neither dark nor burnt out"), Level > 0.2 && Level < 0.7 && ClippedShare < 0.1);
 
-		const FIntPoint Size = ViewportClient->Viewport->GetSizeXY();
 		const auto Save = [&Test, Size](TArray<FColor>& Picture, const TCHAR* Name)
 		{
 			for (FColor& Pixel : Picture)
@@ -278,6 +304,29 @@ namespace
 			FImageUtils::PNGCompressImageArray(Size.X, Size.Y, TArrayView64<const FColor>(Picture.GetData(), Picture.Num()), Png);
 			Test.TestTrue(*FString::Printf(TEXT("The picture %s was saved"), Name), FFileHelper::SaveArrayToFile(Png, *(FPaths::ProjectSavedDir() / TEXT("UEcine/Screenshots") / Name)));
 		};
+		// Where peaking drew: on the subject in the middle of the frame, or on the rest of the set.
+		if (Test.TestEqual(TEXT("The peaking picture is read back"), Peaking.Num(), Pixels.Num()))
+		{
+			int32 OnSubject = 0;
+			int32 Elsewhere = 0;
+			for (int32 Y = 0; Y < Size.Y; ++Y)
+			{
+				for (int32 X = 0; X < Size.X; ++X)
+				{
+					const FColor& Plain = Pixels[Y * Size.X + X];
+					const FColor& Peaked = Peaking[Y * Size.X + X];
+					if (FMath::Abs(Plain.R - Peaked.R) + FMath::Abs(Plain.G - Peaked.G) + FMath::Abs(Plain.B - Peaked.B) > 60)
+					{
+						const bool bMiddle = FMath::Abs(X - Size.X / 2) < PictureWidth / 4;
+						(bMiddle ? OnSubject : Elsewhere) += 1;
+					}
+				}
+			}
+			Test.AddInfo(FString::Printf(TEXT("Focus peaking marks %d pixels on the subject and %d on the rest of the set"), OnSubject, Elsewhere));
+			Test.TestTrue(TEXT("Peaking marks the subject, which is in focus"), OnSubject > 200);
+			Test.TestTrue(TEXT("Peaking leaves the soft background and foreground alone"), Elsewhere * 10 < OnSubject);
+			Save(Peaking, TEXT("sample-stage-peaking.png"));
+		}
 		Save(Pixels, TEXT("sample-stage.png"));
 		if (Test.TestEqual(TEXT("The false colour picture is read back"), FalseColour.Num(), Pixels.Num()))
 		{
