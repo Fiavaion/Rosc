@@ -51,6 +51,10 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Deliver", meta = (DisplayName = "Burn-ins on Review Movies"))
 	bool bDeliverBurnIn = true;
 
+	/** YouTube files and DCP sources are made at 4K, not at 1080p and 2K. */
+	UPROPERTY(config, EditAnywhere, Category = "Deliver", meta = (DisplayName = "YouTube and DCP Source at 4K"))
+	bool bDeliverFourK = false;
+
 	/**
 	 * The folder shot lists, camera reports and printable pages are written under; each
 	 * sequence has a folder of its own in it. Left empty, they go under UEcine/Paperwork in

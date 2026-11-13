@@ -25,6 +25,7 @@ namespace
 	// header brings a third-party library with it (OpenEXR) are found by path.
 	const TCHAR* const LayeredExrNodeClassPath = TEXT("/Script/MovieRenderPipelineRenderPasses.MovieGraphImageSequenceOutputNode_MultiLayerEXR");
 	const TCHAR* const ProResNodeClassPath = TEXT("/Script/AppleProResMedia.MovieGraphAppleProResNode");
+	const TCHAR* const Mp4NodeClassPath = TEXT("/Script/MovieRenderPipelineMP4Encoder.MovieGraphMP4EncoderNode");
 	const TCHAR* const ObjectIdNodeClassPath = TEXT("/Script/MoviePipelineMaskRenderPass.MovieGraphObjectIdNode");
 	// The engine's own pass materials, as its render pass nodes name them.
 	const TCHAR* const WorldDepthMaterialPath = TEXT("/MovieRenderPipeline/Materials/MovieRenderQueue_WorldDepth.MovieRenderQueue_WorldDepth");
@@ -194,6 +195,17 @@ UMovieGraphConfig* UEcine::RenderGraph::Build(const FUEcineRenderSpec& Spec, UOb
 			return nullptr;
 		}
 		GlobalsBranch.Add(File);
+	}
+	else if (Spec.Format == EUEcineRenderFormat::H264Mp4)
+	{
+		File = Cast<UMovieGraphFileOutputNode>(CreateNodeByPath(Graph, Mp4NodeClassPath));
+		if (File == nullptr || !SetNodeProperty(File, TEXT("EncodingRateControl"), TEXT("VariableBitRate"))
+			|| !SetNodeProperty(File, TEXT("AverageBitrateInMbps"), FString::SanitizeFloat(Spec.VideoBitrateMbps)))
+		{
+			OutError = LOCTEXT("NoMp4", "MP4 movies could not be set up: this version of the engine names its H.264 writer differently.");
+			return nullptr;
+		}
+		PictureBranch.Add(File);
 	}
 	else
 	{

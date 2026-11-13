@@ -15,7 +15,9 @@ enum class EUEcineRenderFormat : uint8
 	/** Apple ProRes 4444 in a .mov file: a finished picture for the grade. */
 	ProRes4444,
 	/** One OpenEXR file per frame, holding every pass as a layer. */
-	MultilayerExr
+	MultilayerExr,
+	/** H.264 in an .mp4 file: small, and plays anywhere. */
+	H264Mp4
 };
 
 /** A name and a value written into the files that carry metadata, and read by the slate and the burn-ins. */
@@ -69,6 +71,8 @@ struct FUEcineRenderSpec
 	int32 TemporalSamples = 1;
 	/** Frames played before the first one that is kept, so that lighting and exposure have settled. */
 	int32 WarmUpFrames = 0;
+	/** The megabits a second an H.264 movie averages. Other formats do not read it. */
+	double VideoBitrateMbps = 8.0;
 
 	TArray<FUEcineMetadataEntry> Metadata;
 };
@@ -80,9 +84,15 @@ enum class EUEcineDeliverIntent : uint8
 	/** A light movie of each shot with a slate and burn-ins, to pass around and comment on. */
 	Review,
 	/** Every frame as an OpenEXR file with the passes, camera and lens data that visual effects work from. */
-	VfxHandoff UMETA(DisplayName = "VFX Handoff"),
+	VfxHandoff UMETA(DisplayName = "VFX Passes"),
 	/** The finished picture of each shot at full quality, clean. */
-	Master
+	Master,
+	/** A small, quick movie of each shot to look at while working. */
+	Draft,
+	/** The finished picture of each shot as a file ready to upload to YouTube. */
+	YouTube,
+	/** The finished picture of each shot in a cinema's frame, for a DCP to be made from. */
+	DcpSource UMETA(DisplayName = "DCP Source")
 };
 
 /** What Deliver knows of one shot before it is rendered. */
@@ -116,6 +126,8 @@ struct FUEcineDeliverSettings
 	bool bSlate = true;
 	/** Review movies carry camera and shot data over the picture. */
 	bool bBurnIn = true;
+	/** YouTube files and DCP sources are made at 4K, not at 1080p and 2K. */
+	bool bFourK = false;
 };
 
 /** A word in braces that stands for something of the shot in a file name. */
@@ -197,7 +209,9 @@ enum class EUEcinePreflightCheck : uint8
 	/** A VFX handoff is asked for and the project does not work in ACEScg. */
 	WorkingColourSpace,
 	/** A review movie's slate falls before the first frame of the sequence, where there is no timecode for it. */
-	SlateBeforeSequenceStart
+	SlateBeforeSequenceStart,
+	/** A DCP source is asked for and the sequence does not play at 24 frames a second. */
+	DcpFrameRate
 };
 
 /** What preflight is told of one shot. */
@@ -257,21 +271,23 @@ namespace UEcine::Deliver
 	/** Every intent, in the order Deliver offers them. */
 	UECINECORE_API TConstArrayView<EUEcineDeliverIntent> GetIntents();
 
-	/** The name of a kind of delivery: "Review", "VFX Handoff", "Master". */
+	/** The name of a kind of delivery: "Review", "VFX Passes", "DCP Source". */
 	UECINECORE_API FText GetIntentName(EUEcineDeliverIntent Intent);
 
 	/** One sentence on what an intent makes. */
 	UECINECORE_API FText GetIntentDescription(EUEcineDeliverIntent Intent);
 
-	/** What stands for an intent in file and folder names: "review", "vfx", "master". */
+	/** What stands for an intent in file names: "draft", "review", "vfx", "master", "youtube", "dcp". */
 	UECINECORE_API const TCHAR* GetIntentToken(EUEcineDeliverIntent Intent);
 
 	/**
 	 * The size in pixels a shot is rendered at. Review fits the delivery frame into 1920 by
-	 * 1080. A VFX handoff is everything the camera records, at the recording format's width.
-	 * Master is the delivery frame cut from that. Sides are even numbers.
+	 * 1080 and Draft into half that. A VFX handoff is everything the camera records, at the
+	 * recording format's width. Master is the delivery frame cut from that. YouTube fits the
+	 * delivery frame into 1920 by 1080, or 3840 by 2160 at 4K; a DCP source fits it into the
+	 * cinema's 2048 by 1080, or 4096 by 2160 at 4K. Sides are even numbers.
 	 */
-	UECINECORE_API FIntPoint GetOutputResolution(EUEcineDeliverIntent Intent, const FUEcineDeliverShot& Shot);
+	UECINECORE_API FIntPoint GetOutputResolution(EUEcineDeliverIntent Intent, const FUEcineDeliverShot& Shot, bool bFourK = false);
 
 	/** The pattern files are named by until the user writes another. */
 	inline const TCHAR* const DefaultNamePattern = TEXT("{sequence}_{shot}_{intent}_{version}");

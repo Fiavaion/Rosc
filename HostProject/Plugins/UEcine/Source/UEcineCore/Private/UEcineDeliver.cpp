@@ -126,12 +126,18 @@ int32 UEcine::Deliver::GetHandleFrames(const FUEcineRenderSpec& Spec)
 
 const TCHAR* UEcine::Deliver::GetFileExtension(EUEcineRenderFormat Format)
 {
-	return Format == EUEcineRenderFormat::MultilayerExr ? TEXT("exr") : TEXT("mov");
+	switch (Format)
+	{
+	case EUEcineRenderFormat::MultilayerExr: return TEXT("exr");
+	case EUEcineRenderFormat::H264Mp4: return TEXT("mp4");
+	default: return TEXT("mov");
+	}
 }
 
 TConstArrayView<EUEcineDeliverIntent> UEcine::Deliver::GetIntents()
 {
-	static const EUEcineDeliverIntent Intents[] = { EUEcineDeliverIntent::Review, EUEcineDeliverIntent::VfxHandoff, EUEcineDeliverIntent::Master };
+	static const EUEcineDeliverIntent Intents[] = { EUEcineDeliverIntent::Draft, EUEcineDeliverIntent::Review, EUEcineDeliverIntent::VfxHandoff,
+		EUEcineDeliverIntent::Master, EUEcineDeliverIntent::YouTube, EUEcineDeliverIntent::DcpSource };
 	return Intents;
 }
 
@@ -139,8 +145,11 @@ FText UEcine::Deliver::GetIntentName(EUEcineDeliverIntent Intent)
 {
 	switch (Intent)
 	{
+	case EUEcineDeliverIntent::Draft: return LOCTEXT("IntentDraft", "Draft");
 	case EUEcineDeliverIntent::Review: return LOCTEXT("IntentReview", "Review");
-	case EUEcineDeliverIntent::VfxHandoff: return LOCTEXT("IntentVfx", "VFX Handoff");
+	case EUEcineDeliverIntent::VfxHandoff: return LOCTEXT("IntentVfx", "VFX Passes");
+	case EUEcineDeliverIntent::YouTube: return LOCTEXT("IntentYouTube", "YouTube");
+	case EUEcineDeliverIntent::DcpSource: return LOCTEXT("IntentDcp", "DCP Source");
 	default: return LOCTEXT("IntentMaster", "Master");
 	}
 }
@@ -149,6 +158,12 @@ FText UEcine::Deliver::GetIntentDescription(EUEcineDeliverIntent Intent)
 {
 	switch (Intent)
 	{
+	case EUEcineDeliverIntent::Draft:
+		return LOCTEXT("IntentDraftDescription", "A small, quick MP4 movie of each shot at half the review size, with burn-ins, to look at while you work. It plays in any player.");
+	case EUEcineDeliverIntent::YouTube:
+		return LOCTEXT("IntentYouTubeDescription", "The finished picture of each shot as an H.264 MP4 file at the settings YouTube asks for, with smooth motion blur and nothing drawn over it. The file is made on this computer; uploading it is up to you.");
+	case EUEcineDeliverIntent::DcpSource:
+		return LOCTEXT("IntentDcpDescription", "The finished picture of each shot as a ProRes 4444 movie in the cinema's 2K or 4K frame, for a DCP program such as DCP-o-matic to make the cinema package from. UEcine does not write the DCP itself.");
 	case EUEcineDeliverIntent::Review:
 		return LOCTEXT("IntentReviewDescription", "A light ProRes movie of each shot in its delivery frame, with a slate and burn-ins, to pass around and comment on.");
 	case EUEcineDeliverIntent::VfxHandoff:
@@ -162,8 +177,11 @@ const TCHAR* UEcine::Deliver::GetIntentToken(EUEcineDeliverIntent Intent)
 {
 	switch (Intent)
 	{
+	case EUEcineDeliverIntent::Draft: return TEXT("draft");
 	case EUEcineDeliverIntent::Review: return TEXT("review");
 	case EUEcineDeliverIntent::VfxHandoff: return TEXT("vfx");
+	case EUEcineDeliverIntent::YouTube: return TEXT("youtube");
+	case EUEcineDeliverIntent::DcpSource: return TEXT("dcp");
 	default: return TEXT("master");
 	}
 }
@@ -172,20 +190,45 @@ const TCHAR* UEcine::Deliver::GetIntentFolder(EUEcineDeliverIntent Intent)
 {
 	switch (Intent)
 	{
+	case EUEcineDeliverIntent::Draft: return TEXT("Draft");
 	case EUEcineDeliverIntent::Review: return TEXT("Review");
 	case EUEcineDeliverIntent::VfxHandoff: return TEXT("VFX");
+	case EUEcineDeliverIntent::YouTube: return TEXT("YouTube");
+	case EUEcineDeliverIntent::DcpSource: return TEXT("DCP");
 	default: return TEXT("Master");
 	}
 }
 
-FIntPoint UEcine::Deliver::GetOutputResolution(EUEcineDeliverIntent Intent, const FUEcineDeliverShot& Shot)
+FIntPoint UEcine::Deliver::GetOutputResolution(EUEcineDeliverIntent Intent, const FUEcineDeliverShot& Shot, const bool bFourK)
 {
 	const double Recorded = Shot.RecordedAspect > 0.0 ? Shot.RecordedAspect : UnknownRecordedAspect;
 	const double Delivery = Shot.DeliveryAspect > 0.0 ? Shot.DeliveryAspect : Recorded;
 
-	if (Intent == EUEcineDeliverIntent::Review)
+	// The largest frame of the delivery's shape that fits in a box.
+	const auto FitInto = [Delivery](const double Width, const double Height)
 	{
-		return Delivery >= 16.0 / 9.0 ? FIntPoint(1920, MakeEven(1920.0 / Delivery)) : FIntPoint(MakeEven(1080.0 * Delivery), 1080);
+		return Delivery >= Width / Height ? FIntPoint(MakeEven(Width), MakeEven(Width / Delivery)) : FIntPoint(MakeEven(Height * Delivery), MakeEven(Height));
+	};
+	switch (Intent)
+	{
+	case EUEcineDeliverIntent::Draft: return FitInto(960.0, 540.0);
+	case EUEcineDeliverIntent::Review: return FitInto(1920.0, 1080.0);
+	case EUEcineDeliverIntent::YouTube: return bFourK ? FitInto(3840.0, 2160.0) : FitInto(1920.0, 1080.0);
+	case EUEcineDeliverIntent::DcpSource:
+	{
+		// The cinema's two frames, scope and flat, at their exact sizes; any other shape is fitted into the cinema's container.
+		const int32 Scale = bFourK ? 2 : 1;
+		if (FMath::IsNearlyEqual(Delivery, 2.39, 0.025))
+		{
+			return FIntPoint(2048, 858) * Scale;
+		}
+		if (FMath::IsNearlyEqual(Delivery, 1.85, 0.02))
+		{
+			return FIntPoint(1998, 1080) * Scale;
+		}
+		return FitInto(2048.0 * Scale, 1080.0 * Scale);
+	}
+	default: break;
 	}
 
 	// Everything recorded: the smallest frame of the recorded shape that loses none of the
@@ -211,7 +254,7 @@ TConstArrayView<FUEcineNameToken> UEcine::Deliver::GetNameTokens()
 		{ TEXT("{shot}"), LOCTEXT("TokenShot", "The shot's name") },
 		{ TEXT("{size}"), LOCTEXT("TokenSize", "The shot's size") },
 		{ TEXT("{camera}"), LOCTEXT("TokenCamera", "The camera's name") },
-		{ TEXT("{intent}"), LOCTEXT("TokenIntent", "What the delivery is for: review, vfx or master") },
+		{ TEXT("{intent}"), LOCTEXT("TokenIntent", "What the delivery is for: draft, review, vfx, master, youtube or dcp") },
 		{ TEXT("{date}"), LOCTEXT("TokenDate", "The day of the delivery") },
 		{ VersionToken, LOCTEXT("TokenVersion", "The version, counted up from the files already in the folder") }
 	};
@@ -313,7 +356,7 @@ TArray<FUEcineMetadataEntry> UEcine::Deliver::MakeMetadata(EUEcineDeliverIntent 
 	{
 		AddMetadata(Metadata, MetaDeliveryFrame, UEcine::GetDeliveryAspectName(static_cast<float>(Shot.DeliveryAspect)).ToString());
 	}
-	// A picture made for a display is Rec.709, which is what the engine's ProRes files are.
+	// A picture made for a display is Rec.709, which is what the engine's ProRes and MP4 files are.
 	AddMetadata(Metadata, MetaColourSpace, Intent == EUEcineDeliverIntent::VfxHandoff ? Settings.SceneLinearColourSpace : FString(TEXT("Rec.709")));
 	AddMetadata(Metadata, MetaDistanceUnits, Settings.DistanceUnits == EUEcineDistanceUnits::Imperial ? ImperialUnitsValue : MetricUnitsValue);
 	AddMetadata(Metadata, MetaDate, Settings.Date);
@@ -326,13 +369,32 @@ FUEcineRenderSpec UEcine::Deliver::MakeRenderSpec(EUEcineDeliverIntent Intent, c
 	FUEcineRenderSpec Spec;
 	Spec.OutputDirectory = Settings.OutputDirectory / GetIntentFolder(Intent);
 	Spec.FileName = ResolveFileName(Settings.NamePattern.IsEmpty() ? FString(DefaultNamePattern) : Settings.NamePattern, Intent, Settings, Shot);
-	Spec.Resolution = GetOutputResolution(Intent, Shot);
+	Spec.Resolution = GetOutputResolution(Intent, Shot, Settings.bFourK);
 	Spec.Metadata = MakeMetadata(Intent, Settings, Shot);
 	// Long enough for exposure and the picture's history to settle before the first frame kept.
 	Spec.WarmUpFrames = 8;
 
 	switch (Intent)
 	{
+	case EUEcineDeliverIntent::Draft:
+		Spec.Format = EUEcineRenderFormat::H264Mp4;
+		Spec.VideoBitrateMbps = 4.0;
+		Spec.bDeliveryFrameOnly = true;
+		Spec.bBurnIn = true;
+		break;
+	case EUEcineDeliverIntent::YouTube:
+		Spec.Format = EUEcineRenderFormat::H264Mp4;
+		// YouTube asks for 8 to 12 megabits a second at 1080p and 35 to 68 at 2160p, by frame rate.
+		Spec.VideoBitrateMbps = Settings.bFourK ? 50.0 : 12.0;
+		Spec.bDeliveryFrameOnly = true;
+		Spec.TemporalSamples = 8;
+		break;
+	case EUEcineDeliverIntent::DcpSource:
+		// Twelve bits a channel in Rec.709, which is what a DCP program expects of a movie.
+		Spec.Format = EUEcineRenderFormat::ProRes4444;
+		Spec.bDeliveryFrameOnly = true;
+		Spec.TemporalSamples = 8;
+		break;
 	case EUEcineDeliverIntent::Review:
 		Spec.Format = EUEcineRenderFormat::ProRes422LT;
 		Spec.bDeliveryFrameOnly = true;
@@ -568,6 +630,14 @@ TArray<FUEcinePreflightFinding> UEcine::Deliver::RunPreflight(const FUEcinePrefl
 			LOCTEXT("PreflightColourSpace", "The project does not work in ACEScg"),
 			LOCTEXT("PreflightColourSpaceDetail", "Visual effects usually ask for ACEScg. The files will be scene-linear in the project's own colour space, and say so. Changing the project's working colour space needs the editor to be restarted, and changes how colours in the project are read."),
 			LOCTEXT("PreflightColourSpaceFix", "Work in ACEScg")));
+	}
+
+	if (Facts.Intent == EUEcineDeliverIntent::DcpSource && Facts.bHasSequence && !FMath::IsNearlyEqual(Facts.SequenceFramesPerSecond, 24.0, 0.001))
+	{
+		Findings.Add(MakeFinding(EUEcinePreflightCheck::DcpFrameRate, false, FString(),
+			LOCTEXT("PreflightDcpFrameRate", "The sequence does not play at 24 frames a second"),
+			FText::Format(LOCTEXT("PreflightDcpFrameRateDetail", "The sequence plays at {0} frames a second. Every cinema projector plays 24; other rates are not played everywhere, and a DCP program may have to change the speed of the picture. Set the sequence to 24 fps in Sequencer, or ask the cinema what it can play."),
+				FText::AsNumber(Facts.SequenceFramesPerSecond, &FNumberFormattingOptions().SetMaximumFractionalDigits(3)))));
 	}
 
 	if (Facts.Intent == EUEcineDeliverIntent::Review && Facts.bSlate)

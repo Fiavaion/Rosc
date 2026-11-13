@@ -712,7 +712,7 @@ bool FUEcineDeliverTabVisualTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-/** A picture of the Deliver tab with no sequence open, set to deliver a VFX handoff: preflight says what is missing. */
+/** A picture of the Deliver tab with no sequence open, set to deliver a DCP source at its choice of size: preflight says what is missing. */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineDeliverTabStatesVisualTest, "UEcine.Editor.Visual.DeliverTabStates", VisualTestFlags)
 
 bool FUEcineDeliverTabStatesVisualTest::RunTest(const FString& Parameters)
@@ -723,7 +723,7 @@ bool FUEcineDeliverTabStatesVisualTest::RunTest(const FString& Parameters)
 	}
 
 	const FUEcineDeliverChoicesBefore ChoicesBefore;
-	UEcine::DeliverEditing::EditChoices([](UUEcineEditorSettings& Choices) { Choices.DeliverIntent = EUEcineDeliverIntent::VfxHandoff; });
+	UEcine::DeliverEditing::EditChoices([](UUEcineEditorSettings& Choices) { Choices.DeliverIntent = EUEcineDeliverIntent::DcpSource; });
 	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
 	GEditor->SelectNone(false, true, false);
 	QueuePanelCaptures(*this, nullptr, TEXT("deliver-tab-no-sequence"), EUEcineDepartment::Deliver, 800.0f, NarrowOnly);

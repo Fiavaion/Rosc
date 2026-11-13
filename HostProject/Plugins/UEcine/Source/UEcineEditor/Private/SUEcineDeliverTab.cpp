@@ -154,6 +154,10 @@ void SUEcineDeliverTab::RebuildLayout()
 	{
 		Add(FUEcineStyle::RowPadding, BuildReviewOptions());
 	}
+	else if (CurrentLayoutKey.Intent == EUEcineDeliverIntent::YouTube || CurrentLayoutKey.Intent == EUEcineDeliverIntent::DcpSource)
+	{
+		Add(FUEcineStyle::RowPadding, BuildSizeOptions());
+	}
 
 	Add(FUEcineStyle::SectionPadding, MakeSectionHeader(LOCTEXT("DeliverFilesSection", "Files")));
 	Add(FUEcineStyle::RowPadding, BuildFolderRow());
@@ -236,10 +240,37 @@ TSharedRef<SWidget> SUEcineDeliverTab::BuildReviewOptions()
 	return MakeRow(LOCTEXT("ReviewOptionsLabel", "Movie has"), LOCTEXT("ReviewOptionsToolTip", "What is added to each review movie."), Options);
 }
 
+TSharedRef<SWidget> SUEcineDeliverTab::BuildSizeOptions()
+{
+	const bool bCinema = CurrentLayoutKey.Intent == EUEcineDeliverIntent::DcpSource;
+	const auto AddSize = [this](const TSharedRef<SWrapBox>& Sizes, const FText& Label, const FText& ToolTip, const bool bFourK)
+	{
+		Sizes->AddSlot()
+		[
+			MakeToggleButton(Label, ToolTip,
+				TAttribute<bool>::CreateLambda([bFourK] { return GetDefault<UUEcineEditorSettings>()->bDeliverFourK == bFourK; }),
+				[this, bFourK](bool) { EditChoices([bFourK](UUEcineEditorSettings& Choices) { Choices.bDeliverFourK = bFourK; }); })
+		];
+	};
+	const TSharedRef<SWrapBox> Sizes = MakeButtonRow();
+	if (bCinema)
+	{
+		AddSize(Sizes, LOCTEXT("SizeDci2K", "2K"), LOCTEXT("SizeDci2KToolTip", "2K: the delivery frame fitted into 2048 by 1080, which every cinema projector plays."), false);
+		AddSize(Sizes, LOCTEXT("SizeDci4K", "4K"), LOCTEXT("SizeDci4KToolTip", "4K: the delivery frame fitted into 4096 by 2160. It takes about four times as long to render."), true);
+	}
+	else
+	{
+		AddSize(Sizes, LOCTEXT("SizeHd", "1080p"), LOCTEXT("SizeHdToolTip", "1080p: the delivery frame fitted into 1920 by 1080."), false);
+		AddSize(Sizes, LOCTEXT("SizeUhd", "4K"), LOCTEXT("SizeUhdToolTip", "4K: the delivery frame fitted into 3840 by 2160. It takes about four times as long to render, and YouTube keeps more of the picture's quality."), true);
+	}
+	Sizes->SetEnabled(!CurrentLayoutKey.bRendering);
+	return MakeRow(LOCTEXT("SizeOptionsLabel", "Size"), LOCTEXT("SizeOptionsToolTip", "How large the picture is made."), Sizes);
+}
+
 TSharedRef<SWidget> SUEcineDeliverTab::BuildFolderRow()
 {
 	const FText Label = LOCTEXT("DeliverFolderLabel", "Folder");
-	const FText ToolTip = LOCTEXT("DeliverFolderToolTip", "The folder deliveries are written under. Each sequence has a folder of its own in it, with Review, VFX and Master inside. Clear the box to go back to the project's own folder, Saved/UEcine/Deliveries.");
+	const FText ToolTip = LOCTEXT("DeliverFolderToolTip", "The folder deliveries are written under. Each sequence has a folder of its own in it, with a folder for each kind of delivery inside. Clear the box to go back to the project's own folder, Saved/UEcine/Deliveries.");
 
 	const TSharedRef<SWidget> Folder = MakeFolderControl(Label, ToolTip, LOCTEXT("BrowseFolderToolTip", "Choose the delivery folder"),
 		[] { return GetDeliveryFolder(); },
@@ -498,7 +529,7 @@ TSharedRef<SWidget> SUEcineDeliverTab::BuildHandoff()
 		.AutoHeight()
 		.Padding(FUEcineStyle::RowPadding)
 		[
-			MakeNote(LOCTEXT("HandoffNote", "A copy of the sequence and its shots that plays the same pictures on plain cameras and Sequencer keys, to open in a project without UEcine. A VFX handoff makes it by itself."))
+			MakeNote(LOCTEXT("HandoffNote", "A copy of the sequence and its shots that plays the same pictures on plain cameras and Sequencer keys, to open in a project without UEcine. A VFX Passes delivery makes it by itself."))
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()

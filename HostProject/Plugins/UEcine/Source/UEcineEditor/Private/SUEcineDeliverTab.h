@@ -60,6 +60,7 @@ private:
 	void RebuildLayout();
 
 	TSharedRef<SWidget> BuildIntentChoice();
+	TSharedRef<SWidget> BuildSizeOptions();
 	TSharedRef<SWidget> BuildReviewOptions();
 	TSharedRef<SWidget> BuildFolderRow();
 	TSharedRef<SWidget> BuildNameRow();

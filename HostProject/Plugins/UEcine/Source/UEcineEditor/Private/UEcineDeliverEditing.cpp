@@ -315,6 +315,7 @@ FUEcineDeliverSettings UEcine::DeliverEditing::GetSettings()
 	Settings.DistanceUnits = Choices->DistanceUnits;
 	Settings.bSlate = Choices->bDeliverSlate;
 	Settings.bBurnIn = Choices->bDeliverBurnIn;
+	Settings.bFourK = Choices->bDeliverFourK;
 	return Settings;
 }
 

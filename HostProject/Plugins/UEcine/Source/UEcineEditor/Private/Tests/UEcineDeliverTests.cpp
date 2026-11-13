@@ -774,8 +774,9 @@ bool FUEcineDeliverPreflightFixesTest::RunTest(const FString& Parameters)
 }
 
 /**
- * The Phase 5 workflow: a two-shot sequence is delivered for review, as a VFX handoff (twice,
- * the second time with every monitor tool on) and as a master, and the files are read back.
+ * The Phase 5 workflow: a two-shot sequence is delivered as a draft, for review, as a VFX
+ * handoff (twice, the second time with every monitor tool on), as a master, for YouTube and as
+ * a DCP source, and the files are read back.
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineDeliverIntentsTest, "UEcine.Editor.Deliver.Intents", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
@@ -809,7 +810,7 @@ bool FUEcineDeliverIntentsTest::RunTest(const FString& Parameters)
 		}
 		return true;
 	};
-	const auto CheckMovies = [this, State](const TCHAR* IntentToken, int32 Frames, const ANSICHAR* Codec)
+	const auto CheckMovies = [this, State](const TCHAR* IntentToken, int32 Frames, const ANSICHAR* Codec, const TCHAR* Extension = TEXT(".mov"))
 	{
 		const FUEcineRenderResult& Result = GEditor->GetEditorSubsystem<UUEcineRenderSubsystem>()->GetLastResult();
 		TestTrue(*FString::Printf(TEXT("%hs: the render succeeded"), Codec), Result.bSuccess);
@@ -818,9 +819,10 @@ bool FUEcineDeliverIntentsTest::RunTest(const FString& Parameters)
 		TestTrue(*FString::Printf(TEXT("%hs: nothing is written beside the movies"), Codec), State->Delivery.Files.IsEmpty());
 		for (int32 ShotIndex = 0; ShotIndex < State->Shots.Num(); ++ShotIndex)
 		{
-			const FString Movie = State->Delivery.Directory / GetDeliveredName(*State, ShotIndex, IntentToken) + TEXT(".mov");
+			const FString Movie = State->Delivery.Directory / GetDeliveredName(*State, ShotIndex, IntentToken) + Extension;
 			if (TestTrue(*FString::Printf(TEXT("%s is written"), *Movie), IFileManager::Get().FileExists(*Movie)))
 			{
+				AddInfo(FString::Printf(TEXT("%s: %lld bytes"), *Movie, IFileManager::Get().FileSize(*Movie)));
 				TestEqual(*FString::Printf(TEXT("%s plays the right number of frames"), *Movie), UEcine::RenderedFiles::CountMovFrames(Movie), Frames);
 				TestTrue(*FString::Printf(TEXT("%s is in the codec %hs"), *Movie, Codec), FileHoldsText(Movie, Codec));
 			}
@@ -828,6 +830,13 @@ bool FUEcineDeliverIntentsTest::RunTest(const FString& Parameters)
 	};
 
 	TArray<FDeliverTestStage> Stages;
+
+	// Draft: a small H.264 movie, the shot and nothing else.
+	Stages.Add({ [Start] { return Start(EUEcineDeliverIntent::Draft); }, [this, State, CheckMovies]
+	{
+		CheckMovies(TEXT("draft"), DeliverTestShotFrames, "avc1", TEXT(".mp4"));
+		TestTrue(TEXT("Drafts go in the Draft folder of the sequence's deliveries"), FPaths::IsSamePath(State->Delivery.Directory, State->OutputDirectory / State->CreatedSequences[0]->GetName() / TEXT("Draft")));
+	} });
 
 	// Review: ProRes 422 LT, with a slate before the shot and a frame after it.
 	Stages.Add({ [Start] { return Start(EUEcineDeliverIntent::Review); }, [this, State, CheckMovies]
@@ -873,6 +882,18 @@ bool FUEcineDeliverIntentsTest::RunTest(const FString& Parameters)
 	Stages.Add({ [Start] { return Start(EUEcineDeliverIntent::Master); }, [CheckMovies]
 	{
 		CheckMovies(TEXT("master"), DeliverTestShotFrames, "ap4h");
+	} });
+
+	// YouTube: H.264 in an MP4 file, clean.
+	Stages.Add({ [Start] { return Start(EUEcineDeliverIntent::YouTube); }, [CheckMovies]
+	{
+		CheckMovies(TEXT("youtube"), DeliverTestShotFrames, "avc1", TEXT(".mp4"));
+	} });
+
+	// DCP source: ProRes 4444 in the cinema's frame, clean.
+	Stages.Add({ [Start] { return Start(EUEcineDeliverIntent::DcpSource); }, [CheckMovies]
+	{
+		CheckMovies(TEXT("dcp"), DeliverTestShotFrames, "ap4h");
 	} });
 
 	RunDeliverTestStages(*this, State, MoveTemp(Stages));

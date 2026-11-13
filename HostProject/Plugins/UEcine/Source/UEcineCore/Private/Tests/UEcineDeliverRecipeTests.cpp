@@ -82,6 +82,16 @@ bool FUEcineDeliverResolutionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Review in 2.39:1 is 1920 wide"), GetOutputResolution(EUEcineDeliverIntent::Review, Shot), FIntPoint(1920, 804));
 	TestEqual(TEXT("A VFX handoff is the whole recording format"), GetOutputResolution(EUEcineDeliverIntent::VfxHandoff, Shot), FIntPoint(4608, 3164));
 	TestEqual(TEXT("Master is the delivery frame cut from the format's width"), GetOutputResolution(EUEcineDeliverIntent::Master, Shot), FIntPoint(4608, 1928));
+	TestEqual(TEXT("A draft is half the review size"), GetOutputResolution(EUEcineDeliverIntent::Draft, Shot), FIntPoint(960, 402));
+	TestEqual(TEXT("YouTube in 2.39:1 is 1920 wide"), GetOutputResolution(EUEcineDeliverIntent::YouTube, Shot), FIntPoint(1920, 804));
+	TestEqual(TEXT("YouTube at 4K is 3840 wide"), GetOutputResolution(EUEcineDeliverIntent::YouTube, Shot, true), FIntPoint(3840, 1606));
+	TestEqual(TEXT("A DCP source in 2.39:1 is the cinema's scope frame"), GetOutputResolution(EUEcineDeliverIntent::DcpSource, Shot), FIntPoint(2048, 858));
+	TestEqual(TEXT("And at 4K"), GetOutputResolution(EUEcineDeliverIntent::DcpSource, Shot, true), FIntPoint(4096, 1716));
+	Shot.DeliveryAspect = 1.85;
+	TestEqual(TEXT("A DCP source in 1.85:1 is the cinema's flat frame"), GetOutputResolution(EUEcineDeliverIntent::DcpSource, Shot), FIntPoint(1998, 1080));
+	Shot.DeliveryAspect = 16.0 / 9.0;
+	TestEqual(TEXT("A 16:9 DCP source is fitted into the cinema's height"), GetOutputResolution(EUEcineDeliverIntent::DcpSource, Shot), FIntPoint(1920, 1080));
+	TestEqual(TEXT("Size at 4K is for YouTube and DCP sources only"), GetOutputResolution(EUEcineDeliverIntent::Review, Shot, true), FIntPoint(1920, 1080));
 
 	Shot.DeliveryAspect = 4.0 / 3.0;
 	TestEqual(TEXT("Review in 4:3 is 1080 high"), GetOutputResolution(EUEcineDeliverIntent::Review, Shot), FIntPoint(1440, 1080));
@@ -172,6 +182,32 @@ bool FUEcineDeliverSpecTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Master is ProRes 4444"), Master.Format, EUEcineRenderFormat::ProRes4444);
 	TestTrue(TEXT("Master is the delivery frame at full size, with smooth motion blur"), Master.bDeliveryFrameOnly && Master.Resolution == FIntPoint(4608, 1928) && Master.TemporalSamples > 1);
 	TestFalse(TEXT("Master is clean"), Master.bSlate || Master.bBurnIn);
+
+	const FUEcineRenderSpec Draft = MakeRenderSpec(EUEcineDeliverIntent::Draft, Settings, Shot);
+	TestEqual(TEXT("A draft is an MP4 movie"), Draft.Format, EUEcineRenderFormat::H264Mp4);
+	TestTrue(TEXT("A draft is small and quick, with burn-ins and no slate"), Draft.Resolution == FIntPoint(960, 402) && Draft.TemporalSamples == 1 && Draft.bBurnIn && !Draft.bSlate && Draft.bDeliveryFrameOnly);
+	TestEqual(TEXT("A draft's file as it will be on disk"), PreviewFile(EUEcineDeliverIntent::Draft, Draft), FString(TEXT("Draft/Harbour_Night_shot0010_draft_v001.mp4")));
+
+	const FUEcineRenderSpec YouTube = MakeRenderSpec(EUEcineDeliverIntent::YouTube, Settings, Shot);
+	TestEqual(TEXT("A YouTube file is an MP4 movie"), YouTube.Format, EUEcineRenderFormat::H264Mp4);
+	TestTrue(TEXT("A YouTube file is the finished picture, clean"), YouTube.bDeliveryFrameOnly && YouTube.TemporalSamples > 1 && !YouTube.bSlate && !YouTube.bBurnIn && !YouTube.bSceneLinear);
+	TestTrue(TEXT("At 1080p it has the bit rate YouTube asks for"), YouTube.Resolution == FIntPoint(1920, 804) && YouTube.VideoBitrateMbps >= 8.0 && YouTube.VideoBitrateMbps <= 12.0);
+	TestEqual(TEXT("A YouTube file as it will be on disk"), PreviewFile(EUEcineDeliverIntent::YouTube, YouTube), FString(TEXT("YouTube/Harbour_Night_shot0010_youtube_v001.mp4")));
+	Settings.bFourK = true;
+	const FUEcineRenderSpec YouTube4K = MakeRenderSpec(EUEcineDeliverIntent::YouTube, Settings, Shot);
+	TestTrue(TEXT("At 4K it is larger, at a higher bit rate"), YouTube4K.Resolution == FIntPoint(3840, 1606) && YouTube4K.VideoBitrateMbps >= 35.0 && YouTube4K.VideoBitrateMbps <= 68.0);
+	TestEqual(TEXT("A DCP source at 4K is the cinema's 4K scope frame"), MakeRenderSpec(EUEcineDeliverIntent::DcpSource, Settings, Shot).Resolution, FIntPoint(4096, 1716));
+	TestEqual(TEXT("Master is not changed by the 4K choice"), MakeRenderSpec(EUEcineDeliverIntent::Master, Settings, Shot).Resolution, Master.Resolution);
+	Settings.bFourK = false;
+
+	const FUEcineRenderSpec Dcp = MakeRenderSpec(EUEcineDeliverIntent::DcpSource, Settings, Shot);
+	TestEqual(TEXT("A DCP source is ProRes 4444"), Dcp.Format, EUEcineRenderFormat::ProRes4444);
+	TestTrue(TEXT("A DCP source is the finished picture in the cinema's frame, clean"), Dcp.Resolution == FIntPoint(2048, 858) && Dcp.bDeliveryFrameOnly && Dcp.TemporalSamples > 1 && !Dcp.bSlate && !Dcp.bBurnIn);
+	TestEqual(TEXT("A DCP source's file as it will be on disk"), PreviewFile(EUEcineDeliverIntent::DcpSource, Dcp), FString(TEXT("DCP/Harbour_Night_shot0010_dcp_v001.mov")));
+
+	TestEqual(TEXT("Deliver offers six kinds of delivery, the quickest first"), GetIntents().Num(), 6);
+	TestTrue(TEXT("Draft comes first"), GetIntents()[0] == EUEcineDeliverIntent::Draft);
+	TestEqual(TEXT("Passes for visual effects are named for what they are"), GetIntentName(EUEcineDeliverIntent::VfxHandoff).ToString(), FString(TEXT("VFX Passes")));
 
 	Settings.NamePattern.Reset();
 	TestEqual(TEXT("With no pattern written the default names the file"), MakeRenderSpec(EUEcineDeliverIntent::Master, Settings, Shot).FileName, Master.FileName);
@@ -306,6 +342,17 @@ bool FUEcineDeliverPreflightTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Once ACEScg is chosen the finding says to restart, and has nothing left to put right"),
 		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::WorkingColourSpace && Findings[0].FixLabel.IsEmpty());
 	Facts.bAcesCgWaitsForRestart = false;
+
+	FUEcinePreflightFacts Cinema = MakeCleanPreflightFacts(EUEcineDeliverIntent::DcpSource);
+	Cinema.bWorkingSpaceIsAcesCg = false;
+	TestTrue(TEXT("A DCP source at 24 frames a second has no findings"), RunPreflight(Cinema).IsEmpty());
+	Cinema.SequenceFramesPerSecond = 25.0;
+	Cinema.Shots[0].PackageFramesPerSecond = 25.0;
+	Findings = RunPreflight(Cinema);
+	TestTrue(TEXT("A DCP source at another rate is found, and can be delivered"),
+		Findings.Num() == 1 && Findings[0].Check == EUEcinePreflightCheck::DcpFrameRate && !Findings[0].bStopsRender && Findings[0].Detail.ToString().Contains(TEXT("25")));
+	Cinema.Intent = EUEcineDeliverIntent::YouTube;
+	TestTrue(TEXT("The rate does not matter to YouTube"), RunPreflight(Cinema).IsEmpty());
 
 	// A second shot with everything wrong that can be wrong with a camera, and a third with none.
 	FUEcinePreflightShot& Second = Facts.Shots.AddDefaulted_GetRef();
