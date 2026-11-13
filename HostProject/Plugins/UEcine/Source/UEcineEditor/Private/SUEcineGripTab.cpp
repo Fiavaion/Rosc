@@ -228,6 +228,10 @@ void SUEcineGripTab::RebuildMarks()
 			Add(FUEcineStyle::RowPadding, BuildMoveTimeRow(MarkIndex));
 			Add(FUEcineStyle::RowPadding, BuildEaseRow(MarkIndex, true));
 			Add(FUEcineStyle::RowPadding, BuildEaseRow(MarkIndex, false));
+			if (UEcine::GripEditing::CanDollyZoom(GetRig()))
+			{
+				Add(FUEcineStyle::ButtonRowPadding, BuildDollyZoomRow(MarkIndex));
+			}
 			Add(FUEcineStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineGripTab::GetMoveWarnings, MarkIndex)));
 		}
 		MarkRows.Add(BuildMarkRow(MarkIndex));
@@ -346,6 +350,58 @@ TSharedRef<SWidget> SUEcineGripTab::BuildMarkRow(int32 MarkIndex)
 				UEcine::GripEditing::RemoveMark(GetRig(), MarkIndex);
 				return FReply::Handled();
 			}))
+		];
+}
+
+TSharedRef<SWidget> SUEcineGripTab::BuildDollyZoomRow(int32 MarkIndex)
+{
+	const TAttribute<FText> Zoom = TAttribute<FText>::CreateSPLambda(this, [this, MarkIndex]
+	{
+		UEcine::GripEditing::FDollyZoom Plan;
+		// A prime does not zoom: the warning under the move says so, and there is nothing to read out.
+		if (!UEcine::GripEditing::PlanDollyZoom(GetRig(), MarkIndex, Plan) || !Plan.IsZoomLens())
+		{
+			return FText::GetEmpty();
+		}
+		FNumberFormattingOptions Whole;
+		Whole.SetMaximumFractionalDigits(0);
+		return FText::Format(LOCTEXT("DollyZoomReadout", "The lens zooms from {0} to {1} mm as the camera travels."),
+			FText::AsNumber(FMath::RoundToInt32(Plan.StartFocalLengthMm), &Whole),
+			FText::AsNumber(FMath::RoundToInt32(FMath::Clamp(Plan.EndFocalLengthMm, Plan.LensWidestMm, Plan.LensLongestMm)), &Whole));
+	});
+
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			MakeToggleButton(LOCTEXT("DollyZoomButton", "Dolly Zoom"),
+				FText::Format(LOCTEXT("DollyZoomToolTip", "Make the move from mark {0} to mark {1} a dolly zoom: the lens zooms as the camera travels, so what it is focused on stays the same size while the background grows or shrinks behind it. It needs a zoom lens, and the focus held on the subject."),
+					FText::AsNumber(MarkIndex), FText::AsNumber(MarkIndex + 1)),
+				TAttribute<bool>::CreateSPLambda(this, [this, MarkIndex]
+				{
+					const AUEcineRig* Rig = GetRig();
+					return Rig != nullptr && Rig->Marks.IsValidIndex(MarkIndex) && Rig->Marks[MarkIndex].bDollyZoom;
+				}),
+				[this, MarkIndex](bool bOn)
+				{
+					UEcine::GripEditing::EditRig(GetRig(), LOCTEXT("ChangeDollyZoom", "Change Dolly Zoom"), [MarkIndex, bOn](AUEcineRig& Rig)
+					{
+						if (Rig.Marks.IsValidIndex(MarkIndex))
+						{
+							Rig.Marks[MarkIndex].bDollyZoom = bOn;
+						}
+					});
+				})
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(2.0f, 2.0f, 0.0f, 0.0f)
+		[
+			SNew(STextBlock)
+			.TextStyle(&TextStyle("UEcine.Body"))
+			.AutoWrapText(true)
+			.Text(Zoom)
+			.Visibility_Lambda([Zoom] { return Zoom.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
 		];
 }
 
@@ -682,6 +738,27 @@ FText SUEcineGripTab::GetMoveWarnings(int32 MarkIndex) const
 	for (const FUEcineMoveFinding& Finding : UEcine::Move::MostLimiting(UEcine::Move::Check(Spec, From.Pose, To.Pose, To.Arrival)))
 	{
 		Lines.Add(UEcine::Move::Describe(Finding, Spec.Type, UUEcineEditorSettings::GetDistanceUnits()));
+	}
+
+	UEcine::GripEditing::FDollyZoom Zoom;
+	if (UEcine::GripEditing::PlanDollyZoom(Rig, MarkIndex, Zoom))
+	{
+		FNumberFormattingOptions Whole;
+		Whole.SetMaximumFractionalDigits(0);
+		const auto Millimetres = [&Whole](double Value) { return FText::AsNumber(FMath::RoundToInt32(Value), &Whole); };
+		if (!Zoom.IsZoomLens())
+		{
+			Lines.Add(FText::Format(LOCTEXT("DollyZoomPrimeWarning", "A dolly zoom needs a zoom lens, and the lens on this camera is a {0} mm prime, so it will not zoom. Choose a zoom in the Camera tab."), Millimetres(Zoom.LensWidestMm)));
+		}
+		else if (!Zoom.IsWithinLens())
+		{
+			Lines.Add(FText::Format(LOCTEXT("DollyZoomRangeWarning", "This dolly zoom asks the lens for {0} to {1} mm, and it zooms from {2} to {3} mm, so it stops at the end of its range. Shorten the travel, or start on a focal length nearer the middle of the zoom."),
+				Millimetres(Zoom.WidestMm), Millimetres(Zoom.LongestMm), Millimetres(Zoom.LensWidestMm), Millimetres(Zoom.LensLongestMm)));
+		}
+		if (!Zoom.bFocusHeld)
+		{
+			Lines.Add(LOCTEXT("DollyZoomFocusWarning", "The focus is set by hand, so the subject goes soft as the camera travels. Hold the focus on the subject in the Focus tab."));
+		}
 	}
 	return FText::Join(FText::FromString(TEXT("\n")), Lines);
 }

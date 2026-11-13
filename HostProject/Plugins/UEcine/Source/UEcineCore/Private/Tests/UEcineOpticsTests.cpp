@@ -19,6 +19,14 @@ bool FUEcineOpticsFieldOfViewTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("The focal length for an angle of view is the lens that gives it"), FocalLengthForFieldOfViewMm(36.0, HorizontalFieldOfViewDeg(36.0, 50.0)), 50.0, 1e-9);
 	TestEqual(TEXT("And through a 2x anamorphic lens"), FocalLengthForFieldOfViewMm(20.22, HorizontalFieldOfViewDeg(20.22, 50.0, 2.0), 2.0), 50.0, 1e-9);
 
+	// Dolly zoom: push in from 4 m to 2 m on a 50 mm and the lens has to widen to 25 mm.
+	TestEqual(TEXT("Dolly zoom, pushing in to half the distance, halves the focal length"), DollyZoomFocalLengthMm(50.0, 400.0, 200.0), 25.0, 1e-9);
+	TestEqual(TEXT("Dolly zoom, pulling out to twice the distance, doubles it"), DollyZoomFocalLengthMm(35.0, 300.0, 600.0), 70.0, 1e-9);
+	// The check that matters: the width of the scene seen at the subject does not change.
+	const double WidthBefore = 2.0 * 400.0 * FMath::Tan(FMath::DegreesToRadians(HorizontalFieldOfViewDeg(27.99, 50.0)) / 2.0);
+	const double WidthAfter = 2.0 * 250.0 * FMath::Tan(FMath::DegreesToRadians(HorizontalFieldOfViewDeg(27.99, DollyZoomFocalLengthMm(50.0, 400.0, 250.0))) / 2.0);
+	TestEqual(TEXT("Through a dolly zoom the subject stays the same size in the frame"), WidthAfter, WidthBefore, 1e-9);
+
 	// A 2x anamorphic lens sees twice the sensor width horizontally and the same height.
 	TestEqual(TEXT("50mm 2x anamorphic matches a spherical lens on a sensor twice as wide"),
 		HorizontalFieldOfViewDeg(20.22, 50.0, 2.0), HorizontalFieldOfViewDeg(40.44, 50.0), 1e-9);

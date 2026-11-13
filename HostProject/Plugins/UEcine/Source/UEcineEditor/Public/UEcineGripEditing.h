@@ -46,10 +46,40 @@ namespace UEcine::GripEditing
 	/** Puts the rig on a mark. */
 	UECINEEDITOR_API void GoToMark(AUEcineRig* Rig, int32 MarkIndex);
 
+	/** What the lens does through a dolly zoom, and whether the lens on the camera can do it. */
+	struct FDollyZoom
+	{
+		/** The focal length the move starts on and the one it asks for at its end, before the lens's limits. */
+		double StartFocalLengthMm = 0.0;
+		double EndFocalLengthMm = 0.0;
+		/** The widest and the longest the move asks for on the way. */
+		double WidestMm = 0.0;
+		double LongestMm = 0.0;
+		/** What the lens on the camera can zoom between. Equal for a prime. */
+		double LensWidestMm = 0.0;
+		double LensLongestMm = 0.0;
+		/** True when the focus is held on a subject or a point, so the subject stays sharp as the camera travels. */
+		bool bFocusHeld = false;
+
+		bool IsZoomLens() const { return LensLongestMm > LensWidestMm + 0.01; }
+		bool IsWithinLens() const { return WidestMm >= LensWidestMm - 0.01 && LongestMm <= LensLongestMm + 0.01; }
+	};
+
+	/** True for the supports a dolly zoom is made on: a dolly and a slider. */
+	UECINEEDITOR_API bool CanDollyZoom(const AUEcineRig* Rig);
+
+	/**
+	 * Works out the dolly zoom of the move into a mark: the lens zooms as the camera travels so
+	 * that what the camera is focused on stays the same size in the frame.
+	 * @return false when the move into the mark is not a dolly zoom, or the rig has no camera.
+	 */
+	UECINEEDITOR_API bool PlanDollyZoom(const AUEcineRig* Rig, int32 MarkIndex, FDollyZoom& OutPlan);
+
 	/**
 	 * Writes the rig's move through its marks into a Level Sequence as keys on the rig's axes,
-	 * and the operator imperfection as keys on the mounted camera's transform. Keys already in
-	 * the move's time range are replaced.
+	 * the operator imperfection as keys on the mounted camera's transform, and the zoom of any
+	 * dolly zoom as keys on the camera's focal length. Keys already in the move's time range
+	 * are replaced.
 	 * @param StartFrame The frame, at the sequence's display rate, where the rig leaves its first mark.
 	 * @return false with the reason in OutError when there is nothing to bake.
 	 */

@@ -6,6 +6,7 @@
 #include "Channels/MovieSceneDoubleChannel.h"
 #include "Channels/MovieSceneFloatChannel.h"
 #include "CineCameraActor.h"
+#include "CineCameraComponent.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "LevelSequence.h"
@@ -17,8 +18,11 @@
 #include "Subsystems/EditorActorSubsystem.h"
 #include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
+#include "UEcineCameraPackageComponent.h"
+#include "UEcineFocusEditing.h"
 #include "UEcineMove.h"
 #include "UEcineOperator.h"
+#include "UEcineOptics.h"
 #include "UEcineRig.h"
 #include "UEcineSequenceUtils.h"
 
@@ -33,6 +37,64 @@ namespace
 	{
 		FTransform RigTransform;
 		FUEcineRigPose Pose;
+	};
+
+	/**
+	 * The dolly zooms of a rig's move, worked out one after another: each starts on the focal
+	 * length the one before left the lens at.
+	 */
+	struct FDollyZoomSolver
+	{
+		const AUEcineRig& Rig;
+		/** What the camera is focused on: the thing that keeps its size. */
+		FVector Subject = FVector::ZeroVector;
+		/** The focal length the lens is on as the next move starts. */
+		double FocalLengthMm = 0.0;
+		double LensWidestMm = 0.0;
+		double LensLongestMm = 0.0;
+
+		FDollyZoomSolver(const AUEcineRig& InRig, const ACineCameraActor& Camera)
+			: Rig(InRig)
+		{
+			const UCineCameraComponent* Lens = Camera.GetCineCameraComponent();
+			const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(&Camera);
+			// The package's focal length, not the lens's: Sequencer may be holding the lens somewhere in an earlier bake.
+			FocalLengthMm = Package != nullptr ? Package->Package.FocalLengthMm : Lens->CurrentFocalLength;
+			LensWidestMm = Lens->LensSettings.MinFocalLength;
+			LensLongestMm = Lens->LensSettings.MaxFocalLength;
+			Subject = UEcine::FocusEditing::GetFocusPoint(&Camera);
+		}
+
+		/** How far the camera is from the subject with the rig in a pose. */
+		double DistanceAt(const FUEcineRigPose& Pose) const
+		{
+			return FVector::Dist((Rig.SolveMount(Pose) * Rig.GetActorTransform()).GetLocation(), Subject);
+		}
+
+		/** What the move into a mark asks of the lens at a time from the move's start. */
+		double FocalLengthAt(int32 MarkIndex, double TimeSeconds) const
+		{
+			const FUEcineRigMark& From = Rig.Marks[MarkIndex - 1];
+			const FUEcineRigMark& To = Rig.Marks[MarkIndex];
+			const double StartDistance = DistanceAt(From.Pose);
+			return StartDistance > UE_KINDA_SMALL_NUMBER
+				? UEcine::Optics::DollyZoomFocalLengthMm(FocalLengthMm, StartDistance, DistanceAt(UEcine::Move::Evaluate(From.Pose, To.Pose, To.Arrival, TimeSeconds)))
+				: FocalLengthMm;
+		}
+
+		double ClampToLens(double Asked) const
+		{
+			return FMath::Clamp(Asked, LensWidestMm, LensLongestMm);
+		}
+
+		/** Moves on past the move into a mark: the lens is left where that move put it. */
+		void FinishMove(int32 MarkIndex)
+		{
+			if (Rig.Marks[MarkIndex].bDollyZoom)
+			{
+				FocalLengthMm = ClampToLens(FocalLengthAt(MarkIndex, Rig.Marks[MarkIndex].Arrival.Normalized().DurationSeconds));
+			}
+		}
 	};
 
 	/** Rigs whose lift axis is the camera's height straight above the floor. */
@@ -228,6 +290,46 @@ void UEcine::GripEditing::GoToMark(AUEcineRig* Rig, int32 MarkIndex)
 	}
 }
 
+bool UEcine::GripEditing::CanDollyZoom(const AUEcineRig* Rig)
+{
+	if (Rig == nullptr)
+	{
+		return false;
+	}
+	const EUEcineRigType Type = Rig->GetSpec().Type;
+	return Type == EUEcineRigType::Dolly || Type == EUEcineRigType::Slider;
+}
+
+bool UEcine::GripEditing::PlanDollyZoom(const AUEcineRig* Rig, int32 MarkIndex, FDollyZoom& OutPlan)
+{
+	const ACineCameraActor* Camera = Rig != nullptr ? Rig->GetMountedCamera() : nullptr;
+	if (Camera == nullptr || MarkIndex < 1 || !Rig->Marks.IsValidIndex(MarkIndex) || !Rig->Marks[MarkIndex].bDollyZoom || !CanDollyZoom(Rig))
+	{
+		return false;
+	}
+
+	FDollyZoomSolver Solver(*Rig, *Camera);
+	for (int32 Earlier = 1; Earlier < MarkIndex; ++Earlier)
+	{
+		Solver.FinishMove(Earlier);
+	}
+	const double DurationSeconds = Rig->Marks[MarkIndex].Arrival.Normalized().DurationSeconds;
+	OutPlan.StartFocalLengthMm = Solver.FocalLengthMm;
+	OutPlan.EndFocalLengthMm = Solver.FocalLengthAt(MarkIndex, DurationSeconds);
+	OutPlan.WidestMm = OutPlan.LongestMm = OutPlan.StartFocalLengthMm;
+	const int32 Steps = 32;
+	for (int32 Step = 1; Step <= Steps; ++Step)
+	{
+		const double Asked = Solver.FocalLengthAt(MarkIndex, DurationSeconds * Step / Steps);
+		OutPlan.WidestMm = FMath::Min(OutPlan.WidestMm, Asked);
+		OutPlan.LongestMm = FMath::Max(OutPlan.LongestMm, Asked);
+	}
+	OutPlan.LensWidestMm = Solver.LensWidestMm;
+	OutPlan.LensLongestMm = Solver.LensLongestMm;
+	OutPlan.bFocusHeld = UEcine::FocusEditing::IsFollowing(Camera);
+	return true;
+}
+
 bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError)
 {
 	if (!HasMoveToBake(Rig, OutError))
@@ -322,6 +424,48 @@ bool UEcine::GripEditing::BakeMove(AUEcineRig* Rig, ULevelSequence* Sequence, FF
 					Channels[4]->AddLinearKey(Tick, Rotation.Pitch);
 					Channels[5]->AddLinearKey(Tick, Rotation.Yaw);
 				}
+			}
+			Section->MarkAsChanged();
+		}
+	}
+
+	// A dolly zoom: a key on every frame of the lens's focal length while the camera travels.
+	// A move baked earlier with a dolly zoom that has since been switched off loses its keys.
+	if (ACineCameraActor* Camera = Rig->GetMountedCamera())
+	{
+		UCineCameraComponent* Lens = Camera->GetCineCameraComponent();
+		const FName FocalLengthName = GET_MEMBER_NAME_CHECKED(UCineCameraComponent, CurrentFocalLength);
+		const bool bAnyDollyZoom = CanDollyZoom(Rig) && Rig->Marks.ContainsByPredicate([](const FUEcineRigMark& Mark) { return Mark.bDollyZoom; });
+		UMovieSceneFloatTrack* Track = bAnyDollyZoom
+			? FindOrAddFloatTrack(MovieScene, FindOrAddComponentBinding(Sequence, Lens), FocalLengthName, FocalLengthName.ToString(), LOCTEXT("ZoomTrackName", "Focal Length"))
+			: FindFloatTrack(MovieScene, FindBinding(Sequence, Lens), FocalLengthName);
+		if (Track != nullptr)
+		{
+			Track->Modify();
+			UMovieSceneFloatSection* Section = FindOrAddSection<UMovieSceneFloatSection>(Track);
+			Section->Modify();
+			FMovieSceneFloatChannel& Channel = Section->GetChannel();
+			DeleteKeysInRange(Channel, MoveRange);
+
+			FDollyZoomSolver Solver(*Rig, *Camera);
+			const double FramesPerSecond = DisplayRate.AsDecimal();
+			double MoveStartSeconds = 0.0;
+			for (int32 MarkIndex = 1; bAnyDollyZoom && MarkIndex < Rig->Marks.Num(); ++MarkIndex)
+			{
+				const double MoveSeconds = Rig->Marks[MarkIndex].Arrival.Normalized().DurationSeconds;
+				if (Rig->Marks[MarkIndex].bDollyZoom)
+				{
+					const FFrameNumber FirstFrame = StartFrame + FMath::CeilToInt32(MoveStartSeconds * FramesPerSecond - 1.e-6);
+					const FFrameNumber LastFrame = StartFrame + FMath::CeilToInt32((MoveStartSeconds + MoveSeconds) * FramesPerSecond - 1.e-6);
+					for (FFrameNumber Frame = FirstFrame; Frame <= LastFrame; ++Frame)
+					{
+						const double IntoMove = FMath::Clamp(DisplayRate.AsSeconds(FFrameTime(Frame - StartFrame)) - MoveStartSeconds, 0.0, MoveSeconds);
+						const FFrameNumber Tick = ConvertFrameTime(FFrameTime(Frame), DisplayRate, TickResolution).RoundToFrame();
+						Channel.AddLinearKey(Tick, static_cast<float>(Solver.ClampToLens(Solver.FocalLengthAt(MarkIndex, IntoMove))));
+					}
+				}
+				Solver.FinishMove(MarkIndex);
+				MoveStartSeconds += MoveSeconds;
 			}
 			Section->MarkAsChanged();
 		}

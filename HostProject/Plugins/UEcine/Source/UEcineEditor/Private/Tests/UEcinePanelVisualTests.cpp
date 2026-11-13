@@ -310,9 +310,20 @@ bool FUEcineGripTabStatesVisualTest::RunTest(const FString& Parameters)
 	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]
 	{
 		ACineCameraActor* DollyCamera = UEcine::CameraEditing::SpawnCamera(World, FTransform(FVector(0.0, 0.0, 150.0)));
-		if (TestNotNull(TEXT("A camera on a dolly to show"), UEcine::GripEditing::PutCameraOnRig(DollyCamera, UEcine::Rig::GetDefaultPreset(EUEcineRigType::Dolly))))
+		AUEcineRig* DollyRig = UEcine::GripEditing::PutCameraOnRig(DollyCamera, UEcine::Rig::GetDefaultPreset(EUEcineRigType::Dolly));
+		if (TestNotNull(TEXT("A camera on a dolly to show"), DollyRig))
 		{
-			QueuePanelCaptures(*this, DollyCamera, TEXT("grip-tab-dolly"), EUEcineDepartment::Grip, 700.0f, NarrowOnly);
+			// A dolly zoom on a prime with the focus set by hand: the switch, what the lens would do, and both warnings.
+			UEcine::GripEditing::AddMark(DollyRig);
+			UEcine::GripEditing::EditRig(DollyRig, FText::FromString(TEXT("Move Rig")), [](AUEcineRig& Rig)
+			{
+				FUEcineRigPose Pose = Rig.GetPose();
+				Pose.Travel += 150.0;
+				Rig.SetPose(Pose);
+			});
+			UEcine::GripEditing::AddMark(DollyRig);
+			UEcine::GripEditing::EditRig(DollyRig, FText::FromString(TEXT("Change Dolly Zoom")), [](AUEcineRig& Rig) { Rig.Marks[1].bDollyZoom = true; });
+			QueuePanelCaptures(*this, DollyCamera, TEXT("grip-tab-dolly"), EUEcineDepartment::Grip, 1100.0f, NarrowOnly);
 		}
 		return true;
 	}));

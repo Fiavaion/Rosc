@@ -2,8 +2,10 @@
 
 #include "Channels/MovieSceneFloatChannel.h"
 #include "CineCameraActor.h"
+#include "CineCameraComponent.h"
 #include "Components/SplineComponent.h"
 #include "Editor.h"
+#include "Engine/StaticMeshActor.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/AutomationTest.h"
@@ -12,7 +14,10 @@
 #include "ObjectTools.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Tracks/MovieSceneFloatTrack.h"
+#include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
+#include "UEcineCameraPackageComponent.h"
+#include "UEcineFocusEditing.h"
 #include "UEcineGripEditing.h"
 #include "UEcineMove.h"
 #include "UEcineOperator.h"
@@ -313,6 +318,145 @@ bool FUEcineSequenceFrameRateTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("29.97 fps is 30000/1001"), GetFrameRate(29.97) == FFrameRate(30000, 1001));
 	TestTrue(TEXT("59.94 fps is 60000/1001"), GetFrameRate(59.94) == FFrameRate(60000, 1001));
 	TestEqual(TEXT("25 fps plays 25 frames a second"), GetFrameRate(25.0).AsDecimal(), 25.0, 1.e-9);
+	return true;
+}
+
+/**
+ * A dolly zoom: a zoom on a dolly pushes in on a subject, the move is baked, and scrubbed in the
+ * real Sequencer the subject keeps its size in the frame while the lens widens.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineGripDollyZoomTest, "UEcine.Editor.Grip.DollyZoom", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineGripDollyZoomTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::GripEditing;
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ACineCameraActor* Camera = UEcine::CameraEditing::SpawnCamera(World, FTransform(FVector(0.0, 0.0, 150.0)));
+	AStaticMeshActor* Subject = World->SpawnActor<AStaticMeshActor>(FVector(500.0, 0.0, 150.0), FRotator::ZeroRotator);
+	UUEcineCameraPackageComponent* Package = Camera != nullptr ? UUEcineCameraPackageComponent::Find(Camera) : nullptr;
+	const FUEcineLensKit* Zoom = FUEcineCameraDatabase::Get().FindLensKit(TEXT("angenieux-optimo-24-290"));
+	if (!TestNotNull(TEXT("A camera with a package"), Package) || !TestNotNull(TEXT("A subject"), Subject) || !TestNotNull(TEXT("The 24-290 zoom is in the database"), Zoom))
+	{
+		return false;
+	}
+	UCineCameraComponent* Lens = Camera->GetCineCameraComponent();
+
+	// On a crane there is no dolly zoom to switch on.
+	AUEcineRig* Rig = PutCameraOnRig(Camera, UEcine::Rig::GetDefaultPreset(EUEcineRigType::Crane));
+	TestFalse(TEXT("A crane does not offer a dolly zoom"), CanDollyZoom(Rig));
+	Rig = PutCameraOnRig(Camera, UEcine::Rig::GetDefaultPreset(EUEcineRigType::Slider));
+	TestTrue(TEXT("A slider offers a dolly zoom"), CanDollyZoom(Rig));
+	Rig = PutCameraOnRig(Camera, UEcine::Rig::GetDefaultPreset(EUEcineRigType::Dolly));
+	if (!TestNotNull(TEXT("The camera is put on a dolly"), Rig) || !TestTrue(TEXT("A dolly offers a dolly zoom"), CanDollyZoom(Rig)))
+	{
+		return false;
+	}
+
+	// Two marks: where the camera is, and 2 m further along the track, towards the subject.
+	UEcine::FocusEditing::FollowActor(Camera, Subject);
+	AddMark(Rig);
+	EditRig(Rig, FText::FromString(TEXT("Move Rig")), [](AUEcineRig& Edited)
+	{
+		FUEcineRigPose Pose = Edited.GetPose();
+		Pose.Travel += 200.0;
+		Edited.SetPose(Pose);
+	});
+	AddMark(Rig);
+	const double EndDistance = FVector::Dist(Lens->GetComponentLocation(), Subject->GetActorLocation());
+	GoToMark(Rig, 0);
+	const double StartDistance = FVector::Dist(Lens->GetComponentLocation(), Subject->GetActorLocation());
+	TestEqual(TEXT("The second mark is 2 m nearer the subject"), StartDistance - EndDistance, 200.0, 0.5);
+	EditRig(Rig, FText::FromString(TEXT("Time Move")), [](AUEcineRig& Edited) { Edited.Marks[1].Arrival = MakeTiming(2.0, 0.25, 0.25); });
+
+	FDollyZoom Plan;
+	TestFalse(TEXT("A move is not a dolly zoom until it is made one"), PlanDollyZoom(Rig, 1, Plan));
+	EditRig(Rig, FText::FromString(TEXT("Change Dolly Zoom")), [](AUEcineRig& Edited) { Edited.Marks[1].bDollyZoom = true; });
+
+	// On a prime the plan says the lens cannot do it.
+	if (TestTrue(TEXT("The dolly zoom is worked out"), PlanDollyZoom(Rig, 1, Plan)))
+	{
+		TestFalse(TEXT("A prime is not a zoom lens"), Plan.IsZoomLens());
+		TestTrue(TEXT("The focus is held on the subject"), Plan.bFocusHeld);
+	}
+
+	// On the 24-290, starting on 50 mm.
+	FText Error;
+	TestTrue(TEXT("The zoom goes on"), UEcine::CameraEditing::EditPackage(Package, FText::FromString(TEXT("Change Lens")), [Zoom](FUEcineCameraPackage& Edited)
+	{
+		Edited.SelectLensKit(*Zoom);
+		Edited.FocalLengthMm = 50.0f;
+	}, Error));
+	TestEqual(TEXT("The zoom is on 50 mm"), Lens->CurrentFocalLength, 50.0f, 0.01f);
+	const double ExpectedEnd = 50.0 * EndDistance / StartDistance;
+	if (TestTrue(TEXT("The dolly zoom is worked out for the zoom"), PlanDollyZoom(Rig, 1, Plan)))
+	{
+		TestTrue(TEXT("The 24-290 is a zoom and can do this one"), Plan.IsZoomLens() && Plan.IsWithinLens());
+		TestEqual(TEXT("It starts on 50 mm"), Plan.StartFocalLengthMm, 50.0, 0.01);
+		TestEqual(TEXT("Pushing in, the lens widens in step with the distance"), Plan.EndFocalLengthMm, ExpectedEnd, 0.01);
+		AddInfo(FString::Printf(TEXT("From %.0f cm to %.0f cm the lens zooms from %.1f to %.1f mm"), StartDistance, EndDistance, Plan.StartFocalLengthMm, Plan.EndFocalLengthMm));
+	}
+
+	// With the focus set by hand the plan says the subject will go soft.
+	UEcine::FocusEditing::StopFollowing(Camera);
+	TestTrue(TEXT("The plan is worked out with the focus set by hand"), PlanDollyZoom(Rig, 1, Plan) && !Plan.bFocusHeld);
+	TestEqual(TEXT("And the subject is what the lens is focused on"), Plan.EndFocalLengthMm, ExpectedEnd, 0.01);
+	UEcine::FocusEditing::FollowActor(Camera, Subject);
+
+	// Bake it and play it in the real Sequencer.
+	ULevelSequence* Sequence = NewObject<ULevelSequence>(GetTransientPackage(), NAME_None, RF_Transactional);
+	Sequence->Initialize();
+	Sequence->GetMovieScene()->SetDisplayRate(FFrameRate(24, 1));
+	TestTrue(TEXT("The move bakes"), BakeMove(Rig, Sequence, 0, Error));
+	const UMovieSceneFloatTrack* ZoomTrack = UEcine::SequenceUtils::FindFloatTrack(Sequence->GetMovieScene(), UEcine::SequenceUtils::FindBinding(Sequence, Lens), TEXT("CurrentFocalLength"));
+	if (TestNotNull(TEXT("The lens's focal length has a track"), ZoomTrack) && TestTrue(TEXT("The shot opens in Sequencer"), ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(Sequence)))
+	{
+		TestEqual(TEXT("A key on every frame of the two-second move"), CastChecked<UMovieSceneFloatSection>(ZoomTrack->GetAllSections()[0])->GetChannel().GetNumKeys(), 49);
+		float WidestSeen = 50.0f;
+		for (int32 Frame = 0; Frame <= 48; Frame += 6)
+		{
+			ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(Frame), EUpdatePositionMethod::Scrub));
+			const double Distance = FVector::Dist(Lens->GetComponentLocation(), Subject->GetActorLocation());
+			// The subject's size in the frame goes with focal length over distance.
+			TestEqual(*FString::Printf(TEXT("Scrubbed to frame %d: the subject is the size it started"), Frame), Lens->CurrentFocalLength / Distance, 50.0 / StartDistance, 1.e-4);
+			WidestSeen = FMath::Min(WidestSeen, Lens->CurrentFocalLength);
+		}
+		TestEqual(TEXT("At the end of the move the camera is on its second mark"), FVector::Dist(Lens->GetComponentLocation(), Subject->GetActorLocation()), EndDistance, 0.5);
+		TestEqual(TEXT("And the lens is as wide as the plan said"), static_cast<double>(WidestSeen), ExpectedEnd, 0.05);
+
+		// Switched off and baked again, the zoom's keys go.
+		ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(0), EUpdatePositionMethod::Scrub));
+		EditRig(Rig, FText::FromString(TEXT("Change Dolly Zoom")), [](AUEcineRig& Edited) { Edited.Marks[1].bDollyZoom = false; });
+		TestTrue(TEXT("The move bakes again"), BakeMove(Rig, Sequence, 0, Error));
+		TestEqual(TEXT("Without the dolly zoom the lens has no keys"), CastChecked<UMovieSceneFloatSection>(ZoomTrack->GetAllSections()[0])->GetChannel().GetNumKeys(), 0);
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	}
+
+	// A travel the lens cannot follow all the way: the plan says so and the keys stop at the lens's limit.
+	TestTrue(TEXT("The zoom is put on its wide end"), UEcine::CameraEditing::EditPackage(Package, FText::FromString(TEXT("Zoom")), [](FUEcineCameraPackage& Edited) { Edited.FocalLengthMm = 30.0f; }, Error));
+	EditRig(Rig, FText::FromString(TEXT("Change Dolly Zoom")), [](AUEcineRig& Edited) { Edited.Marks[1].bDollyZoom = true; });
+	if (TestTrue(TEXT("The plan is worked out from 30 mm"), PlanDollyZoom(Rig, 1, Plan)))
+	{
+		TestTrue(TEXT("Pushing in from 30 mm asks for wider than the zoom goes"), Plan.WidestMm < 24.0 && !Plan.IsWithinLens());
+	}
+	ULevelSequence* Short = NewObject<ULevelSequence>(GetTransientPackage(), NAME_None, RF_Transactional);
+	Short->Initialize();
+	Short->GetMovieScene()->SetDisplayRate(FFrameRate(24, 1));
+	TestTrue(TEXT("The move still bakes"), BakeMove(Rig, Short, 0, Error));
+	const UMovieSceneFloatTrack* ShortTrack = UEcine::SequenceUtils::FindFloatTrack(Short->GetMovieScene(), UEcine::SequenceUtils::FindBinding(Short, Lens), TEXT("CurrentFocalLength"));
+	if (TestNotNull(TEXT("The lens's focal length has a track"), ShortTrack))
+	{
+		float LastKey = 0.0f;
+		const FMovieSceneFloatChannel& Channel = CastChecked<UMovieSceneFloatSection>(ShortTrack->GetAllSections()[0])->GetChannel();
+		Channel.Evaluate(ConvertFrameTime(FFrameTime(48), FFrameRate(24, 1), Short->GetMovieScene()->GetTickResolution()), LastKey);
+		TestEqual(TEXT("The lens stops at its wide end"), LastKey, 24.0f, 0.01f);
+	}
+
+	GEditor->SelectNone(false, true, false);
+	World->EditorDestroyActor(Rig, false);
+	World->EditorDestroyActor(Subject, false);
+	World->EditorDestroyActor(Camera, false);
+	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine dolly zoom test")));
 	return true;
 }
 

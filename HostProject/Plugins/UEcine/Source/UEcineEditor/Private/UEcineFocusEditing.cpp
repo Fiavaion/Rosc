@@ -152,6 +152,19 @@ float UEcine::FocusEditing::GetFocusDistance(const ACineCameraActor* Camera)
 	return Distance + Settings.FocusOffset;
 }
 
+FVector UEcine::FocusEditing::GetFocusPoint(const ACineCameraActor* Camera)
+{
+	if (Camera == nullptr)
+	{
+		return FVector::ZeroVector;
+	}
+	const UCineCameraComponent* Lens = Camera->GetCineCameraComponent();
+	const FCameraFocusSettings& Settings = Lens->FocusSettings;
+	return Settings.FocusMethod == ECameraFocusMethod::Tracking
+		? GetPointInLevel(Settings.TrackingFocusSettings.ActorToTrack.Get(), Settings.TrackingFocusSettings.RelativeOffset)
+		: Lens->GetComponentLocation() + Lens->GetForwardVector() * GetLensDistance(Camera);
+}
+
 float UEcine::FocusEditing::GetCloseFocus(const ACineCameraActor* Camera)
 {
 	// The lens keeps its close focus in millimetres.

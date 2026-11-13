@@ -43,6 +43,13 @@ struct UECINECORE_API FUEcineRigMark
 	/** How the rig arrives here from the mark before. Not used by the first mark. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
 	FUEcineMoveTiming Arrival;
+
+	/**
+	 * The move into this mark is a dolly zoom: the lens zooms as the camera travels, so that
+	 * what it is focused on stays the same size in the frame. Not used by the first mark.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
+	bool bDollyZoom = false;
 };
 
 /** What a rig cannot do about a move. */

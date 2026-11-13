@@ -23,6 +23,12 @@ namespace UEcine::FocusEditing
 	 */
 	UECINEEDITOR_API float GetFocusDistance(const ACineCameraActor* Camera);
 
+	/**
+	 * The place in the level the camera is focused on: the subject or point the focus is held
+	 * on, or else the point on the lens axis at the focus distance.
+	 */
+	UECINEEDITOR_API FVector GetFocusPoint(const ACineCameraActor* Camera);
+
 	/** The nearest the camera's lens can focus. */
 	UECINEEDITOR_API float GetCloseFocus(const ACineCameraActor* Camera);
 

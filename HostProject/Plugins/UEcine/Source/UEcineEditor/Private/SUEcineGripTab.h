@@ -54,6 +54,7 @@ private:
 	TSharedRef<SWidget> BuildAxisRow(EUEcineRigType Type, EUEcineRigAxis Axis);
 	TSharedRef<SWidget> BuildMarkRow(int32 MarkIndex);
 	TSharedRef<SWidget> BuildMoveTimeRow(int32 MarkIndex);
+	TSharedRef<SWidget> BuildDollyZoomRow(int32 MarkIndex);
 	TSharedRef<SWidget> BuildEaseRow(int32 MarkIndex, bool bEaseIn);
 	TSharedRef<SWidget> BuildOperatorRows();
 	TSharedRef<SWidget> BuildBakeRows();

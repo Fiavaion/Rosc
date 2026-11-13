@@ -16,6 +16,13 @@ namespace UEcine::Optics
 		return SensorWidthMm * Squeeze / (2.0 * FMath::Tan(FMath::DegreesToRadians(HorizontalFieldOfViewDeg) / 2.0));
 	}
 
+	double DollyZoomFocalLengthMm(double StartFocalLengthMm, double StartDistance, double Distance)
+	{
+		check(StartDistance > 0.0);
+		// The subject's size in the frame goes with focal length over distance; keep that ratio.
+		return StartFocalLengthMm * FMath::Max(Distance, 0.0) / StartDistance;
+	}
+
 	double VerticalFieldOfViewDeg(double SensorHeightMm, double FocalLengthMm)
 	{
 		check(FocalLengthMm > 0.0);
