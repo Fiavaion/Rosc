@@ -122,12 +122,32 @@ ACineCameraActor* UEcine::CameraEditing::SpawnCamera(UWorld* World, const FTrans
 
 ACineCameraActor* UEcine::CameraEditing::SpawnCameraAtViewport()
 {
-	FTransform Transform = FTransform::Identity;
-	if (GCurrentLevelEditingViewportClient != nullptr)
+	const FLevelEditorViewportClient* View = GCurrentLevelEditingViewportClient;
+	if (View == nullptr || !View->IsPerspective())
 	{
-		Transform = FTransform(GCurrentLevelEditingViewportClient->GetViewRotation(), GCurrentLevelEditingViewportClient->GetViewLocation());
+		// A plan or elevation view is no place for a camera: take the level's perspective view.
+		View = nullptr;
+		for (const FLevelEditorViewportClient* Candidate : GEditor->GetLevelViewportClients())
+		{
+			if (Candidate != nullptr && Candidate->IsPerspective())
+			{
+				View = Candidate;
+				break;
+			}
+		}
 	}
-	return SpawnCamera(GEditor->GetEditorWorldContext().World(), Transform);
+
+	const FScopedTransaction Transaction(LOCTEXT("AddCameraHere", "Add Camera Here"));
+	ACineCameraActor* Camera = SpawnCamera(GEditor->GetEditorWorldContext().World(),
+		View != nullptr ? FTransform(View->GetViewRotation(), View->GetViewLocation()) : FTransform::Identity);
+	if (Camera != nullptr && View != nullptr)
+	{
+		// The lens of the kit that frames nearest to what the view showed. A view wider or
+		// longer than any lens of the kit gets the kit's widest or longest.
+		FText Error;
+		PutOnLensForFieldOfView(Camera, View->ViewFOV, Error);
+	}
+	return Camera;
 }
 
 bool UEcine::CameraEditing::EditPackage(UUEcineCameraPackageComponent* Component, const FText& Description, TFunctionRef<void(FUEcineCameraPackage&)> Edit, FText& OutError, TArray<FText>* OutWarnings)

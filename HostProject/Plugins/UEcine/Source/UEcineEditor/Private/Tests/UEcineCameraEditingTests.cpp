@@ -3,6 +3,7 @@
 #include "CineCameraActor.h"
 #include "CineCameraComponent.h"
 #include "Editor.h"
+#include "LevelEditorViewport.h"
 #include "Misc/AutomationTest.h"
 #include "UEcineCameraDatabase.h"
 #include "UEcineCameraEditing.h"
@@ -102,6 +103,53 @@ bool FUEcineCameraEditingTest::RunTest(const FString& Parameters)
 	GEditor->SelectNone(false, true, false);
 	World->EditorDestroyActor(CameraActor, false);
 	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine camera editing test")));
+	// Add Camera Here: the new camera stands where the view was, with the kit's lens nearest to what the view showed.
+	FLevelEditorViewportClient* View = nullptr;
+	for (FLevelEditorViewportClient* Candidate : GEditor->GetLevelViewportClients())
+	{
+		if (Candidate != nullptr && Candidate->IsPerspective())
+		{
+			View = Candidate;
+			break;
+		}
+	}
+	if (TestNotNull(TEXT("The level has a perspective view"), View))
+	{
+		const FVector ViewLocationBefore = View->GetViewLocation();
+		const FRotator ViewRotationBefore = View->GetViewRotation();
+		const float ViewFovBefore = View->ViewFOV;
+		TGuardValue<FLevelEditorViewportClient*> CurrentView(GCurrentLevelEditingViewportClient, View);
+		View->SetViewLocation(FVector(-420.0, 130.0, 175.0));
+		View->SetViewRotation(FRotator(-8.0, 25.0, 0.0));
+		View->ViewFOV = 40.0f;
+
+		ACineCameraActor* Added = UEcine::CameraEditing::SpawnCameraAtViewport();
+		const UUEcineCameraPackageComponent* AddedPackage = Added != nullptr ? UUEcineCameraPackageComponent::Find(Added) : nullptr;
+		if (TestNotNull(TEXT("Add Camera Here makes a camera with a package"), AddedPackage))
+		{
+			TestTrue(TEXT("The camera stands where the view was"), Added->GetActorLocation().Equals(FVector(-420.0, 130.0, 175.0), 0.01));
+			TestTrue(TEXT("The camera looks where the view looked"), Added->GetActorRotation().Equals(FRotator(-8.0, 25.0, 0.0), 0.01));
+
+			// The nearest lens of the kit to a 40 degree view is the one no other lens of the kit beats.
+			const UCineCameraComponent* AddedLens = Added->GetCineCameraComponent();
+			const double Wanted = UEcine::Optics::FocalLengthForFieldOfViewMm(AddedLens->Filmback.SensorWidth, 40.0, AddedLens->LensSettings.SqueezeFactor);
+			const FUEcineLensKit* AddedKit = Database.FindLensKit(AddedPackage->Package.LensKitId);
+			double Nearest = TNumericLimits<double>::Max();
+			for (const FUEcineLens& Lens : AddedKit->Lenses)
+			{
+				Nearest = FMath::Min(Nearest, FMath::Abs(Lens.FocalLengthMm - Wanted));
+			}
+			AddInfo(FString::Printf(TEXT("A 40 degree view asks for %.1f mm; the camera was given the %.0f mm"), Wanted, AddedLens->CurrentFocalLength));
+			TestEqual(TEXT("The camera has the kit's lens nearest to the view"), FMath::Abs(AddedLens->CurrentFocalLength - Wanted), Nearest, 0.01);
+
+			GEditor->UndoTransaction();
+			TestFalse(TEXT("One undo takes the added camera away"), IsValid(Added) && Added->GetLevel() != nullptr && Added->GetLevel()->Actors.Contains(Added));
+		}
+		View->SetViewLocation(ViewLocationBefore);
+		View->SetViewRotation(ViewRotationBefore);
+		View->ViewFOV = ViewFovBefore;
+	}
+
 	return true;
 }
 

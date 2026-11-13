@@ -39,7 +39,7 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 	const FText CameraToolTip = LOCTEXT("CameraPickerToolTip", "The camera this panel is working on. Selecting a camera in the level also switches to it.");
 	const FText LookThroughToolTip = LOCTEXT("LookThroughToolTip", "Look through this camera in the viewport. Moving the viewport then moves the camera, unless it is on a support: a support holds the camera, and the Grip tab moves it.");
 	const FText UserGuideToolTip = LOCTEXT("UserGuideToolTip", "User guide: open the UEcine guide in your web browser.");
-	const FText NewCameraToolTip = LOCTEXT("PanelNewCameraToolTip", "New camera: create a Cine Camera Actor where the viewport is looking from, with a camera package ready to edit.");
+	const FText NewCameraToolTip = LOCTEXT("AddCameraHereToolTip", "Add a camera where the viewport is looking from. Move through the level until you like the view, then press this: the new camera stands there, with the lens of its kit that frames nearest to what you saw.");
 
 	const TSharedRef<SWidget> LookThrough = MakeToggleButton(LOCTEXT("LookThroughLabel", "Look Through"), LookThroughToolTip,
 		TAttribute<bool>::CreateSP(this, &SUEcinePanel::IsLookingThrough),
@@ -56,6 +56,10 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 			.BorderImage(FAppStyle::Get().GetBrush("Brushes.Header"))
 			.Padding(FMargin(FUEcineStyle::PanelPadding, 6.0f))
 			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot()
 				.FillWidth(1.0f)
@@ -79,23 +83,27 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				+ SHorizontalBox::Slot()
 				.AutoWidth()
 				.VAlign(VAlign_Center)
-				.Padding(6.0f, 0.0f, 0.0f, 0.0f)
-				[
-					LookThrough
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
-				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
-				[
-					MakeIconButton("Icons.Plus", NewCameraToolTip, FOnClicked::CreateSP(this, &SUEcinePanel::OnNewCameraClicked))
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.VAlign(VAlign_Center)
 				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
 				[
 					MakeIconButton("Icons.Help", UserGuideToolTip, FOnClicked::CreateSP(this, &SUEcinePanel::OnUserGuideClicked))
+				]
+				]
+				// The two things done with the viewport, in words: neither is found behind an icon.
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0.0f, 4.0f, 0.0f, 0.0f)
+				[
+					SNew(SWrapBox)
+					.UseAllottedSize(true)
+					.InnerSlotPadding(FVector2D(4.0f, 4.0f))
+					+ SWrapBox::Slot()
+					[
+						LookThrough
+					]
+					+ SWrapBox::Slot()
+					[
+						MakeButton(LOCTEXT("AddCameraHereLabel", "Add Camera Here"), NewCameraToolTip, FOnClicked::CreateSP(this, &SUEcinePanel::OnNewCameraClicked))
+					]
 				]
 			]
 		]
@@ -161,9 +169,9 @@ void SUEcinePanel::Construct(const FArguments& InArgs)
 				.Padding(FUEcineStyle::PanelPadding)
 				[
 					MakeEmptyState(
-						LOCTEXT("NoCameraMessage", "There is no camera to work on yet. Create one at the current viewport position, or select a Cine Camera Actor in the level."),
-						LOCTEXT("NewCameraButton", "New Camera"),
-						LOCTEXT("NewCameraToolTip", "Create a Cine Camera Actor where the viewport is looking from, with a camera package ready to edit."),
+						LOCTEXT("NoCameraMessage", "There is no camera to work on yet. Move through the level until you like the view and add a camera there, or select a Cine Camera Actor in the level."),
+						LOCTEXT("NoCameraAddButton", "Add Camera Here"),
+						NewCameraToolTip,
 						FOnClicked::CreateSP(this, &SUEcinePanel::OnNewCameraClicked))
 				]
 				+ SWidgetSwitcher::Slot()
@@ -238,8 +246,8 @@ TSharedRef<SWidget> SUEcinePanel::MakeCameraMenu()
 
 	MenuBuilder.BeginSection(NAME_None);
 	MenuBuilder.AddMenuEntry(
-		LOCTEXT("NewCameraEntry", "New Camera"),
-		LOCTEXT("NewCameraEntryToolTip", "Create a Cine Camera Actor where the viewport is looking from, with a camera package ready to edit."),
+		LOCTEXT("AddCameraHereEntry", "Add Camera Here"),
+		LOCTEXT("AddCameraHereEntryToolTip", "Add a camera where the viewport is looking from, with the lens of its kit that frames nearest to the view."),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"),
 		FUIAction(FExecuteAction::CreateSPLambda(this, [this] { OnNewCameraClicked(); })));
 	MenuBuilder.EndSection();
