@@ -42,18 +42,32 @@ namespace UEcine::FocusEditing
 	UECINEEDITOR_API bool FocusOnPoint(ACineCameraActor* Camera, const FVector& WorldPoint, FText& OutError);
 
 	/**
+	 * Keeps the focus on a point in the level as the camera moves. With a subject, the point is
+	 * kept as a place on it (an eye, not the whole figure) and moves with it.
+	 * @return false, with the reason in OutError and the focus unchanged, when the point is behind the camera.
+	 */
+	UECINEEDITOR_API bool HoldPoint(ACineCameraActor* Camera, AActor* Subject, const FVector& WorldPoint, FText& OutError);
+
+	/**
 	 * Lets the user click a subject in the level viewport to focus the camera on it. Picking
 	 * ends with the click, with Escape, or when the viewport loses focus.
+	 * @param bHold Keep the focus on the point clicked as it and the camera move, instead of setting a distance.
 	 */
-	UECINEEDITOR_API void BeginPickFocus(ACineCameraActor* Camera);
+	UECINEEDITOR_API void BeginPickFocus(ACineCameraActor* Camera, bool bHold = false);
 
 	UECINEEDITOR_API void EndPickFocus();
 
-	/** True while the given camera is waiting for a click to focus on. */
-	UECINEEDITOR_API bool IsPickingFocus(const ACineCameraActor* Camera);
+	/** True while the given camera is waiting for a click to focus on, in the given way. */
+	UECINEEDITOR_API bool IsPickingFocus(const ACineCameraActor* Camera, bool bHold = false);
 
 	/** Keeps the focus on an actor as it and the camera move. */
 	UECINEEDITOR_API void FollowActor(ACineCameraActor* Camera, AActor* Subject);
+
+	/** True when the focus is kept on something, a subject or a point, as the camera moves. */
+	UECINEEDITOR_API bool IsFollowing(const ACineCameraActor* Camera);
+
+	/** True when what the focus is kept on is a picked point, not a subject as a whole. */
+	UECINEEDITOR_API bool IsHoldingPoint(const ACineCameraActor* Camera);
 
 	/** Stops following, leaving the focus where it is. */
 	UECINEEDITOR_API void StopFollowing(ACineCameraActor* Camera);
@@ -62,8 +76,9 @@ namespace UEcine::FocusEditing
 	UECINEEDITOR_API AActor* GetFollowedActor(const ACineCameraActor* Camera);
 
 	/**
-	 * Stores where the focus is now as a new focus mark after the existing ones. Marks are kept
-	 * with the camera package. Returns the mark's index, or INDEX_NONE when the camera has no package.
+	 * Stores where the focus is now as a new focus mark after the existing ones: the point or
+	 * subject the focus is kept on, or else its distance. Marks are kept with the camera
+	 * package. Returns the mark's index, or INDEX_NONE when the camera has no package.
 	 */
 	UECINEEDITOR_API int32 AddFocusMark(ACineCameraActor* Camera);
 
@@ -72,8 +87,11 @@ namespace UEcine::FocusEditing
 
 	UECINEEDITOR_API void RemoveFocusMark(ACineCameraActor* Camera, int32 MarkIndex);
 
-	/** Puts the focus on a mark at once. */
+	/** Puts the focus on a mark at once. A mark on a point keeps the focus on that point from then on. */
 	UECINEEDITOR_API void GoToFocusMark(ACineCameraActor* Camera, int32 MarkIndex);
+
+	/** How far a mark is from the camera now: a mark on a point is measured to where the point is. */
+	UECINEEDITOR_API float GetFocusMarkDistance(const ACineCameraActor* Camera, int32 MarkIndex);
 
 	/** Sets how long the camera's racks take. */
 	UECINEEDITOR_API void SetRackTime(ACineCameraActor* Camera, float Seconds);
@@ -87,6 +105,15 @@ namespace UEcine::FocusEditing
 	 * @return false with the reason in OutError when the rack cannot be written.
 	 */
 	UECINEEDITOR_API bool BakeRack(ACineCameraActor* Camera, float ToDistanceCm, double RackSeconds, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError);
+
+	/**
+	 * Writes a rack to a point in the level, and then keeps the focus on the point: a key on
+	 * every frame from the start frame to the end of the sequence's playback range, each measured
+	 * from where the camera and the subject are on that frame. The frames are read by moving
+	 * Sequencer's playhead, so the sequence has to be the one open in it; otherwise every frame
+	 * is measured from where the camera is now.
+	 */
+	UECINEEDITOR_API bool BakeRackToPoint(ACineCameraActor* Camera, AActor* Subject, const FVector& Offset, double RackSeconds, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError);
 
 	/**
 	 * Bakes a rack to one of the camera's focus marks, over the camera's rack time, into the

@@ -342,7 +342,11 @@ bool FUEcineFocusTabVisualTest::RunTest(const FString& Parameters)
 	// nearer than the lens can focus (warning row).
 	SetFocusDistance(CameraActor, 150.0f);
 	AddFocusMark(CameraActor);
-	SetFocusDistance(CameraActor, 320.0f);
+	// The second mark is on a point picked on a subject: the longest label a mark has.
+	AStaticMeshActor* Far = World->SpawnActor<AStaticMeshActor>(FVector(320.0, 0.0, 0.0), FRotator::ZeroRotator);
+	Far->SetActorLabel(TEXT("Anna head"));
+	FText HoldError;
+	HoldPoint(CameraActor, Far, FVector(320.0, 0.0, 0.0), HoldError);
 	AddFocusMark(CameraActor);
 	AStaticMeshActor* Subject = World->SpawnActor<AStaticMeshActor>(FVector(20.0, 0.0, 0.0), FRotator::ZeroRotator);
 	Subject->SetActorLabel(TEXT("Hero"));
@@ -350,11 +354,14 @@ bool FUEcineFocusTabVisualTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The subject is nearer than the lens can focus"), GetFocusDistance(CameraActor) < GetCloseFocus(CameraActor));
 
 	QueuePanelCaptures(*this, CameraActor, TEXT("focus-tab"), EUEcineDepartment::Focus, 760.0f);
-	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([WeakSubject = TWeakObjectPtr<AStaticMeshActor>(Subject)]
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([WeakSubject = TWeakObjectPtr<AStaticMeshActor>(Subject), WeakFar = TWeakObjectPtr<AStaticMeshActor>(Far)]
 	{
-		if (AStaticMeshActor* SubjectToRemove = WeakSubject.Get())
+		for (const TWeakObjectPtr<AStaticMeshActor>& Weak : { WeakSubject, WeakFar })
 		{
-			SubjectToRemove->GetWorld()->EditorDestroyActor(SubjectToRemove, false);
+			if (AStaticMeshActor* ToRemove = Weak.Get())
+			{
+				ToRemove->GetWorld()->EditorDestroyActor(ToRemove, false);
+			}
 		}
 		return true;
 	}));

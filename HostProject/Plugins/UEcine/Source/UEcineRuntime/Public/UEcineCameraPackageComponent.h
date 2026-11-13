@@ -10,6 +10,33 @@
 
 class UCineCameraComponent;
 
+
+/**
+ * A focus mark: a distance from the camera, or a point in the level. A point is kept as a place
+ * on a subject, so it stays on the subject when the subject or the camera moves.
+ */
+USTRUCT(BlueprintType)
+struct FUEcineFocusMark
+{
+	GENERATED_BODY()
+
+	/** How far from the camera the focus was when it was marked, in centimetres along the lens axis. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus", meta = (Units = "cm"))
+	float DistanceCm = 0.0f;
+
+	/** True for a mark on a point in the level: the distance is then measured to the point each time it is used. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus")
+	bool bPoint = false;
+
+	/** The subject the point is on. With none, Offset is a place in the level. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus")
+	TSoftObjectPtr<AActor> Subject;
+
+	/** The point, in the subject's own space. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus")
+	FVector Offset = FVector::ZeroVector;
+};
+
 /**
  * Lives on a standard Cine Camera Actor and remembers which real camera body, recording format
  * and lens it represents, and the focus puller's marks for it. Applying the package writes
@@ -24,12 +51,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine")
 	FUEcineCameraPackage Package;
 
-	/**
-	 * The focus distances the focus puller has marked for this camera, in centimetres, in the
-	 * order they were marked.
-	 */
+	/** What the focus puller has marked for this camera, in the order it was marked. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus")
-	TArray<float> FocusMarksCm;
+	TArray<FUEcineFocusMark> FocusMarks;
 
 	/** How long a rack from one focus distance to another takes, in seconds. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UEcine|Focus", meta = (ClampMin = "0.1", Units = "s"))

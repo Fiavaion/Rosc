@@ -21,6 +21,7 @@
 #include "UEcineWidgets.h"
 #include "Widgets/Input/NumericUnitTypeInterface.inl"
 #include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -81,20 +82,36 @@ void SUEcineFocusTab::RebuildLayout()
 	{
 		Add(FMargin(0.0f), MakeSectionHeader(LOCTEXT("FocusSection", "Focus")));
 		Add(FUEcineStyle::RowPadding, BuildDistanceRow());
-		Add(FUEcineStyle::ButtonRowPadding, MakeToggleButton(LOCTEXT("PickFocusButton", "Pick Focus"),
-			LOCTEXT("PickFocusToolTip", "Pick focus: then click a subject in the viewport to focus on it. Escape calls it off."),
-			TAttribute<bool>::CreateSPLambda(this, [this] { return UEcine::FocusEditing::IsPickingFocus(Target->GetCamera()); }),
-			[this](bool bPick)
-			{
-				if (bPick)
+		const auto MakePickButton = [this](const FText& Label, const FText& ToolTip, bool bHold)
+		{
+			return MakeToggleButton(Label, ToolTip,
+				TAttribute<bool>::CreateSPLambda(this, [this, bHold] { return UEcine::FocusEditing::IsPickingFocus(Target->GetCamera(), bHold); }),
+				[this, bHold](bool bPick)
 				{
-					UEcine::FocusEditing::BeginPickFocus(Target->GetCamera());
-				}
-				else
-				{
-					UEcine::FocusEditing::EndPickFocus();
-				}
-			}));
+					if (bPick)
+					{
+						UEcine::FocusEditing::BeginPickFocus(Target->GetCamera(), bHold);
+					}
+					else
+					{
+						UEcine::FocusEditing::EndPickFocus();
+					}
+				});
+		};
+		Add(FUEcineStyle::ButtonRowPadding,
+			SNew(SWrapBox)
+			.UseAllottedSize(true)
+			.InnerSlotPadding(FVector2D(4.0f, 4.0f))
+			+ SWrapBox::Slot()
+			[
+				MakePickButton(LOCTEXT("PickFocusButton", "Pick Focus"),
+					LOCTEXT("PickFocusToolTip", "Pick focus: then click a subject, or a part of it, in the viewport. The focus is set to that distance and stays there. Escape calls it off."), false)
+			]
+			+ SWrapBox::Slot()
+			[
+				MakePickButton(LOCTEXT("PickHoldButton", "Pick and Hold"),
+					LOCTEXT("PickHoldToolTip", "Pick and hold: then click a point in the viewport, such as an eye. The focus stays on that point as the camera and the subject move. Mark it to rack to it later. Escape calls it off."), true)
+			]);
 		Add(FUEcineStyle::RowPadding, BuildFollowRows());
 		Add(FUEcineStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SUEcineFocusTab::GetFocusWarning)));
 
@@ -107,7 +124,7 @@ void SUEcineFocusTab::RebuildLayout()
 			Add(FUEcineStyle::RowPadding, BuildRackTimeRow());
 			Add(FMargin(0.0f), SAssignNew(MarksBox, SVerticalBox));
 			const TSharedRef<SWidget> MarkFocus = MakeButton(LOCTEXT("MarkFocusButton", "Mark Focus"),
-				LOCTEXT("MarkFocusToolTip", "Store where the focus is now as the next focus mark."),
+				LOCTEXT("MarkFocusToolTip", "Store what the focus is on now as the next focus mark: the point or subject it is held on, or else its distance."),
 				FOnClicked::CreateSPLambda(this, [this]
 				{
 					UEcine::FocusEditing::AddFocusMark(Target->GetCamera());
@@ -216,8 +233,8 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildFollowRows()
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
-			MakeReadoutRow(LOCTEXT("FollowingLabel", "Following"),
-				LOCTEXT("FollowingToolTip", "The subject the focus is kept on as it and the camera move."),
+			MakeReadoutRow(LOCTEXT("FollowingLabel", "Held on"),
+				LOCTEXT("FollowingToolTip", "The subject or the picked point the focus is kept on as it and the camera move."),
 				TAttribute<FText>::CreateSP(this, &SUEcineFocusTab::GetFollowedName))
 		]
 		+ SVerticalBox::Slot()
@@ -240,8 +257,8 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildFollowRows()
 			.FillWidth(1.0f)
 			.Padding(4.0f, 0.0f, 0.0f, 0.0f)
 			[
-				MakeButton(LOCTEXT("StopFollowingButton", "Stop Following"),
-					LOCTEXT("StopFollowingToolTip", "Stop following the subject. The focus stays where it is."),
+				MakeButton(LOCTEXT("StopFollowingButton", "Let Go"),
+					LOCTEXT("StopFollowingToolTip", "Let go of the subject or point. The focus stays at the distance it is at."),
 					FOnClicked::CreateSPLambda(this, [this]
 					{
 						UEcine::FocusEditing::StopFollowing(Target->GetCamera());
@@ -331,17 +348,39 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildMarkRow(int32 MarkIndex)
 	const TAttribute<FText> MarkLabel = TAttribute<FText>::CreateSPLambda(this, [this, MarkIndex, Number]
 	{
 		const UUEcineCameraPackageComponent* Package = Target->GetPackageComponent();
-		return Package != nullptr && Package->FocusMarksCm.IsValidIndex(MarkIndex)
-			? FText::Format(LOCTEXT("FocusMarkButton", "Mark {0}: {1}"), Number, FormatDistanceMm(Package->FocusMarksCm[MarkIndex] * 10.0))
-			: FText::GetEmpty();
+		if (Package == nullptr || !Package->FocusMarks.IsValidIndex(MarkIndex))
+		{
+			return FText::GetEmpty();
+		}
+		return FText::Format(LOCTEXT("FocusMarkButton", "Mark {0}: {1}"), Number, FormatDistanceMm(UEcine::FocusEditing::GetFocusMarkDistance(Target->GetCamera(), MarkIndex) * 10.0));
+	});
+	// A mark on a subject or a point says what it is on, on a line of its own under the row.
+	const TAttribute<FText> MarkSubject = TAttribute<FText>::CreateSPLambda(this, [this, MarkIndex]
+	{
+		const UUEcineCameraPackageComponent* Package = Target->GetPackageComponent();
+		if (Package == nullptr || !Package->FocusMarks.IsValidIndex(MarkIndex) || !Package->FocusMarks[MarkIndex].bPoint)
+		{
+			return FText::GetEmpty();
+		}
+		const FUEcineFocusMark& Mark = Package->FocusMarks[MarkIndex];
+		const AActor* Subject = Mark.Subject.Get();
+		if (Subject == nullptr)
+		{
+			return Mark.Subject.IsNull() ? LOCTEXT("FocusMarkOnPlace", "On a point in the level") : LOCTEXT("FocusMarkSubjectGone", "On a subject no longer in the level");
+		}
+		return FText::Format(Mark.Offset.IsNearlyZero() ? LOCTEXT("FocusMarkOnSubject", "On {0}") : LOCTEXT("FocusMarkOnPoint", "On a point on {0}"), FText::FromString(Subject->GetActorLabel()));
 	});
 
-	return SNew(SHorizontalBox)
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot()
 		.FillWidth(1.0f)
 		[
 			MakeButton(MarkLabel,
-				FText::Format(LOCTEXT("FocusMarkButtonToolTip", "Put the focus on mark {0} at once."), Number),
+				FText::Format(LOCTEXT("FocusMarkButtonToolTip", "Put the focus on mark {0} at once. A mark on a subject or a point holds the focus on it from then on."), Number),
 				FOnClicked::CreateSPLambda(this, [this, MarkIndex]
 				{
 					UEcine::FocusEditing::GoToFocusMark(Target->GetCamera(), MarkIndex);
@@ -353,7 +392,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildMarkRow(int32 MarkIndex)
 		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
 		[
 			MakeButton(LOCTEXT("RackButton", "Rack"),
-				FText::Format(LOCTEXT("RackToolTip", "Rack to mark {0}: write a focus pull into Sequencer, from where the focus is at the playhead to this mark, over the rack time."), Number),
+				FText::Format(LOCTEXT("RackToolTip", "Rack to mark {0}: write a focus pull into Sequencer, from where the focus is at the playhead to this mark, over the rack time. A mark on a subject or a point is then kept sharp to the end of the shot, wherever the camera goes."), Number),
 				FOnClicked::CreateSP(this, &SUEcineFocusTab::OnRackClicked, MarkIndex))
 		]
 		+ SHorizontalBox::Slot()
@@ -361,7 +400,7 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildMarkRow(int32 MarkIndex)
 		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
 		[
 			MakeButton(LOCTEXT("FocusRemarkButton", "Re-mark"),
-				FText::Format(LOCTEXT("FocusRemarkToolTip", "Move mark {0} to where the focus is now."), Number),
+				FText::Format(LOCTEXT("FocusRemarkToolTip", "Move mark {0} to what the focus is on now."), Number),
 				FOnClicked::CreateSPLambda(this, [this, MarkIndex]
 				{
 					UEcine::FocusEditing::UpdateFocusMark(Target->GetCamera(), MarkIndex);
@@ -379,6 +418,17 @@ TSharedRef<SWidget> SUEcineFocusTab::BuildMarkRow(int32 MarkIndex)
 				UEcine::FocusEditing::RemoveFocusMark(Target->GetCamera(), MarkIndex);
 				return FReply::Handled();
 			}))
+		]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(2.0f, 2.0f, 0.0f, 0.0f)
+		[
+			SNew(STextBlock)
+			.TextStyle(&TextStyle("UEcine.Body"))
+			.AutoWrapText(true)
+			.Text(MarkSubject)
+			.Visibility_Lambda([MarkSubject] { return MarkSubject.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
 		];
 }
 
@@ -435,7 +485,7 @@ AActor* SUEcineFocusTab::GetSelectedSubject() const
 int32 SUEcineFocusTab::GetMarkCount() const
 {
 	const UUEcineCameraPackageComponent* Package = Target->GetPackageComponent();
-	return Package != nullptr ? Package->FocusMarksCm.Num() : 0;
+	return Package != nullptr ? Package->FocusMarks.Num() : 0;
 }
 
 FText SUEcineFocusTab::GetFollowedName() const
@@ -444,8 +494,15 @@ FText SUEcineFocusTab::GetFollowedName() const
 	{
 		return LOCTEXT("FollowingNothing", "Nothing");
 	}
-	const AActor* Subject = UEcine::FocusEditing::GetFollowedActor(Target->GetCamera());
-	return Subject != nullptr ? FText::FromString(Subject->GetActorLabel()) : LOCTEXT("FollowingMissing", "A subject no longer in the level");
+	const ACineCameraActor* Camera = Target->GetCamera();
+	const AActor* Subject = UEcine::FocusEditing::GetFollowedActor(Camera);
+	if (!UEcine::FocusEditing::IsHoldingPoint(Camera))
+	{
+		return Subject != nullptr ? FText::FromString(Subject->GetActorLabel()) : LOCTEXT("FollowingMissing", "A subject no longer in the level");
+	}
+	return Subject != nullptr
+		? FText::Format(LOCTEXT("HoldingPointOn", "A point on {0}"), FText::FromString(Subject->GetActorLabel()))
+		: LOCTEXT("HoldingPlace", "A point in the level");
 }
 
 FText SUEcineFocusTab::GetFocusWarning() const

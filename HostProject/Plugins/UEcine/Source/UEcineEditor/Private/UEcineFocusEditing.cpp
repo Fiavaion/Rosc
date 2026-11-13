@@ -6,10 +6,13 @@
 #include "CineCameraActor.h"
 #include "CineCameraComponent.h"
 #include "Editor.h"
+#include "Engine/World.h"
+#include "LevelEditorViewport.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Modules/ModuleManager.h"
 #include "MovieScene.h"
+#include "MovieSceneSequencePlayer.h"
 #include "SceneDepthPickerMode.h"
 #include "ScopedTransaction.h"
 #include "Sections/MovieSceneFloatSection.h"
@@ -27,8 +30,37 @@ namespace
 {
 	const FName DepthPickerModuleName("SceneDepthPickerMode");
 
-	/** The camera waiting for a click to focus on. */
+	/** The camera waiting for a click to focus on, and whether the click is to be held. */
 	TWeakObjectPtr<ACineCameraActor> PickingCamera;
+	bool bPickingToHold = false;
+
+	/** Where a point kept on a subject is in the level. With no subject the offset is the place itself. */
+	FVector GetPointInLevel(const AActor* Subject, const FVector& Offset)
+	{
+		return Subject != nullptr ? Subject->GetActorTransform().TransformPosition(Offset) : Offset;
+	}
+
+	/** The distance the Cine Camera would focus at for a point: along the lens axis, and zero behind the camera. */
+	float MeasureToPoint(const UCineCameraComponent* Lens, const FVector& WorldPoint)
+	{
+		return static_cast<float>(FMath::Max(0.0, FVector::DotProduct(Lens->GetForwardVector(), WorldPoint - Lens->GetComponentLocation())));
+	}
+
+	/** The subject under a point picked in the viewport, found by looking along the view to it. */
+	AActor* FindSubjectAt(const UWorld* World, const FVector& WorldPoint)
+	{
+		if (World == nullptr || GCurrentLevelEditingViewportClient == nullptr)
+		{
+			return nullptr;
+		}
+		const FVector Eye = GCurrentLevelEditingViewportClient->GetViewLocation();
+		const FVector Along = (WorldPoint - Eye).GetSafeNormal();
+		FHitResult Hit;
+		FCollisionQueryParams Query(SCENE_QUERY_STAT(UEcinePickFocus), true);
+		// A surface with no collision is not found: the point is then kept as a place in the level.
+		const bool bHit = World->LineTraceSingleByChannel(Hit, Eye, WorldPoint + Along * 10.0, ECC_Visibility, Query);
+		return bHit && FVector::Dist(Hit.ImpactPoint, WorldPoint) < 25.0 ? Hit.GetActor() : nullptr;
+	}
 
 	/** Changes a camera's focus settings as one undoable step and redraws the viewports. */
 	void EditFocus(ACineCameraActor* Camera, const FText& Description, TFunctionRef<void(FCameraFocusSettings&)> Edit)
@@ -67,8 +99,34 @@ namespace
 	bool HasFocusMark(const ACineCameraActor* Camera, int32 MarkIndex)
 	{
 		const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
-		return Package != nullptr && Package->FocusMarksCm.IsValidIndex(MarkIndex);
+		return Package != nullptr && Package->FocusMarks.IsValidIndex(MarkIndex);
 	}
+
+	/** What the focus is on now, as a mark: the point or subject it is kept on, or else its distance. */
+	FUEcineFocusMark MakeMark(const ACineCameraActor* Camera)
+	{
+		FUEcineFocusMark Mark;
+		Mark.DistanceCm = UEcine::FocusEditing::GetLensDistance(Camera);
+		const FCameraFocusSettings& Settings = Camera->GetCineCameraComponent()->FocusSettings;
+		if (Settings.FocusMethod == ECameraFocusMethod::Tracking)
+		{
+			Mark.bPoint = true;
+			Mark.Subject = Settings.TrackingFocusSettings.ActorToTrack;
+			Mark.Offset = Settings.TrackingFocusSettings.RelativeOffset;
+		}
+		return Mark;
+	}
+
+	/** What a rack pulls to: a distance, or a point that is measured again on every frame. */
+	struct FRackTarget
+	{
+		bool bPoint = false;
+		float DistanceCm = 0.0f;
+		TWeakObjectPtr<AActor> Subject;
+		FVector Offset = FVector::ZeroVector;
+	};
+
+	bool BakeRackKeys(ACineCameraActor* Camera, const FRackTarget& Target, double RackSeconds, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError);
 }
 
 float UEcine::FocusEditing::GetLensDistance(const ACineCameraActor* Camera)
@@ -89,10 +147,7 @@ float UEcine::FocusEditing::GetFocusDistance(const ACineCameraActor* Camera)
 	float Distance = Settings.ManualFocusDistance;
 	if (Settings.FocusMethod == ECameraFocusMethod::Tracking)
 	{
-		const AActor* Subject = Settings.TrackingFocusSettings.ActorToTrack.Get();
-		const FVector Offset = Settings.TrackingFocusSettings.RelativeOffset;
-		const FVector FocusPoint = Subject != nullptr ? Subject->GetActorTransform().TransformPosition(Offset) : Offset;
-		Distance = static_cast<float>(FMath::Max(0.0, FVector::DotProduct(Lens->GetForwardVector(), FocusPoint - Lens->GetComponentLocation())));
+		Distance = MeasureToPoint(Lens, GetPointInLevel(Settings.TrackingFocusSettings.ActorToTrack.Get(), Settings.TrackingFocusSettings.RelativeOffset));
 	}
 	return Distance + Settings.FocusOffset;
 }
@@ -129,13 +184,40 @@ bool UEcine::FocusEditing::FocusOnPoint(ACineCameraActor* Camera, const FVector&
 	return true;
 }
 
-void UEcine::FocusEditing::BeginPickFocus(ACineCameraActor* Camera)
+bool UEcine::FocusEditing::HoldPoint(ACineCameraActor* Camera, AActor* Subject, const FVector& WorldPoint, FText& OutError)
+{
+	if (Camera == nullptr)
+	{
+		OutError = LOCTEXT("FocusNoCamera", "There is no camera to focus.");
+		return false;
+	}
+	if (MeasureToPoint(Camera->GetCineCameraComponent(), WorldPoint) <= 0.0f)
+	{
+		OutError = LOCTEXT("FocusBehindCamera", "That point is behind the camera, so the lens cannot focus on it. Pick something the camera is facing.");
+		return false;
+	}
+	if (Subject == Camera)
+	{
+		Subject = nullptr;
+	}
+	const FVector Offset = Subject != nullptr ? Subject->GetActorTransform().InverseTransformPosition(WorldPoint) : WorldPoint;
+	EditFocus(Camera, LOCTEXT("HoldFocus", "Pick and Hold Focus"), [Subject, &Offset](FCameraFocusSettings& Settings)
+	{
+		Settings.FocusMethod = ECameraFocusMethod::Tracking;
+		Settings.TrackingFocusSettings.ActorToTrack = Subject;
+		Settings.TrackingFocusSettings.RelativeOffset = Offset;
+	});
+	return true;
+}
+
+void UEcine::FocusEditing::BeginPickFocus(ACineCameraActor* Camera, bool bHold)
 {
 	if (Camera == nullptr)
 	{
 		return;
 	}
 	PickingCamera = Camera;
+	bPickingToHold = bHold;
 	FSceneDepthPickerModeModule& Picker = FModuleManager::LoadModuleChecked<FSceneDepthPickerModeModule>(DepthPickerModuleName);
 	Picker.BeginSceneDepthPickingMode(FOnSceneDepthLocationSelected::CreateLambda([](FVector Location)
 	{
@@ -147,7 +229,9 @@ void UEcine::FocusEditing::BeginPickFocus(ACineCameraActor* Camera)
 		}
 		// A click on empty sky comes back as the origin.
 		FText Error = LOCTEXT("PickedNothing", "There is nothing there to focus on. Pick a surface in the level.");
-		if (Location == FVector::ZeroVector || !FocusOnPoint(Picking, Location, Error))
+		const bool bFocused = Location != FVector::ZeroVector
+			&& (bPickingToHold ? HoldPoint(Picking, FindSubjectAt(Picking->GetWorld(), Location), Location, Error) : FocusOnPoint(Picking, Location, Error));
+		if (!bFocused)
 		{
 			UEcine::Widgets::Notify(Error, false);
 		}
@@ -163,10 +247,10 @@ void UEcine::FocusEditing::EndPickFocus()
 	}
 }
 
-bool UEcine::FocusEditing::IsPickingFocus(const ACineCameraActor* Camera)
+bool UEcine::FocusEditing::IsPickingFocus(const ACineCameraActor* Camera, bool bHold)
 {
 	const FSceneDepthPickerModeModule* Picker = FModuleManager::GetModulePtr<FSceneDepthPickerModeModule>(DepthPickerModuleName);
-	return Camera != nullptr && PickingCamera == Camera && Picker != nullptr && Picker->IsInSceneDepthPickingMode();
+	return Camera != nullptr && PickingCamera == Camera && bPickingToHold == bHold && Picker != nullptr && Picker->IsInSceneDepthPickingMode();
 }
 
 void UEcine::FocusEditing::FollowActor(ACineCameraActor* Camera, AActor* Subject)
@@ -191,6 +275,21 @@ void UEcine::FocusEditing::StopFollowing(ACineCameraActor* Camera)
 	}
 }
 
+bool UEcine::FocusEditing::IsFollowing(const ACineCameraActor* Camera)
+{
+	return Camera != nullptr && Camera->GetCineCameraComponent()->FocusSettings.FocusMethod == ECameraFocusMethod::Tracking;
+}
+
+bool UEcine::FocusEditing::IsHoldingPoint(const ACineCameraActor* Camera)
+{
+	if (!IsFollowing(Camera))
+	{
+		return false;
+	}
+	const FCameraTrackingFocusSettings& Tracking = Camera->GetCineCameraComponent()->FocusSettings.TrackingFocusSettings;
+	return Tracking.ActorToTrack.IsNull() || !Tracking.RelativeOffset.IsNearlyZero();
+}
+
 AActor* UEcine::FocusEditing::GetFollowedActor(const ACineCameraActor* Camera)
 {
 	if (Camera == nullptr)
@@ -206,7 +305,7 @@ int32 UEcine::FocusEditing::AddFocusMark(ACineCameraActor* Camera)
 	int32 MarkIndex = INDEX_NONE;
 	EditMarks(Camera, LOCTEXT("AddFocusMark", "Mark Focus"), [Camera, &MarkIndex](UUEcineCameraPackageComponent& Package)
 	{
-		MarkIndex = Package.FocusMarksCm.Add(GetLensDistance(Camera));
+		MarkIndex = Package.FocusMarks.Add(MakeMark(Camera));
 	});
 	return MarkIndex;
 }
@@ -217,7 +316,7 @@ void UEcine::FocusEditing::UpdateFocusMark(ACineCameraActor* Camera, int32 MarkI
 	{
 		EditMarks(Camera, LOCTEXT("UpdateFocusMark", "Move Focus Mark"), [Camera, MarkIndex](UUEcineCameraPackageComponent& Package)
 		{
-			Package.FocusMarksCm[MarkIndex] = GetLensDistance(Camera);
+			Package.FocusMarks[MarkIndex] = MakeMark(Camera);
 		});
 	}
 }
@@ -228,17 +327,44 @@ void UEcine::FocusEditing::RemoveFocusMark(ACineCameraActor* Camera, int32 MarkI
 	{
 		EditMarks(Camera, LOCTEXT("RemoveFocusMark", "Remove Focus Mark"), [MarkIndex](UUEcineCameraPackageComponent& Package)
 		{
-			Package.FocusMarksCm.RemoveAt(MarkIndex);
+			Package.FocusMarks.RemoveAt(MarkIndex);
 		});
 	}
 }
 
 void UEcine::FocusEditing::GoToFocusMark(ACineCameraActor* Camera, int32 MarkIndex)
 {
-	if (HasFocusMark(Camera, MarkIndex))
+	if (!HasFocusMark(Camera, MarkIndex))
 	{
-		SetManualFocus(Camera, UUEcineCameraPackageComponent::Find(Camera)->FocusMarksCm[MarkIndex], LOCTEXT("GoToFocusMark", "Go to Focus Mark"));
+		return;
 	}
+	const FUEcineFocusMark Mark = UUEcineCameraPackageComponent::Find(Camera)->FocusMarks[MarkIndex];
+	if (Mark.bPoint)
+	{
+		EditFocus(Camera, LOCTEXT("GoToFocusMark", "Go to Focus Mark"), [&Mark](FCameraFocusSettings& Settings)
+		{
+			Settings.FocusMethod = ECameraFocusMethod::Tracking;
+			Settings.TrackingFocusSettings.ActorToTrack = Mark.Subject;
+			Settings.TrackingFocusSettings.RelativeOffset = Mark.Offset;
+		});
+	}
+	else
+	{
+		SetManualFocus(Camera, Mark.DistanceCm, LOCTEXT("GoToFocusMark", "Go to Focus Mark"));
+	}
+}
+
+float UEcine::FocusEditing::GetFocusMarkDistance(const ACineCameraActor* Camera, int32 MarkIndex)
+{
+	if (!HasFocusMark(Camera, MarkIndex))
+	{
+		return 0.0f;
+	}
+	const FUEcineFocusMark& Mark = UUEcineCameraPackageComponent::Find(Camera)->FocusMarks[MarkIndex];
+	const UCineCameraComponent* Lens = Camera->GetCineCameraComponent();
+	return Mark.bPoint
+		? FMath::Max(MeasureToPoint(Lens, GetPointInLevel(Mark.Subject.Get(), Mark.Offset)) + Lens->FocusSettings.FocusOffset, GetCloseFocus(Camera))
+		: Mark.DistanceCm;
 }
 
 void UEcine::FocusEditing::SetRackTime(ACineCameraActor* Camera, float Seconds)
@@ -251,6 +377,25 @@ void UEcine::FocusEditing::SetRackTime(ACineCameraActor* Camera, float Seconds)
 
 bool UEcine::FocusEditing::BakeRack(ACineCameraActor* Camera, float ToDistanceCm, double RackSeconds, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError)
 {
+	FRackTarget Target;
+	Target.DistanceCm = ToDistanceCm;
+	return BakeRackKeys(Camera, Target, RackSeconds, Sequence, StartFrame, OutError);
+}
+
+bool UEcine::FocusEditing::BakeRackToPoint(ACineCameraActor* Camera, AActor* Subject, const FVector& Offset, double RackSeconds, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError)
+{
+	FRackTarget Target;
+	Target.bPoint = true;
+	Target.Subject = Subject;
+	Target.Offset = Offset;
+	return BakeRackKeys(Camera, Target, RackSeconds, Sequence, StartFrame, OutError);
+}
+
+namespace
+{
+bool BakeRackKeys(ACineCameraActor* Camera, const FRackTarget& Target, double RackSeconds, ULevelSequence* Sequence, FFrameNumber StartFrame, FText& OutError)
+{
+	using namespace UEcine::FocusEditing;
 	if (Camera == nullptr)
 	{
 		OutError = LOCTEXT("RackNoCamera", "There is no camera to rack focus on.");
@@ -274,7 +419,15 @@ bool UEcine::FocusEditing::BakeRack(ACineCameraActor* Camera, float ToDistanceCm
 	// A key on every frame from the one the rack starts on to the first one at or after its end.
 	const FUEcineMoveTiming Timing = UEcine::Focus::MakeRackTiming(RackSeconds);
 	const FFrameNumber EndFrame = StartFrame + FMath::CeilToInt32(Timing.DurationSeconds * DisplayRate.AsDecimal() - 1.e-6);
-	const TRange<FFrameNumber> RackRange = TRange<FFrameNumber>::Inclusive(ToTick(StartFrame), ToTick(EndFrame));
+
+	// A point is kept sharp after the rack as well, to the last frame the sequence plays.
+	FFrameNumber LastFrame = EndFrame;
+	if (Target.bPoint && MovieScene->GetPlaybackRange().HasUpperBound())
+	{
+		const FFrameNumber LastPlayed = ConvertFrameTime(FFrameTime(UE::MovieScene::DiscreteExclusiveUpper(MovieScene->GetPlaybackRange()) - 1), TickResolution, DisplayRate).FloorToFrame();
+		LastFrame = FMath::Max(EndFrame, LastPlayed);
+	}
+	const TRange<FFrameNumber> RackRange = TRange<FFrameNumber>::Inclusive(ToTick(StartFrame), ToTick(LastFrame));
 
 	const FScopedTransaction Transaction(LOCTEXT("BakeRack", "Rack Focus"));
 	Sequence->Modify();
@@ -296,7 +449,28 @@ bool UEcine::FocusEditing::BakeRack(ACineCameraActor* Camera, float ToDistanceCm
 	const float FromDistance = Channel.Evaluate(FFrameTime(RackRange.GetLowerBoundValue()), KeyedDistance)
 		? FMath::Max(KeyedDistance + FocusOffset, CloseFocus)
 		: GetLensDistance(Camera);
-	const float ToDistance = FMath::Max(ToDistanceCm, CloseFocus);
+
+	// Where the rack is pulling to on each frame. A point is measured from where the camera and
+	// the subject are on that frame, read by putting Sequencer's playhead there.
+	TArray<float> ToDistances;
+	ToDistances.Init(FMath::Max(Target.DistanceCm, CloseFocus), LastFrame.Value - StartFrame.Value + 1);
+	if (Target.bPoint)
+	{
+		const bool bReadFrames = ULevelSequenceEditorBlueprintLibrary::GetFocusedLevelSequence() == Sequence;
+		const FMovieSceneSequencePlaybackParams PlayheadBefore = ULevelSequenceEditorBlueprintLibrary::GetLocalPosition(EMovieSceneTimeUnit::TickResolution);
+		for (int32 Index = 0; Index < ToDistances.Num(); ++Index)
+		{
+			if (bReadFrames)
+			{
+				ULevelSequenceEditorBlueprintLibrary::SetLocalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(ToTick(StartFrame + Index)), EUpdatePositionMethod::Scrub), EMovieSceneTimeUnit::TickResolution);
+			}
+			ToDistances[Index] = FMath::Max(MeasureToPoint(Lens, GetPointInLevel(Target.Subject.Get(), Target.Offset)) + FocusOffset, CloseFocus);
+		}
+		if (bReadFrames)
+		{
+			ULevelSequenceEditorBlueprintLibrary::SetLocalPosition(FMovieSceneSequencePlaybackParams(PlayheadBefore.Frame, EUpdatePositionMethod::Scrub), EMovieSceneTimeUnit::TickResolution);
+		}
+	}
 
 	// Keys drive the hand-set distance, so the camera has to be focused by hand.
 	if (Lens->FocusSettings.FocusMethod != ECameraFocusMethod::Manual)
@@ -305,9 +479,12 @@ bool UEcine::FocusEditing::BakeRack(ACineCameraActor* Camera, float ToDistanceCm
 	}
 
 	DeleteKeysInRange(Channel, RackRange);
-	for (FFrameNumber Frame = StartFrame; Frame <= EndFrame; ++Frame)
+	for (FFrameNumber Frame = StartFrame; Frame <= LastFrame; ++Frame)
 	{
-		const double Distance = UEcine::Focus::RackDistance(FromDistance, ToDistance, Timing, DisplayRate.AsSeconds(FFrameTime(Frame - StartFrame)));
+		const float ToDistance = ToDistances[Frame.Value - StartFrame.Value];
+		const double Distance = Frame <= EndFrame
+			? UEcine::Focus::RackDistance(FromDistance, ToDistance, Timing, DisplayRate.AsSeconds(FFrameTime(Frame - StartFrame)))
+			: ToDistance;
 		Channel.AddLinearKey(ToTick(Frame), static_cast<float>(Distance) - FocusOffset);
 	}
 	Section->MarkAsChanged();
@@ -315,6 +492,7 @@ bool UEcine::FocusEditing::BakeRack(ACineCameraActor* Camera, float ToDistanceCm
 	IncludeInPlaybackRange(MovieScene, RackRange);
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;
+}
 }
 
 ULevelSequence* UEcine::FocusEditing::RackToFocusMark(ACineCameraActor* Camera, int32 MarkIndex, FText& OutError)
@@ -333,7 +511,11 @@ ULevelSequence* UEcine::FocusEditing::RackToFocusMark(ACineCameraActor* Camera, 
 		return nullptr;
 	}
 	const UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
-	return BakeRack(Camera, Package->FocusMarksCm[MarkIndex], Package->RackSeconds, Target.Sequence, Target.StartFrame, OutError) ? Target.Sequence : nullptr;
+	const FUEcineFocusMark Mark = Package->FocusMarks[MarkIndex];
+	const bool bBaked = Mark.bPoint
+		? BakeRackToPoint(Camera, Mark.Subject.Get(), Mark.Offset, Package->RackSeconds, Target.Sequence, Target.StartFrame, OutError)
+		: BakeRack(Camera, Mark.DistanceCm, Package->RackSeconds, Target.Sequence, Target.StartFrame, OutError);
+	return bBaked ? Target.Sequence : nullptr;
 }
 
 #undef LOCTEXT_NAMESPACE

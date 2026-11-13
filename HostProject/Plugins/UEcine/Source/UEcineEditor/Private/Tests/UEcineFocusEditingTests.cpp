@@ -11,7 +11,10 @@
 #include "MovieScene.h"
 #include "MovieSceneSequencePlayer.h"
 #include "ObjectTools.h"
+#include "Channels/MovieSceneDoubleChannel.h"
+#include "Sections/MovieScene3DTransformSection.h"
 #include "Sections/MovieSceneFloatSection.h"
+#include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraPackageComponent.h"
@@ -115,20 +118,20 @@ bool FUEcineFocusPullTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("First focus mark"), AddFocusMark(Camera), 0);
 	SetFocusDistance(Camera, 600.0f);
 	TestEqual(TEXT("Second focus mark"), AddFocusMark(Camera), 1);
-	TestEqual(TEXT("The first mark is at 1.5 m"), Package->FocusMarksCm[0], 150.0f, 0.01f);
-	TestEqual(TEXT("The second mark is at 6 m"), Package->FocusMarksCm[1], 600.0f, 0.01f);
+	TestEqual(TEXT("The first mark is at 1.5 m"), Package->FocusMarks[0].DistanceCm, 150.0f, 0.01f);
+	TestEqual(TEXT("The second mark is at 6 m"), Package->FocusMarks[1].DistanceCm, 600.0f, 0.01f);
 	TestTrue(TEXT("Marking can be undone"), GEditor->UndoTransaction());
-	TestEqual(TEXT("After undo there is one mark"), Package->FocusMarksCm.Num(), 1);
+	TestEqual(TEXT("After undo there is one mark"), Package->FocusMarks.Num(), 1);
 	TestTrue(TEXT("It can be redone"), GEditor->RedoTransaction());
 	GoToFocusMark(Camera, 0);
 	TestEqual(TEXT("Go to mark puts the focus on it"), GetFocusDistance(Camera), 150.0f, 0.01f);
 	SetFocusDistance(Camera, 450.0f);
 	UpdateFocusMark(Camera, 1);
-	TestEqual(TEXT("Re-marking moves the mark"), Package->FocusMarksCm[1], 450.0f, 0.01f);
+	TestEqual(TEXT("Re-marking moves the mark"), Package->FocusMarks[1].DistanceCm, 450.0f, 0.01f);
 	TestEqual(TEXT("A third mark"), AddFocusMark(Camera), 2);
 	RemoveFocusMark(Camera, 1);
-	TestEqual(TEXT("Removing a mark leaves the others"), Package->FocusMarksCm.Num(), 2);
-	TestEqual(TEXT("The marks after it move up"), Package->FocusMarksCm[1], 450.0f, 0.01f);
+	TestEqual(TEXT("Removing a mark leaves the others"), Package->FocusMarks.Num(), 2);
+	TestEqual(TEXT("The marks after it move up"), Package->FocusMarks[1].DistanceCm, 450.0f, 0.01f);
 	SetFocusDistance(Camera, 600.0f);
 	UpdateFocusMark(Camera, 1);
 	SetRackTime(Camera, 2.0f);
@@ -249,6 +252,134 @@ bool FUEcineFocusPullTest::RunTest(const FString& Parameters)
 	World->EditorDestroyActor(Subject, false);
 	World->EditorDestroyActor(Camera, false);
 	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine focus test")));
+	return true;
+}
+
+/**
+ * Focus on a point: pick and hold a point on a subject, mark it, go back to it, and rack to it
+ * in a shot where the camera travels, reading the frames in the real Sequencer.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineFocusPointsTest, "UEcine.Editor.Focus.Points", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineFocusPointsTest::RunTest(const FString& Parameters)
+{
+	using namespace UEcine::FocusEditing;
+
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	// At the origin, looking along X.
+	ACineCameraActor* Camera = UEcine::CameraEditing::SpawnCamera(World, FTransform::Identity);
+	AStaticMeshActor* Subject = World->SpawnActor<AStaticMeshActor>(FVector(600.0, 0.0, 0.0), FRotator::ZeroRotator);
+	if (!TestNotNull(TEXT("A camera to pull focus on"), Camera) || !TestNotNull(TEXT("A subject"), Subject))
+	{
+		return false;
+	}
+	Subject->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Subject->SetActorLabel(TEXT("Anna"));
+	UUEcineCameraPackageComponent* Package = UUEcineCameraPackageComponent::Find(Camera);
+	FText Error;
+
+	// Hold a point on the subject: an eye, 40 cm nearer the camera than the subject's middle.
+	SetFocusDistance(Camera, 150.0f);
+	TestFalse(TEXT("A camera focused by hand holds nothing"), IsFollowing(Camera));
+	TestTrue(TEXT("A point on the subject is held"), HoldPoint(Camera, Subject, FVector(560.0, 30.0, 20.0), Error));
+	TestTrue(TEXT("The focus is held on a point"), IsFollowing(Camera) && IsHoldingPoint(Camera));
+	TestTrue(TEXT("The point is on the subject"), GetFollowedActor(Camera) == Subject);
+	TestEqual(TEXT("The focus is at the point, not the subject's middle"), GetFocusDistance(Camera), 560.0f, 0.01f);
+	TestEqual(TEXT("The engine renders with the focus at the point"), GetRenderedFocusDistance(Camera), 560.0f, 0.01f);
+	Subject->SetActorLocation(FVector(700.0, 0.0, 0.0));
+	TestEqual(TEXT("The point moves with the subject"), GetFocusDistance(Camera), 660.0f, 0.01f);
+	Camera->SetActorLocation(FVector(100.0, 0.0, 0.0));
+	TestEqual(TEXT("And stays in focus when the camera moves"), GetRenderedFocusDistance(Camera), 560.0f, 0.01f);
+	Camera->SetActorLocation(FVector::ZeroVector);
+	Subject->SetActorLocation(FVector(600.0, 0.0, 0.0));
+
+	FollowActor(Camera, Subject);
+	TestTrue(TEXT("Following a subject as a whole is not holding a point"), IsFollowing(Camera) && !IsHoldingPoint(Camera));
+	TestFalse(TEXT("A point behind the camera is refused"), HoldPoint(Camera, Subject, FVector(-200.0, 0.0, 0.0), Error));
+	TestTrue(TEXT("A refused point leaves the focus where it was"), !IsHoldingPoint(Camera) && GetFollowedActor(Camera) == Subject);
+	TestTrue(TEXT("A place in the level can be held with no subject"), HoldPoint(Camera, nullptr, FVector(400.0, 0.0, 0.0), Error));
+	TestTrue(TEXT("That is holding a point, on no subject"), IsHoldingPoint(Camera) && GetFollowedActor(Camera) == nullptr);
+	TestEqual(TEXT("The focus is at the place"), GetFocusDistance(Camera), 400.0f, 0.01f);
+	TestTrue(TEXT("Holding a point can be undone"), GEditor->UndoTransaction());
+	TestTrue(TEXT("After undo the focus follows the subject again"), !IsHoldingPoint(Camera) && GetFollowedActor(Camera) == Subject);
+
+	// Pick and hold waits for its own click.
+	BeginPickFocus(Camera, true);
+	TestTrue(TEXT("The camera is waiting for a click to hold"), IsPickingFocus(Camera, true) && !IsPickingFocus(Camera, false));
+	EndPickFocus();
+	TestFalse(TEXT("Picking is called off"), IsPickingFocus(Camera, true));
+
+	// Marks: one at a distance, one on the point.
+	SetFocusDistance(Camera, 150.0f);
+	TestEqual(TEXT("A mark at a distance"), AddFocusMark(Camera), 0);
+	HoldPoint(Camera, Subject, FVector(560.0, 30.0, 20.0), Error);
+	TestEqual(TEXT("A mark on the point"), AddFocusMark(Camera), 1);
+	TestFalse(TEXT("The first mark is a distance"), Package->FocusMarks[0].bPoint);
+	TestTrue(TEXT("The second mark is the point on the subject"), Package->FocusMarks[1].bPoint && Package->FocusMarks[1].Subject == Subject);
+	Subject->SetActorLocation(FVector(800.0, 0.0, 0.0));
+	TestEqual(TEXT("A mark at a distance stays where it was"), GetFocusMarkDistance(Camera, 0), 150.0f, 0.01f);
+	TestEqual(TEXT("A mark on a point is measured to where the point is now"), GetFocusMarkDistance(Camera, 1), 760.0f, 0.01f);
+	Subject->SetActorLocation(FVector(600.0, 0.0, 0.0));
+	GoToFocusMark(Camera, 0);
+	TestTrue(TEXT("Going to a distance mark sets the focus by hand"), !IsFollowing(Camera) && FMath::IsNearlyEqual(GetFocusDistance(Camera), 150.0f, 0.01f));
+	GoToFocusMark(Camera, 1);
+	TestTrue(TEXT("Going to a point mark holds the point"), IsHoldingPoint(Camera) && GetFollowedActor(Camera) == Subject);
+	GoToFocusMark(Camera, 0);
+
+	// A shot in which the camera travels 2 m towards the subject over its first two seconds.
+	ULevelSequence* Sequence = NewObject<ULevelSequence>(GetTransientPackage(), NAME_None, RF_Transactional);
+	Sequence->Initialize();
+	UMovieScene* MovieScene = Sequence->GetMovieScene();
+	const FFrameRate DisplayRate(24, 1);
+	MovieScene->SetDisplayRate(DisplayRate);
+	const FFrameRate TickResolution = MovieScene->GetTickResolution();
+	const auto ToTime = [&DisplayRate, &TickResolution](int32 Frame) { return ConvertFrameTime(FFrameTime(Frame), DisplayRate, TickResolution); };
+	MovieScene->SetPlaybackRange(TRange<FFrameNumber>(ToTime(0).RoundToFrame(), ToTime(72).RoundToFrame()));
+	UMovieScene3DTransformTrack* Travel = MovieScene->AddTrack<UMovieScene3DTransformTrack>(UEcine::SequenceUtils::FindOrAddBinding(Sequence, Camera));
+	UMovieScene3DTransformSection* TravelSection = CastChecked<UMovieScene3DTransformSection>(Travel->CreateNewSection());
+	TravelSection->SetRange(TRange<FFrameNumber>::All());
+	Travel->AddSection(*TravelSection);
+	FMovieSceneDoubleChannel* TravelX = TravelSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
+	TravelX->AddLinearKey(ToTime(0).RoundToFrame(), 0.0);
+	TravelX->AddLinearKey(ToTime(48).RoundToFrame(), 200.0);
+
+	if (TestTrue(TEXT("The shot opens in Sequencer"), ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(Sequence)))
+	{
+		ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(0), EUpdatePositionMethod::Scrub));
+		TestTrue(TEXT("Racking to the point mark uses the open shot"), RackToFocusMark(Camera, 1, Error) == Sequence);
+		const FMovieSceneFloatChannel* Channel = FindFocusChannel(Sequence, Camera);
+		if (TestNotNull(TEXT("The camera's focus distance has a track"), Channel))
+		{
+			TestEqual(TEXT("A key on every frame the shot plays: the rack, then the hold"), Channel->GetNumKeys(), 72);
+			const auto Keyed = [Channel, &ToTime](int32 Frame)
+			{
+				float Value = 0.0f;
+				Channel->Evaluate(ToTime(Frame), Value);
+				return Value;
+			};
+			TestEqual(TEXT("The rack leaves from where the focus was"), Keyed(0), 150.0f, 0.01f);
+			// The rack takes the camera's one second. By then the camera has come 1 m closer.
+			TestEqual(TEXT("At the end of the rack the focus is on the point, measured from where the camera is by then"), Keyed(24), 460.0f, 0.5f);
+			TestEqual(TEXT("While the camera keeps travelling the point stays sharp"), Keyed(36), 410.0f, 0.5f);
+			TestEqual(TEXT("And when the camera has stopped"), Keyed(60), 360.0f, 0.5f);
+			TestEqual(TEXT("To the last frame the shot plays"), Keyed(71), 360.0f, 0.5f);
+		}
+		TestEqual(TEXT("The playhead is back where it was"), ULevelSequenceEditorBlueprintLibrary::GetGlobalPosition().Frame.FloorToFrame().Value, 0);
+
+		// The real thing: scrub, and compare the engine's focus with the distance to the point.
+		for (int32 Frame = 24; Frame <= 71; Frame += 12)
+		{
+			ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(Frame), EUpdatePositionMethod::Scrub));
+			const float ToPoint = 560.0f - static_cast<float>(Camera->GetActorLocation().X);
+			TestEqual(*FString::Printf(TEXT("Scrubbed to frame %d: the engine focuses on the point"), Frame), GetRenderedFocusDistance(Camera), ToPoint, 0.5f);
+		}
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	}
+
+	GEditor->SelectNone(false, true, false);
+	World->EditorDestroyActor(Subject, false);
+	World->EditorDestroyActor(Camera, false);
+	GEditor->ResetTransaction(FText::FromString(TEXT("UEcine focus points test")));
 	return true;
 }
 
