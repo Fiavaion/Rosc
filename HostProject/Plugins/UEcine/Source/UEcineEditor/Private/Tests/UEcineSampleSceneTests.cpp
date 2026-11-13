@@ -236,7 +236,7 @@ namespace
 		}
 		LevelEditor->PilotLevelActor(Camera);
 		ViewportClient->SetGameView(true);
-		// The viewport takes the camera's exposure and focus when it ticks; the pictures are taken before it has.
+		// LESSON-TEST-009: the viewport takes the camera's exposure and focus when it ticks; the pictures are taken before it has.
 		ViewportClient->UpdateViewForLockedActor();
 		TArray<FColor> Pixels;
 		// The sky's light settles over a few frames.

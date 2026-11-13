@@ -152,6 +152,27 @@ What the run added to the design:
 - **The slate is drawn on the first frame the renderer keeps**, asked of the shot: the renderer
   also plays warm-up frames before it (LESSON-TEST-006).
 
+## Decisions added after first use (2026-11-13)
+- **Six kinds of delivery.** Draft, YouTube and DCP Source join Review, VFX handoff (shown as
+  "VFX Passes") and Master. Each is still one choice that sets the whole render; their folders
+  are `Draft`, `YouTube` and `DCP`, their name tokens `draft`, `youtube` and `dcp`.
+- **Draft** is H.264 in MP4 at half the review size (the delivery frame fitted into 960 by
+  540), 4 Mbit/s, burn-ins on, no slate. MP4 because a ProRes `.mov` does not play in Windows'
+  own player.
+- **YouTube** is H.264 High in MP4, the delivery frame fitted into 1920 by 1080 at 12 Mbit/s or
+  3840 by 2160 at 50 Mbit/s (inside YouTube's published upload ranges), eight temporal samples,
+  clean. It is a file on the user's machine. UEcine does not upload: that would send footage
+  off the machine and need accounts and keys the plugin has no other use for.
+- **DCP Source is a movie for a DCP program, not a DCP.** Writing a DCP needs JPEG 2000 and MXF
+  libraries the engine does not have. The source is ProRes 4444 (12 bits, Rec.709) at the
+  cinema's exact frames: 2048 by 858 for 2.39:1, 1998 by 1080 for 1.85:1, any other shape
+  fitted into 2048 by 1080; twice those at 4K. Sixteen-bit stills were considered and dropped:
+  the engine's PNG writer is 8 bits and its 16-bit format, OpenEXR, is scene-linear
+  (LESSON-API-021). Preflight says when the sequence does not play at 24 frames a second.
+- **MP4 comes from the engine's own writer** (`MovieGraphMP4EncoderNode`, in the Movie Render
+  Pipeline plugin already depended on), made by class path like the ProRes node.
+- **One size choice**, 4K or not, serves YouTube and DCP Source; the other kinds ignore it.
+
 ## Consequences
 - ✅ One code path for the panel button and the acceptance test.
 - ✅ Graphs are standard data; nothing of UEcine is needed to load one.
