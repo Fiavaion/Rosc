@@ -21,7 +21,7 @@ Select-String -Path $log -Pattern "\): (error|warning) |: fatal error |error LNK
 # What a buyer needs must be in the package, and every source file must say whose it is.
 if ($code -eq 0) {
 	$needed = @(
-		"UEcine.uplugin", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png",
+		"UEcine.uplugin", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
 		"Content\Sample\UEcineSampleStage.umap", "Resources\Icon128.png", "Resources\Icons\Panel.svg",
 		"Resources\Database\lenses.json", "Resources\AI\models.json", "Resources\AI\uecine_ai_server.py",
 		"Shaders\Private\UEcineMonitor.usf", "Binaries\Win64\UnrealEditor-UEcineEditor.dll"
