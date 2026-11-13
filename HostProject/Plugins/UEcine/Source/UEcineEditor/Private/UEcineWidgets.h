@@ -98,12 +98,26 @@ namespace UEcine::Widgets
 	TSharedRef<INumericTypeInterface<float>> MakeDistanceInterface();
 
 	/**
-	 * A box holding a folder's whole path, and a button that opens the folder dialog. The box
-	 * shows the folder in use. What the user types or picks is handed to ChooseFolder when it
-	 * is a whole path and not the folder already in use; an empty path asks for the folder the
-	 * project keeps for the purpose.
+	 * A box holding a folder's whole path, with Browse and Show in Explorer under it. A folder
+	 * dragged from Explorer can be dropped on the box. The box shows the folder in use. What the
+	 * user types, picks or drops is handed to ChooseFolder when it is a whole path and not the
+	 * folder already in use; an empty path asks for the folder the project keeps for the purpose.
 	 */
 	TSharedRef<SWidget> MakeFolderControl(const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, TFunction<FString()> GetFolder, TFunction<void(const FString& Folder)> ChooseFolder);
+
+	/**
+	 * The same for one file. Extensions are the kinds of file taken, in lower case with no dot;
+	 * FileTypeName names them in the file dialog ("Pictures").
+	 */
+	TSharedRef<SWidget> MakeFileControl(const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, const FText& FileTypeName, TArray<FString> Extensions, TFunction<FString()> GetFile, TFunction<void(const FString& File)> ChooseFile);
+
+	/**
+	 * What a path control takes from files dropped on it: the first one, as a whole path. A
+	 * folder control takes a folder, or the folder a dropped file is in; a file control takes a
+	 * file of one of its kinds (any kind when Extensions is empty). False, with the reason, when
+	 * the drop is not something the control takes.
+	 */
+	bool ResolveDroppedPath(const TArray<FString>& Dropped, bool bFolder, const TArray<FString>& Extensions, FString& OutPath, FText& OutError);
 
 	/**
 	 * Keeps keyboard focus in a list whose rows are rebuilt when one is removed. Without it the

@@ -2,13 +2,17 @@
 
 #include "CineCameraActor.h"
 #include "Editor.h"
+#include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "SUEcineAITab.h"
 #include "UEcineCameraEditing.h"
 #include "UEcineCameraTarget.h"
 #include "UEcineGripEditing.h"
 #include "UEcineRig.h"
 #include "UEcineShotPlan.h"
+#include "UEcineWidgets.h"
 #include "Widgets/Text/STextBlock.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -83,6 +87,35 @@ bool FUEcineAITabTest::RunTest(const FString& Parameters)
 	const FString OnDolly = ReadAITabText(*Tab, 2.0);
 	TestTrue(TEXT("The plan is still shown"), OnDolly.Contains(TEXT("A slow push forward.")));
 	TestFalse(TEXT("On a dolly the push forward is part of the move, and the warning has gone"), OnDolly.Contains(LeftOut));
+	return true;
+}
+
+/** What the file and folder boxes take when something is dragged onto them from Explorer. */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FUEcineDroppedPathTest, "UEcine.Editor.DroppedPath", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FUEcineDroppedPathTest::RunTest(const FString& Parameters)
+{
+	using UEcine::Widgets::ResolveDroppedPath;
+
+	const FString Folder = FPaths::ConvertRelativePathToFull(FPaths::ProjectIntermediateDir() / TEXT("UEcineDroppedPathTest"));
+	const FString Picture = Folder / TEXT("Plate.PNG");
+	const FString Notes = Folder / TEXT("Notes.txt");
+	IFileManager::Get().MakeDirectory(*Folder, true);
+	FFileHelper::SaveStringToFile(TEXT("x"), *Picture);
+	FFileHelper::SaveStringToFile(TEXT("x"), *Notes);
+	const TArray<FString> Pictures = { TEXT("png"), TEXT("jpg") };
+
+	FString Path;
+	FText Error;
+	TestTrue(TEXT("A picture dropped on the picture box is taken"), ResolveDroppedPath({ Picture, Notes }, false, Pictures, Path, Error) && Path == Picture);
+	TestFalse(TEXT("A text file is not a picture"), ResolveDroppedPath({ Notes }, false, Pictures, Path, Error));
+	TestTrue(TEXT("The refusal names the file and the kinds taken"), Error.ToString().Contains(TEXT("Notes.txt")) && Error.ToString().Contains(TEXT("png, jpg")));
+	TestFalse(TEXT("A folder is not a file"), ResolveDroppedPath({ Folder }, false, Pictures, Path, Error));
+	TestTrue(TEXT("A folder dropped on a folder box is taken"), ResolveDroppedPath({ Folder }, true, {}, Path, Error) && Path == Folder);
+	TestTrue(TEXT("A file dropped on a folder box gives the folder it is in"), ResolveDroppedPath({ Picture }, true, {}, Path, Error) && Path == Folder);
+	TestFalse(TEXT("Nothing dropped is refused"), ResolveDroppedPath({}, true, {}, Path, Error));
+
+	IFileManager::Get().DeleteDirectory(*Folder, false, true);
 	return true;
 }
 

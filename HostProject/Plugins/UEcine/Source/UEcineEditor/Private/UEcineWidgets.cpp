@@ -7,8 +7,12 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "IDesktopPlatform.h"
+#include "Input/DragAndDrop.h"
 #include "Misc/Paths.h"
+#include "SDropTarget.h"
 #include "Styling/AppStyle.h"
 #include "UEcineEditorSettings.h"
 #include "UEcineStyle.h"
@@ -20,6 +24,7 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -372,62 +377,178 @@ void UEcine::Widgets::Notify(const FText& Message, bool bSucceeded)
 	}
 }
 
+bool UEcine::Widgets::ResolveDroppedPath(const TArray<FString>& Dropped, const bool bFolder, const TArray<FString>& Extensions, FString& OutPath, FText& OutError)
+{
+	if (Dropped.IsEmpty())
+	{
+		OutError = LOCTEXT("DropNothing", "Nothing was dropped.");
+		return false;
+	}
+	const FString Path = FPaths::ConvertRelativePathToFull(Dropped[0]);
+	const bool bIsFolder = IFileManager::Get().DirectoryExists(*Path);
+	if (bFolder)
+	{
+		OutPath = bIsFolder ? Path : FPaths::GetPath(Path);
+		return true;
+	}
+	if (bIsFolder)
+	{
+		OutError = LOCTEXT("DropFolderOnFile", "Drop a file here, not a folder.");
+		return false;
+	}
+	if (!Extensions.IsEmpty() && !Extensions.Contains(FPaths::GetExtension(Path).ToLower()))
+	{
+		OutError = FText::Format(LOCTEXT("DropWrongKind", "{0} is not a kind of file this takes. It takes: {1}."),
+			FText::FromString(FPaths::GetCleanFilename(Path)), FText::FromString(FString::Join(Extensions, TEXT(", "))));
+		return false;
+	}
+	OutPath = Path;
+	return true;
+}
+
+namespace
+{
+	TSharedRef<SWidget> MakePathControl(const bool bFolder, const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, const FText& FileTypeName, TArray<FString> Extensions, TFunction<FString()> GetPath, TFunction<void(const FString& Path)> ChoosePath)
+	{
+		using namespace UEcine::Widgets;
+
+		const auto Choose = [GetPath, ChoosePath = MoveTemp(ChoosePath)](const FString& Path)
+		{
+			// The box shows the path in use, which for a folder is the project's own until another is chosen.
+			if (Path == GetPath())
+			{
+				return;
+			}
+			if (!Path.IsEmpty() && FPaths::IsRelative(Path))
+			{
+				Notify(LOCTEXT("PathNotWhole", "Give the whole path, from its drive on."), false);
+				return;
+			}
+			ChoosePath(Path);
+		};
+
+		const FText BoxToolTip = FText::Format(bFolder
+			? LOCTEXT("FolderBoxToolTip", "{0} Browse picks it, or drag a folder here from Explorer.")
+			: LOCTEXT("FileBoxToolTip", "{0} Browse picks it, or drag the file here from Explorer."), ToolTip);
+
+		return SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SDropTarget)
+				.OnAllowDrop_Lambda([](TSharedPtr<FDragDropOperation> Operation)
+				{
+					return Operation.IsValid() && Operation->IsOfType<FExternalDragOperation>() && StaticCastSharedPtr<FExternalDragOperation>(Operation)->HasFiles();
+				})
+				.OnDropped_Lambda([bFolder, Extensions, Choose](const FGeometry&, const FDragDropEvent& Event)
+				{
+					const TSharedPtr<FExternalDragOperation> Operation = Event.GetOperationAs<FExternalDragOperation>();
+					if (Operation.IsValid() && Operation->HasFiles())
+					{
+						FString Path;
+						FText Error;
+						if (ResolveDroppedPath(Operation->GetFiles(), bFolder, Extensions, Path, Error))
+						{
+							Choose(Path);
+						}
+						else
+						{
+							Notify(Error, false);
+						}
+					}
+					return FReply::Handled();
+				})
+				[
+					SNew(SBox)
+					.MinDesiredHeight(FUEcineStyle::MinTargetSize)
+					[
+						SNew(SEditableTextBox)
+						.ToolTipText(BoxToolTip)
+						.AccessibleText(Name)
+						.Text_Lambda([GetPath] { return FText::FromString(GetPath()); })
+						.OnTextCommitted_Lambda([Choose](const FText& Text, ETextCommit::Type CommitType)
+						{
+							// Escape gives up what was typed. A path copied in Explorer comes in quotes.
+							if (CommitType != ETextCommit::OnCleared)
+							{
+								Choose(Text.ToString().TrimStartAndEnd().TrimQuotes());
+							}
+						})
+					]
+				]
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.0f, 4.0f, 0.0f, 0.0f)
+			[
+				SNew(SWrapBox)
+				.UseAllottedSize(true)
+				.InnerSlotPadding(FVector2D(4.0f, 4.0f))
+				+ SWrapBox::Slot()
+				[
+					MakeButton(LOCTEXT("BrowseButton", "Browse"), BrowseToolTip, FOnClicked::CreateLambda([bFolder, BrowseToolTip, FileTypeName, Extensions, GetPath, Choose]
+					{
+						IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+						if (DesktopPlatform == nullptr)
+						{
+							return FReply::Handled();
+						}
+						const void* Window = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
+						if (bFolder)
+						{
+							FString Folder;
+							if (DesktopPlatform->OpenDirectoryDialog(Window, BrowseToolTip.ToString(), GetPath(), Folder))
+							{
+								Choose(Folder);
+							}
+							return FReply::Handled();
+						}
+						const FString Pattern = TEXT("*.") + FString::Join(Extensions, TEXT(";*."));
+						TArray<FString> Files;
+						if (DesktopPlatform->OpenFileDialog(Window, BrowseToolTip.ToString(), FPaths::GetPath(GetPath()), FString(),
+							FString::Printf(TEXT("%s (%s)|%s"), *FileTypeName.ToString(), *Pattern, *Pattern), EFileDialogFlags::None, Files) && !Files.IsEmpty())
+						{
+							Choose(FPaths::ConvertRelativePathToFull(Files[0]));
+						}
+						return FReply::Handled();
+					}))
+				]
+				+ SWrapBox::Slot()
+				[
+					MakeButton(LOCTEXT("ShowInExplorerButton", "Show in Explorer"),
+						bFolder ? LOCTEXT("ShowFolderToolTip", "Open this folder in Explorer.") : LOCTEXT("ShowFileToolTip", "Open the folder this file is in, in Explorer."),
+						FOnClicked::CreateLambda([bFolder, GetPath]
+						{
+							const FString Path = GetPath();
+							if (bFolder ? IFileManager::Get().DirectoryExists(*Path) : IFileManager::Get().FileExists(*Path))
+							{
+								FPlatformProcess::ExploreFolder(*Path);
+							}
+							else if (Path.IsEmpty())
+							{
+								Notify(LOCTEXT("ShowNothing", "Nothing is chosen yet."), false);
+							}
+							else
+							{
+								Notify(bFolder
+									? LOCTEXT("ShowNoFolder", "This folder is not there yet. It is made when the first file is written to it.")
+									: LOCTEXT("ShowNoFile", "There is no file at this path."), false);
+							}
+							return FReply::Handled();
+						}))
+				]
+			];
+	}
+}
+
 TSharedRef<SWidget> UEcine::Widgets::MakeFolderControl(const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, TFunction<FString()> GetFolder, TFunction<void(const FString& Folder)> ChooseFolder)
 {
-	const auto Choose = [GetFolder, ChooseFolder = MoveTemp(ChooseFolder)](const FString& Folder)
-	{
-		// The box shows the folder in use, which is the project's own until another is chosen.
-		if (Folder == GetFolder())
-		{
-			return;
-		}
-		if (!Folder.IsEmpty() && FPaths::IsRelative(Folder))
-		{
-			Notify(LOCTEXT("FolderNotWhole", "Give the whole path of the folder, from its drive on."), false);
-			return;
-		}
-		ChooseFolder(Folder);
-	};
+	return MakePathControl(true, Name, ToolTip, BrowseToolTip, FText::GetEmpty(), TArray<FString>(), MoveTemp(GetFolder), MoveTemp(ChooseFolder));
+}
 
-	return SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.FillWidth(1.0f)
-		.VAlign(VAlign_Center)
-		[
-			SNew(SBox)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SEditableTextBox)
-				.ToolTipText(ToolTip)
-				.AccessibleText(Name)
-				.Text_Lambda([GetFolder] { return FText::FromString(GetFolder()); })
-				.OnTextCommitted_Lambda([Choose](const FText& Text, ETextCommit::Type CommitType)
-				{
-					// Escape gives up what was typed.
-					if (CommitType != ETextCommit::OnCleared)
-					{
-						Choose(Text.ToString().TrimStartAndEnd());
-					}
-				})
-			]
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
-		[
-			MakeIconButton("Icons.FolderOpen", BrowseToolTip, FOnClicked::CreateLambda([BrowseToolTip, GetFolder, Choose]
-			{
-				FString Folder;
-				IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-				if (DesktopPlatform != nullptr && DesktopPlatform->OpenDirectoryDialog(
-					FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr), BrowseToolTip.ToString(), GetFolder(), Folder))
-				{
-					Choose(Folder);
-				}
-				return FReply::Handled();
-			}))
-		];
+TSharedRef<SWidget> UEcine::Widgets::MakeFileControl(const FText& Name, const FText& ToolTip, const FText& BrowseToolTip, const FText& FileTypeName, TArray<FString> Extensions, TFunction<FString()> GetFile, TFunction<void(const FString& File)> ChooseFile)
+{
+	return MakePathControl(false, Name, ToolTip, BrowseToolTip, FileTypeName, MoveTemp(Extensions), MoveTemp(GetFile), MoveTemp(ChooseFile));
 }
 
 namespace

@@ -4,11 +4,8 @@
 
 #include "Brushes/SlateDynamicImageBrush.h"
 #include "CineCameraActor.h"
-#include "DesktopPlatformModule.h"
 #include "Editor.h"
-#include "Framework/Application/SlateApplication.h"
 #include "HAL/PlatformProcess.h"
-#include "IDesktopPlatform.h"
 #include "ISettingsModule.h"
 #include "ImageUtils.h"
 #include "Misc/App.h"
@@ -24,7 +21,6 @@
 #include "UEcineUnits.h"
 #include "UEcineWidgets.h"
 #include "Widgets/Images/SImage.h"
-#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
@@ -151,35 +147,10 @@ void SUEcineAITab::Construct(const FArguments& InArgs, TSharedRef<FUEcineCameraT
 	const FText PictureLabel = LOCTEXT("PictureLabel", "Picture");
 	const FText PictureToolTip = LOCTEXT("PictureToolTip", "The still or frame of a plate to work on: a PNG, JPEG, EXR or TIFF file.");
 
-	const TSharedRef<SWidget> PictureControl = SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot()
-		.FillWidth(1.0f)
-		.VAlign(VAlign_Center)
-		[
-			SNew(SBox)
-			.MinDesiredHeight(FUEcineStyle::MinTargetSize)
-			[
-				SNew(SEditableTextBox)
-				.ToolTipText(PictureToolTip)
-				.AccessibleText(PictureLabel)
-				.Text_Lambda([this] { return FText::FromString(PictureFile); })
-				.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type CommitType)
-				{
-					// Escape gives up what was typed.
-					if (CommitType != ETextCommit::OnCleared)
-					{
-						PictureFile = Text.ToString().TrimStartAndEnd().TrimQuotes();
-					}
-				})
-			]
-		]
-		+ SHorizontalBox::Slot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(4.0f, 0.0f, 0.0f, 0.0f)
-		[
-			MakeIconButton("Icons.FolderOpen", LOCTEXT("BrowsePictureToolTip", "Choose the picture"), FOnClicked::CreateSP(this, &SUEcineAITab::OnBrowsePictureClicked))
-		];
+	const TSharedRef<SWidget> PictureControl = MakeFileControl(PictureLabel, PictureToolTip, LOCTEXT("BrowsePictureToolTip", "Choose the picture"),
+		LOCTEXT("PictureFileTypeName", "Pictures"), { TEXT("png"), TEXT("jpg"), TEXT("jpeg"), TEXT("exr"), TEXT("tif"), TEXT("tiff") },
+		[this] { return PictureFile; },
+		[this](const FString& File) { PictureFile = File; });
 
 	ChildSlot
 	[
@@ -911,20 +882,6 @@ FReply SUEcineAITab::OnApplyPlanClicked()
 	Plan.Reset();
 	++AssistantRevision;
 	RefreshSoon();
-	return FReply::Handled();
-}
-
-FReply SUEcineAITab::OnBrowsePictureClicked()
-{
-	TArray<FString> Files;
-	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
-	if (DesktopPlatform != nullptr && DesktopPlatform->OpenFileDialog(
-		FSlateApplication::Get().FindBestParentWindowHandleForDialogs(AsShared()),
-		LOCTEXT("BrowsePictureTitle", "Choose the picture").ToString(), FPaths::GetPath(PictureFile), FString(),
-		TEXT("Pictures (*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff)|*.png;*.jpg;*.jpeg;*.exr;*.tif;*.tiff"), EFileDialogFlags::None, Files) && !Files.IsEmpty())
-	{
-		PictureFile = FPaths::ConvertRelativePathToFull(Files[0]);
-	}
 	return FReply::Handled();
 }
 

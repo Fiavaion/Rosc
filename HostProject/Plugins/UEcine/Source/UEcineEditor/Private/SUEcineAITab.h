@@ -97,7 +97,6 @@ private:
 	bool CanAskForPlan() const;
 	FReply OnPlanClicked();
 	FReply OnApplyPlanClicked();
-	FReply OnBrowsePictureClicked();
 	FReply OnRunClicked(EUEcineAITask Task);
 	FReply OnPutOnLensClicked();
 
