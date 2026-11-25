@@ -163,7 +163,12 @@ void SRoscDeliverTab::RebuildLayout()
 	Add(FRoscStyle::RowPadding, BuildFolderRow());
 	Add(FRoscStyle::RowPadding, BuildNameRow());
 	Add(FRoscStyle::ButtonRowPadding, BuildNameButtons());
-	Add(FRoscStyle::RowPadding, MakeWarning(Rosc::Deliver::ValidateNamePattern(GetDefault<URoscEditorSettings>()->DeliverNamePattern)));
+	Add(FRoscStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSPLambda(this, [this]
+	{
+		return NamePatternProblem.IsEmpty() ? FText::GetEmpty()
+			: FText::Format(LOCTEXT("NamePatternRefused", "{0} Until it is put right, files are named {1}."),
+				NamePatternProblem, FText::FromString(GetDefault<URoscEditorSettings>()->DeliverNamePattern));
+	})));
 	Add(FRoscStyle::RowPadding, BuildFilePreview());
 
 	Add(FRoscStyle::SectionPadding, MakeSectionHeader(LOCTEXT("PreflightSection", "Preflight")));
@@ -290,7 +295,7 @@ TSharedRef<SWidget> SRoscDeliverTab::BuildNameRow()
 			SNew(SEditableTextBox)
 			.ToolTipText(ToolTip)
 			.AccessibleText(Label)
-			.Text_Lambda([] { return FText::FromString(GetDefault<URoscEditorSettings>()->DeliverNamePattern); })
+			.Text_Lambda([this] { return FText::FromString(GetShownNamePattern()); })
 			.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type CommitType)
 			{
 				if (CommitType != ETextCommit::OnCleared)
@@ -322,7 +327,7 @@ TSharedRef<SWidget> SRoscDeliverTab::BuildNameButtons()
 				ChooseNamePattern(Rosc::Deliver::DefaultNamePattern);
 				return FReply::Handled();
 			}),
-			TAttribute<bool>::CreateLambda([] { return GetDefault<URoscEditorSettings>()->DeliverNamePattern != Rosc::Deliver::DefaultNamePattern; }))
+			TAttribute<bool>::CreateSPLambda(this, [this] { return GetShownNamePattern() != Rosc::Deliver::DefaultNamePattern; }))
 	];
 	Buttons->SetEnabled(!CurrentLayoutKey.bRendering);
 	return Buttons;
@@ -339,7 +344,8 @@ TSharedRef<SWidget> SRoscDeliverTab::MakeTokenMenu()
 			FSlateIcon(),
 			FUIAction(FExecuteAction::CreateSPLambda(this, [this, TokenText = Token.Token]
 			{
-				const FString& Pattern = GetDefault<URoscEditorSettings>()->DeliverNamePattern;
+				// Added to what is in the box, so a refused name can be put right with the token it lacks.
+				const FString Pattern = GetShownNamePattern();
 				ChooseNamePattern(Pattern.IsEmpty() ? TokenText : Pattern + TEXT("_") + TokenText);
 			})));
 	}
@@ -555,13 +561,19 @@ void SRoscDeliverTab::EditChoices(TFunctionRef<void(URoscEditorSettings&)> Edit)
 
 void SRoscDeliverTab::ChooseNamePattern(const FString& Pattern)
 {
-	const FText Problem = Rosc::Deliver::ValidateNamePattern(Pattern);
-	if (!Problem.IsEmpty())
+	NamePatternProblem = Rosc::Deliver::ValidateNamePattern(Pattern);
+	if (!NamePatternProblem.IsEmpty())
 	{
-		Notify(Problem, false);
+		RefusedNamePattern = Pattern;
 		return;
 	}
+	RefusedNamePattern.Reset();
 	EditChoices([&Pattern](URoscEditorSettings& Choices) { Choices.DeliverNamePattern = Pattern; });
+}
+
+FString SRoscDeliverTab::GetShownNamePattern() const
+{
+	return NamePatternProblem.IsEmpty() ? GetDefault<URoscEditorSettings>()->DeliverNamePattern : RefusedNamePattern;
 }
 
 FReply SRoscDeliverTab::OnFixClicked(FFindingGroup Group)

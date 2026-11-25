@@ -8,9 +8,13 @@
 #include "SRoscPanel.h"
 #include "Tests/AutomationCommon.h"
 #include "RoscCameraEditing.h"
+#include "RoscDeliverChoicesBefore.h"
+#include "RoscDeliverEditing.h"
+#include "RoscEditorSettings.h"
 #include "RoscFocusEditing.h"
 #include "RoscGripEditing.h"
 #include "RoscRig.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -117,6 +121,51 @@ namespace
 		Slate.ProcessKeyDownEvent(Enter);
 		Slate.ProcessKeyUpEvent(Enter);
 		return true;
+	}
+
+	/** Puts the focus in a text box by its name, types over what is in it and presses Enter, as a keyboard user would. */
+	bool TypeIntoControlCalled(SRoscPanel& Panel, const TCHAR* AccessibleName, const FString& Typed)
+	{
+		const TSharedPtr<SWidget> Control = FindControlCalled(Panel, AccessibleName);
+		if (!Control.IsValid())
+		{
+			return false;
+		}
+		FSlateApplication& Slate = FSlateApplication::Get();
+		Slate.SetKeyboardFocus(Control, EFocusCause::SetDirectly);
+		const FKeyEvent SelectAll(EKeys::A, FModifierKeysState(false, false, true, false, false, false, false, false, false), 0, false, 0, 0);
+		Slate.ProcessKeyDownEvent(SelectAll);
+		Slate.ProcessKeyUpEvent(SelectAll);
+		for (const TCHAR Character : Typed)
+		{
+			Slate.ProcessKeyCharEvent(FCharacterEvent(Character, FModifierKeysState(), 0, false));
+		}
+		const FKeyEvent Enter(EKeys::Enter, FModifierKeysState(), 0, false, 0, 0);
+		Slate.ProcessKeyDownEvent(Enter);
+		Slate.ProcessKeyUpEvent(Enter);
+		return true;
+	}
+
+	/** True when a line of text that is shown somewhere under a widget has these words in it. */
+	bool ShowsText(const TSharedRef<SWidget>& Widget, const TCHAR* Words)
+	{
+		if (!Widget->GetVisibility().IsVisible())
+		{
+			return false;
+		}
+		if (Widget->GetType() == FName("STextBlock") && StaticCastSharedRef<STextBlock>(Widget)->GetText().ToString().Contains(Words))
+		{
+			return true;
+		}
+		FChildren* Children = Widget->GetChildren();
+		for (int32 Index = 0; Index < Children->Num(); ++Index)
+		{
+			if (ShowsText(Children->GetChildAt(Index), Words))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	const TCHAR* GetDepartmentTestName(ERoscDepartment Department)
@@ -295,6 +344,34 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("No mark is left"), WeakRig.IsValid() ? WeakRig->Marks.Num() : -1, 0);
 		TestEqual(TEXT("With the last mark removed, the focus is on the button that marks a position"), DescribeFocus(*Walk->Panel), FString(TEXT("Mark Position")));
+	}, 0.3f));
+
+	// A file name typed without {shot} is refused where it was typed: it stays in the box with the
+	// reason under it, and files keep the name they had until it is put right.
+	const TSharedRef<FRoscDeliverChoicesBefore> ChoicesBefore = MakeShared<FRoscDeliverChoicesBefore>();
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk]
+	{
+		Rosc::DeliverEditing::EditChoices([](URoscEditorSettings& Choices) { Choices.DeliverNamePattern = Rosc::Deliver::DefaultNamePattern; });
+		Walk->Panel->ShowDepartment(ERoscDepartment::Deliver);
+		return true;
+	}));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk]
+	{
+		TestTrue(TEXT("A name without the shot is typed into the Name box"), TypeIntoControlCalled(*Walk->Panel, TEXT("Name"), TEXT("{sequence}_{intent}")));
+	}, 0.3f));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk]
+	{
+		TestEqual(TEXT("Files keep the name they had"), GetDefault<URoscEditorSettings>()->DeliverNamePattern, FString(Rosc::Deliver::DefaultNamePattern));
+		const TSharedPtr<SWidget> NameBox = FindControlCalled(*Walk->Panel, TEXT("Name"));
+		TestEqual(TEXT("The box keeps what was typed"), NameBox.IsValid() ? StaticCastSharedPtr<SEditableTextBox>(NameBox)->GetText().ToString() : FString(), FString(TEXT("{sequence}_{intent}")));
+		TestTrue(TEXT("The tab says why it was refused"), ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
+		TestTrue(TEXT("A name with the shot is typed in"), TypeIntoControlCalled(*Walk->Panel, TEXT("Name"), TEXT("{sequence}_{intent}_{shot}")));
+	}, 0.3f));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk, ChoicesBefore]
+	{
+		TestEqual(TEXT("Files are named by it"), GetDefault<URoscEditorSettings>()->DeliverNamePattern, FString(TEXT("{sequence}_{intent}_{shot}")));
+		TestFalse(TEXT("The reason is gone"), ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
+		ChoicesBefore->PutBack();
 	}, 0.3f));
 
 	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]

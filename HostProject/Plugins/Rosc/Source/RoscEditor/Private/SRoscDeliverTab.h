@@ -78,7 +78,10 @@ private:
 
 	/** Changes the user's choices for deliveries and has preflight look again. */
 	void EditChoices(TFunctionRef<void(URoscEditorSettings&)> Edit);
+	/** Keeps a file name pattern, or keeps it in the box with the reason it was refused. */
 	void ChooseNamePattern(const FString& Pattern);
+	/** The pattern in the name box: the one refused, while there is one, or else the one files get. */
+	FString GetShownNamePattern() const;
 
 	FReply OnFixClicked(FFindingGroup Group);
 	FReply OnRenderClicked();
@@ -108,4 +111,8 @@ private:
 	/** How the last delivery started here turned out, and the icon that goes with it. Empty before the first. */
 	FText ResultText;
 	FName ResultIcon;
+
+	/** A pattern typed in that was refused, and why; empty while the box shows the one files get. */
+	FString RefusedNamePattern;
+	FText NamePatternProblem;
 };
