@@ -10,8 +10,11 @@
 #include "ScopedTransaction.h"
 #include "RoscCameraDatabase.h"
 #include "RoscCameraPackageComponent.h"
+#include "RoscEditorSettings.h"
+#include "RoscFocusEditing.h"
 #include "RoscLog.h"
 #include "RoscOptics.h"
+#include "RoscUnits.h"
 
 #define LOCTEXT_NAMESPACE "RoscEditor"
 
@@ -150,7 +153,7 @@ ACineCameraActor* Rosc::CameraEditing::SpawnCameraAtViewport()
 	return Camera;
 }
 
-bool Rosc::CameraEditing::EditPackage(URoscCameraPackageComponent* Component, const FText& Description, TFunctionRef<void(FRoscCameraPackage&)> Edit, FText& OutError, TArray<FText>* OutWarnings)
+bool Rosc::CameraEditing::EditPackage(URoscCameraPackageComponent* Component, const FText& Description, TFunctionRef<void(FRoscCameraPackage&)> Edit, FText& OutError, FText* OutNotice)
 {
 	if (Component == nullptr)
 	{
@@ -161,14 +164,28 @@ bool Rosc::CameraEditing::EditPackage(URoscCameraPackageComponent* Component, co
 	FScopedTransaction Transaction(Description);
 	Component->Modify();
 
+	// A new lens moves a hand-set focus nearer than it can focus out to its close focus (the Cine
+	// Camera does it), so where the focus was set is known only before the change.
+	const ACineCameraActor* Camera = Cast<ACineCameraActor>(Component->GetOwner());
+	const bool bHandSetFocus = Camera != nullptr && Camera->GetCineCameraComponent()->FocusSettings.FocusMethod == ECameraFocusMethod::Manual;
+	const float FocusBeforeCm = Rosc::FocusEditing::GetFocusDistance(Camera);
+
 	const FRoscCameraPackage PackageBefore = Component->Package;
 	Edit(Component->Package);
 
-	if (!Component->ApplyToCamera(OutError, OutWarnings))
+	if (!Component->ApplyToCamera(OutError))
 	{
 		Component->Package = PackageBefore;
 		Transaction.Cancel();
 		return false;
+	}
+
+	const float CloseFocusCm = Rosc::FocusEditing::GetCloseFocus(Camera);
+	if (OutNotice != nullptr && bHandSetFocus && FocusBeforeCm < CloseFocusCm - 0.01f)
+	{
+		const ERoscDistanceUnits Units = URoscEditorSettings::GetDistanceUnits();
+		*OutNotice = FText::Format(LOCTEXT("FocusMovedToCloseFocus", "The focus was at {0}, nearer than this lens can focus. It is now at the lens's close focus, {1}. Set the focus again in the Focus tab or move the camera."),
+			Rosc::Units::FormatDistance(FocusBeforeCm * 10.0, Units), Rosc::Units::FormatDistance(CloseFocusCm * 10.0, Units));
 	}
 
 	GEditor->RedrawLevelEditingViewports();
@@ -200,7 +217,7 @@ bool Rosc::CameraEditing::MatchLensToFieldOfView(const ACineCameraActor* Camera,
 	return true;
 }
 
-bool Rosc::CameraEditing::PutOnLensForFieldOfView(ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FText& OutError)
+bool Rosc::CameraEditing::PutOnLensForFieldOfView(ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FText& OutError, FText* OutNotice)
 {
 	FLensMatch Match;
 	if (!MatchLensToFieldOfView(Camera, HorizontalFieldOfViewDeg, Match))
@@ -212,7 +229,7 @@ bool Rosc::CameraEditing::PutOnLensForFieldOfView(ACineCameraActor* Camera, doub
 	{
 		Package.FocalLengthMm = static_cast<float>(Match.FocalLengthMm);
 		Package.SelectLensKit(*FRoscCameraDatabase::Get().FindLensKit(Package.LensKitId));
-	}, OutError);
+	}, OutError, OutNotice);
 }
 
 #undef LOCTEXT_NAMESPACE

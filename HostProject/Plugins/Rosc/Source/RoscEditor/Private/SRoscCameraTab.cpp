@@ -668,9 +668,14 @@ const FRoscCameraPackage& SRoscCameraTab::GetPackage() const
 void SRoscCameraTab::Edit(const FText& Description, TFunctionRef<void(FRoscCameraPackage&)> EditFunction)
 {
 	FText Error;
-	if (!Rosc::CameraEditing::EditPackage(GetComponent(), Description, EditFunction, Error))
+	FText Notice;
+	if (!Rosc::CameraEditing::EditPackage(GetComponent(), Description, EditFunction, Error, &Notice))
 	{
 		Notify(Error, false);
+	}
+	else if (!Notice.IsEmpty())
+	{
+		Notify(Notice, false);
 	}
 }
 

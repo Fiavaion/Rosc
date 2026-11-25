@@ -915,10 +915,19 @@ FReply SRoscAITab::OnRunClicked(ERoscAITask Task)
 
 FReply SRoscAITab::OnPutOnLensClicked()
 {
+	if (!JobResult.IsSet())
+	{
+		return FReply::Handled();
+	}
 	FText Error;
-	if (JobResult.IsSet() && !Rosc::CameraEditing::PutOnLensForFieldOfView(Target->GetCamera(), JobResult->FieldOfViewDeg, Error))
+	FText Notice;
+	if (!Rosc::CameraEditing::PutOnLensForFieldOfView(Target->GetCamera(), JobResult->FieldOfViewDeg, Error, &Notice))
 	{
 		Notify(Error, false);
+	}
+	else if (!Notice.IsEmpty())
+	{
+		Notify(Notice, false);
 	}
 	return FReply::Handled();
 }

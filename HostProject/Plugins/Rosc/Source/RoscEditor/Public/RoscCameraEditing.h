@@ -37,10 +37,12 @@ namespace Rosc::CameraEditing
 	 * Changes a camera's package and applies it to the camera as one undoable step.
 	 * @param Description What the user did, shown in the undo history ("Change Lens").
 	 * @param Edit Makes the change to the package.
+	 * @param OutNotice Set when the change did something to tell the user once, as it happens: a
+	 *        new lens moved a hand-set focus nearer than it can focus out to its close focus.
 	 * @return false, with the package and camera unchanged and the reason in OutError, when the
 	 *         edited package cannot be applied.
 	 */
-	ROSCEDITOR_API bool EditPackage(URoscCameraPackageComponent* Component, const FText& Description, TFunctionRef<void(FRoscCameraPackage&)> Edit, FText& OutError, TArray<FText>* OutWarnings = nullptr);
+	ROSCEDITOR_API bool EditPackage(URoscCameraPackageComponent* Component, const FText& Description, TFunctionRef<void(FRoscCameraPackage&)> Edit, FText& OutError, FText* OutNotice = nullptr);
 
 	/** What a field of view comes to on a camera, and the lens of its kit that comes nearest. */
 	struct FLensMatch
@@ -59,6 +61,6 @@ namespace Rosc::CameraEditing
 	 */
 	ROSCEDITOR_API bool MatchLensToFieldOfView(const ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FLensMatch& OutMatch);
 
-	/** Puts the lens MatchLensToFieldOfView finds on the camera, as one undoable step. */
-	ROSCEDITOR_API bool PutOnLensForFieldOfView(ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FText& OutError);
+	/** Puts the lens MatchLensToFieldOfView finds on the camera, as one undoable step. OutNotice is as for EditPackage. */
+	ROSCEDITOR_API bool PutOnLensForFieldOfView(ACineCameraActor* Camera, double HorizontalFieldOfViewDeg, FText& OutError, FText* OutNotice = nullptr);
 }

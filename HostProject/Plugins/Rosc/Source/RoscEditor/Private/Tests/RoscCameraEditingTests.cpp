@@ -8,6 +8,7 @@
 #include "RoscCameraDatabase.h"
 #include "RoscCameraEditing.h"
 #include "RoscCameraPackageComponent.h"
+#include "RoscFocusEditing.h"
 #include "RoscOptics.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -99,6 +100,26 @@ bool FRoscCameraEditingTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("The camera has it"), Camera->CurrentFocalLength, 58.0f, 0.001f);
 	TestTrue(TEXT("Putting it on can be undone"), GEditor->UndoTransaction());
 	TestEqual(TEXT("Undo puts the lens before back"), Camera->CurrentFocalLength, NewFocal, 0.001f);
+
+	// A longer lens that cannot focus as near as the focus was set: the lens goes to its close
+	// focus and the user is told where the focus was.
+	const int32 LongLensIndex = Kit->Lenses.Num() - 1;
+	const float ShortCloseFocusCm = static_cast<float>(Kit->Lenses[0].CloseFocusM * 100.0);
+	const float LongCloseFocusCm = static_cast<float>(Kit->Lenses[LongLensIndex].CloseFocusM * 100.0);
+	const float SetFocusCm = (ShortCloseFocusCm + LongCloseFocusCm) * 0.5f;
+	TestTrue(TEXT("The kit's longest lens focuses less near than its shortest"), LongCloseFocusCm > ShortCloseFocusCm);
+	FText Notice;
+	TestTrue(TEXT("The shortest lens goes on"), Rosc::CameraEditing::EditPackage(Component, FText::FromString(TEXT("Change Lens")),
+		[Kit](FRoscCameraPackage& Package) { Package.SelectLens(*Kit, 0); }, Error, &Notice));
+	TestTrue(TEXT("A lens change that leaves the focus where it was says nothing"), Notice.IsEmpty());
+	Rosc::FocusEditing::SetFocusDistance(CameraActor, SetFocusCm);
+	TestTrue(TEXT("The longest lens goes on"), Rosc::CameraEditing::EditPackage(Component, FText::FromString(TEXT("Change Lens")),
+		[Kit, LongLensIndex](FRoscCameraPackage& Package) { Package.SelectLens(*Kit, LongLensIndex); }, Error, &Notice));
+	TestEqual(TEXT("The lens is at its close focus"), Rosc::FocusEditing::GetFocusDistance(CameraActor), LongCloseFocusCm, 0.01f);
+	AddInfo(FString::Printf(TEXT("Notice: %s"), *Notice.ToString()));
+	TestFalse(TEXT("The user is told the focus moved"), Notice.IsEmpty());
+	TestTrue(TEXT("Undo puts the shorter lens back"), GEditor->UndoTransaction());
+	TestEqual(TEXT("And the focus where it was set"), Rosc::FocusEditing::GetFocusDistance(CameraActor), SetFocusCm, 0.01f);
 
 	GEditor->SelectNone(false, true, false);
 	World->EditorDestroyActor(CameraActor, false);
