@@ -27,6 +27,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "Tests/RoscDeliverChoicesBefore.h"
 #include "Tests/RoscRenderedFiles.h"
+#include "Tests/RoscWidgetTestUtils.h"
+#include "SRoscDeliverTab.h"
 #include "RoscBurnInWidget.h"
 #include "RoscCameraEditing.h"
 #include "RoscCameraPackageComponent.h"
@@ -681,8 +683,15 @@ bool FRoscDeliverPreflightFixesTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Redone, nothing stops the render"), StopsRender(CheckDelivery(ERoscDeliverIntent::Review)));
 	}
 
-	// A camera shooting at another frame rate than the sequence plays at.
+	// A camera shooting at another frame rate than the sequence plays at. The Deliver tab, open
+	// while it is changed somewhere else, finds it with no Check Again.
+	const TSharedRef<SRoscDeliverTab> Tab = SNew(SRoscDeliverTab);
+	const TCHAR* const FrameRateTitle = TEXT("frame rate is not the sequence's");
+	Tab->Tick(FGeometry(), 0.0, 0.0f);
+	TestFalse(TEXT("The tab finds nothing wrong with the frame rate yet"), Rosc::WidgetTests::ShowsText(Tab, FrameRateTitle));
 	TestTrue(TEXT("The camera is set to 25 fps"), Rosc::CameraEditing::EditPackage(Package, FText::FromString(TEXT("Change Frame Rate")), [](FRoscCameraPackage& Edited) { Edited.FramesPerSecond = 25.0f; }, Error));
+	Tab->Tick(FGeometry(), 0.0, 0.0f);
+	TestTrue(TEXT("The tab finds the camera's new frame rate by itself"), Rosc::WidgetTests::ShowsText(Tab, FrameRateTitle));
 	Check = CheckDelivery(ERoscDeliverIntent::Review);
 	if (const FRoscPreflightFinding* WrongRate = FindFinding(Check, ERoscPreflightCheck::FrameRateMismatch, First);
 		TestNotNull(TEXT("A camera at another frame rate than the sequence is found"), WrongRate)

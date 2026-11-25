@@ -8,7 +8,8 @@
 #include "SRoscPanel.h"
 #include "Tests/AutomationCommon.h"
 #include "RoscCameraEditing.h"
-#include "RoscDeliverChoicesBefore.h"
+#include "Tests/RoscDeliverChoicesBefore.h"
+#include "Tests/RoscWidgetTestUtils.h"
 #include "RoscDeliverEditing.h"
 #include "RoscEditorSettings.h"
 #include "RoscFocusEditing.h"
@@ -144,28 +145,6 @@ namespace
 		Slate.ProcessKeyDownEvent(Enter);
 		Slate.ProcessKeyUpEvent(Enter);
 		return true;
-	}
-
-	/** True when a line of text that is shown somewhere under a widget has these words in it. */
-	bool ShowsText(const TSharedRef<SWidget>& Widget, const TCHAR* Words)
-	{
-		if (!Widget->GetVisibility().IsVisible())
-		{
-			return false;
-		}
-		if (Widget->GetType() == FName("STextBlock") && StaticCastSharedRef<STextBlock>(Widget)->GetText().ToString().Contains(Words))
-		{
-			return true;
-		}
-		FChildren* Children = Widget->GetChildren();
-		for (int32 Index = 0; Index < Children->Num(); ++Index)
-		{
-			if (ShowsText(Children->GetChildAt(Index), Words))
-			{
-				return true;
-			}
-		}
-		return false;
 	}
 
 	const TCHAR* GetDepartmentTestName(ERoscDepartment Department)
@@ -364,13 +343,13 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Files keep the name they had"), GetDefault<URoscEditorSettings>()->DeliverNamePattern, FString(Rosc::Deliver::DefaultNamePattern));
 		const TSharedPtr<SWidget> NameBox = FindControlCalled(*Walk->Panel, TEXT("Name"));
 		TestEqual(TEXT("The box keeps what was typed"), NameBox.IsValid() ? StaticCastSharedPtr<SEditableTextBox>(NameBox)->GetText().ToString() : FString(), FString(TEXT("{sequence}_{intent}")));
-		TestTrue(TEXT("The tab says why it was refused"), ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
+		TestTrue(TEXT("The tab says why it was refused"), Rosc::WidgetTests::ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
 		TestTrue(TEXT("A name with the shot is typed in"), TypeIntoControlCalled(*Walk->Panel, TEXT("Name"), TEXT("{sequence}_{intent}_{shot}")));
 	}, 0.3f));
 	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk, ChoicesBefore]
 	{
 		TestEqual(TEXT("Files are named by it"), GetDefault<URoscEditorSettings>()->DeliverNamePattern, FString(TEXT("{sequence}_{intent}_{shot}")));
-		TestFalse(TEXT("The reason is gone"), ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
+		TestFalse(TEXT("The reason is gone"), Rosc::WidgetTests::ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
 		ChoicesBefore->PutBack();
 	}, 0.3f));
 

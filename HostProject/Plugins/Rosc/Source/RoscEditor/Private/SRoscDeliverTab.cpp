@@ -3,6 +3,7 @@
 #include "SRoscDeliverTab.h"
 
 #include "Editor.h"
+#include "Editor/TransBuffer.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
@@ -97,6 +98,12 @@ namespace
 void SRoscDeliverTab::Construct(const FArguments& InArgs)
 {
 	GetRenderer()->OnRenderFinished().AddSP(this, &SRoscDeliverTab::HandleRenderFinished);
+	// Preflight reads the cameras and shots, which any edit can change: in another tab, in the
+	// Details panel or in Sequencer. A hidden tab looks again when it is next shown.
+	CastChecked<UTransBuffer>(GEditor->Trans)->OnTransactionStateChanged().AddSPLambda(this, [this](const FTransactionContext&, ETransactionStateEventType State)
+	{
+		bCheckWanted |= State == ETransactionStateEventType::TransactionFinalized || State == ETransactionStateEventType::UndoRedoFinalized;
+	});
 	CurrentLayoutKey = ReadLayoutKey();
 	RebuildLayout();
 }

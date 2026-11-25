@@ -17,7 +17,8 @@ struct FRoscRenderResult;
  * read what preflight found and put it right, render, and bake for handoff.
  *
  * Preflight plays to the start of each shot, so it runs when something it depends on changes
- * and when asked, not every frame.
+ * (the sequence, its shots, the kind of delivery, or any edit, undo or redo in the editor) and
+ * when asked, not every frame.
  */
 class SRoscDeliverTab : public SCompoundWidget
 {
