@@ -28,6 +28,7 @@
 #include "RoscMonitorSubsystem.h"
 #include "RoscMove.h"
 #include "RoscRig.h"
+#include "RoscShotEditing.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -293,6 +294,28 @@ namespace
 		const double ClippedShare = static_cast<double>(Clipped) / (PictureWidth * Size.Y);
 		Test.AddInfo(FString::Printf(TEXT("Through the stage's camera the picture averages %.2f of full signal, with %.1f %% of it clipped"), Level, ClippedShare * 100.0));
 		Test.TestTrue(TEXT("The stage is exposed: neither dark nor burnt out"), Level > 0.2 && Level < 0.7 && ClippedShare < 0.1);
+
+		// A storyboard frame through the same camera is exposed as the viewport shows it.
+		FRoscStoryboardFrame Storyboard;
+		FImage StoryboardPicture;
+		if (Test.TestTrue(TEXT("A storyboard picture is taken through the stage's camera"), Rosc::ShotEditing::TakeStoryboardPicture(*Camera, Storyboard))
+			&& Test.TestTrue(TEXT("The storyboard picture reads back"), FImageUtils::DecompressImage(Storyboard.Jpeg.GetData(), Storyboard.Jpeg.Num(), StoryboardPicture)))
+		{
+			StoryboardPicture.ChangeFormat(ERawImageFormat::BGRA8, EGammaSpace::sRGB);
+			double StoryboardLevel = 0.0;
+			int32 StoryboardClipped = 0;
+			for (const FColor& Pixel : StoryboardPicture.AsBGRA8())
+			{
+				const double Luma = (0.2126 * Pixel.R + 0.7152 * Pixel.G + 0.0722 * Pixel.B) / 255.0;
+				StoryboardLevel += Luma;
+				StoryboardClipped += Luma > 0.98 ? 1 : 0;
+			}
+			const int64 StoryboardPixels = StoryboardPicture.GetNumPixels();
+			StoryboardLevel /= StoryboardPixels;
+			Test.AddInfo(FString::Printf(TEXT("The storyboard picture averages %.2f of full signal, with %.1f %% of it clipped"), StoryboardLevel, 100.0 * StoryboardClipped / StoryboardPixels));
+			Test.TestEqual(TEXT("The storyboard picture is as bright as the viewport's"), StoryboardLevel, Level, 0.1);
+			FFileHelper::SaveArrayToFile(Storyboard.Jpeg, *(FPaths::ProjectSavedDir() / TEXT("Rosc/Screenshots/sample-stage-storyboard.jpg")));
+		}
 
 		const auto Save = [&Test, Size](TArray<FColor>& Picture, const TCHAR* Name)
 		{

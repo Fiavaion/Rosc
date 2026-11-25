@@ -111,54 +111,6 @@ namespace
 		return nullptr;
 	}
 
-	/** Takes a picture through a camera as the level stands. False when there is no renderer to take it with. */
-	bool TakeStoryboardPicture(const ACineCameraActor& Camera, FRoscStoryboardFrame& OutFrame)
-	{
-		FMinimalViewInfo View;
-		Camera.GetCineCameraComponent()->GetCameraView(0.0f, View);
-
-		const int32 Width = StoryboardWidth;
-		const int32 Height = FMath::Max(FMath::RoundToInt32(Width / View.AspectRatio), 1);
-
-		UTextureRenderTarget2D* Target = NewObject<UTextureRenderTarget2D>(GetTransientPackage());
-		// Eight bits that hold the picture as displayed, like a viewport.
-		Target->RenderTargetFormat = RTF_RGBA8;
-		Target->TargetGamma = 2.2f;
-		Target->InitAutoFormat(Width, Height);
-		Target->UpdateResourceImmediate(true);
-
-		USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(GetTransientPackage());
-		Capture->TextureTarget = Target;
-		Capture->CaptureSource = SCS_FinalColorLDR;
-		Capture->bCaptureEveryFrame = false;
-		Capture->bCaptureOnMovement = false;
-		Capture->SetCameraView(View);
-		Capture->PostProcessSettings = View.PostProcessSettings;
-		Capture->PostProcessBlendWeight = View.PostProcessBlendWeight;
-		Capture->RegisterComponentWithWorld(Camera.GetWorld());
-		Capture->CaptureScene();
-
-		TArray<FColor> Pixels;
-		FTextureRenderTargetResource* Resource = Target->GameThread_GetRenderTargetResource();
-		const bool bRead = Resource != nullptr && Resource->ReadPixels(Pixels) && Pixels.Num() == Width * Height;
-		Capture->DestroyComponent();
-		if (!bRead)
-		{
-			return false;
-		}
-
-		TArray64<uint8> Jpeg;
-		if (!FImageUtils::CompressImage(Jpeg, TEXT("jpg"), FImageView(Pixels.GetData(), Width, Height), StoryboardJpegQuality))
-		{
-			return false;
-		}
-		OutFrame.Width = Width;
-		OutFrame.Height = Height;
-		OutFrame.Jpeg.Reset();
-		OutFrame.Jpeg.Append(Jpeg.GetData(), IntCastChecked<int32>(Jpeg.Num()));
-		return true;
-	}
-
 	void AddPlanSubject(FRoscPlan& Plan, const AActor* Actor)
 	{
 		if (Actor == nullptr || Actor->IsA<ACineCameraActor>() || Actor->IsA<ARoscRig>())
@@ -444,6 +396,56 @@ TConstArrayView<FRoscStoryboardFrame> Rosc::ShotEditing::GetStoryboardFrames(con
 {
 	const URoscShotMetaData* Data = ShotSequence->FindMetaData<URoscShotMetaData>();
 	return Data != nullptr ? TConstArrayView<FRoscStoryboardFrame>(Data->StoryboardFrames) : TConstArrayView<FRoscStoryboardFrame>();
+}
+
+bool Rosc::ShotEditing::TakeStoryboardPicture(const ACineCameraActor& Camera, FRoscStoryboardFrame& OutFrame)
+{
+	FMinimalViewInfo View;
+	Camera.GetCineCameraComponent()->GetCameraView(0.0f, View);
+
+	const int32 Width = StoryboardWidth;
+	const int32 Height = FMath::Max(FMath::RoundToInt32(Width / View.AspectRatio), 1);
+
+	UTextureRenderTarget2D* Target = NewObject<UTextureRenderTarget2D>(GetTransientPackage());
+	// Eight bits that hold the picture as displayed, like a viewport.
+	Target->RenderTargetFormat = RTF_RGBA8;
+	Target->TargetGamma = 2.2f;
+	Target->InitAutoFormat(Width, Height);
+	Target->UpdateResourceImmediate(true);
+
+	USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(GetTransientPackage());
+	Capture->TextureTarget = Target;
+	Capture->CaptureSource = SCS_FinalColorLDR;
+	Capture->bCaptureEveryFrame = false;
+	Capture->bCaptureOnMovement = false;
+	// Without a rendering state of its own the capture has no exposure, and the camera's ISO,
+	// shutter, stop and ND go unused: a daylight stage reads as pure white.
+	Capture->bAlwaysPersistRenderingState = true;
+	Capture->SetCameraView(View);
+	Capture->PostProcessSettings = View.PostProcessSettings;
+	Capture->PostProcessBlendWeight = View.PostProcessBlendWeight;
+	Capture->RegisterComponentWithWorld(Camera.GetWorld());
+	Capture->CaptureScene();
+
+	TArray<FColor> Pixels;
+	FTextureRenderTargetResource* Resource = Target->GameThread_GetRenderTargetResource();
+	const bool bRead = Resource != nullptr && Resource->ReadPixels(Pixels) && Pixels.Num() == Width * Height;
+	Capture->DestroyComponent();
+	if (!bRead)
+	{
+		return false;
+	}
+
+	TArray64<uint8> Jpeg;
+	if (!FImageUtils::CompressImage(Jpeg, TEXT("jpg"), FImageView(Pixels.GetData(), Width, Height), StoryboardJpegQuality))
+	{
+		return false;
+	}
+	OutFrame.Width = Width;
+	OutFrame.Height = Height;
+	OutFrame.Jpeg.Reset();
+	OutFrame.Jpeg.Append(Jpeg.GetData(), IntCastChecked<int32>(Jpeg.Num()));
+	return true;
 }
 
 bool Rosc::ShotEditing::GrabStoryboardFrame(const FShot& Shot, FText& OutError)

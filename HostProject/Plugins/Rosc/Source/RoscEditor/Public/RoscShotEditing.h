@@ -85,6 +85,9 @@ namespace Rosc::ShotEditing
 	 */
 	ROSCEDITOR_API bool GrabStoryboardFrame(const FShot& Shot, FText& OutError);
 
+	/** Takes a storyboard picture through a camera as the level stands. False when there is no renderer to take it with. */
+	ROSCEDITOR_API bool TakeStoryboardPicture(const ACineCameraActor& Camera, FRoscStoryboardFrame& OutFrame);
+
 	ROSCEDITOR_API void RemoveStoryboardFrame(ULevelSequence* ShotSequence, int32 FrameIndex);
 
 	/**
