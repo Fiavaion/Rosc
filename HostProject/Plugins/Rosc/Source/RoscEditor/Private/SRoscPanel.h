@@ -7,6 +7,7 @@
 #include "Widgets/SCompoundWidget.h"
 
 class FRoscCameraTarget;
+class SLevelViewport;
 class SRoscAITab;
 
 /** The departments of the panel, in tab order. */
@@ -56,4 +57,13 @@ private:
 	TSharedPtr<FRoscCameraTarget> Target;
 	TSharedPtr<SRoscAITab> AITab;
 	ERoscDepartment ActiveDepartment = ERoscDepartment::Camera;
+
+	/** The viewport Look Through took over and where its view was, put back when Look Through is turned off. */
+	struct FViewBeforeLookThrough
+	{
+		TWeakPtr<SLevelViewport> Viewport;
+		FVector Location;
+		FRotator Rotation;
+	};
+	TOptional<FViewBeforeLookThrough> ViewBeforeLookThrough;
 };

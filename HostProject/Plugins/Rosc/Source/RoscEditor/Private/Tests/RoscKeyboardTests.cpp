@@ -3,6 +3,10 @@
 #include "CineCameraActor.h"
 #include "Editor.h"
 #include "Framework/Application/SlateApplication.h"
+#include "LevelEditor.h"
+#include "LevelEditorSubsystem.h"
+#include "LevelEditorViewport.h"
+#include "SLevelViewport.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
 #include "SRoscPanel.h"
@@ -145,6 +149,14 @@ namespace
 		Slate.ProcessKeyDownEvent(Enter);
 		Slate.ProcessKeyUpEvent(Enter);
 		return true;
+	}
+
+	/** The view of the level editor's active viewport, the one Look Through takes over. */
+	FLevelEditorViewportClient* GetActiveViewClient()
+	{
+		const TSharedPtr<ILevelEditor> Editor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor").GetFirstLevelEditor();
+		const TSharedPtr<SLevelViewport> Viewport = Editor.IsValid() ? Editor->GetActiveViewportInterface() : nullptr;
+		return Viewport.IsValid() ? &Viewport->GetLevelViewportClient() : nullptr;
 	}
 
 	const TCHAR* GetDepartmentTestName(ERoscDepartment Department)
@@ -351,6 +363,37 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Files are named by it"), GetDefault<URoscEditorSettings>()->DeliverNamePattern, FString(TEXT("{sequence}_{intent}_{shot}")));
 		TestFalse(TEXT("The reason is gone"), Rosc::WidgetTests::ShowsText(Walk->Panel.ToSharedRef(), TEXT("needs {shot}")));
 		ChoicesBefore->PutBack();
+	}, 0.3f));
+
+	// Look Through and back: the view returns to where it was, not left where the camera is.
+	const TCHAR* const LookThroughName = TEXT("Look through this camera in the viewport. Moving the viewport then moves the camera, unless it is on a support: a support holds the camera, and the Grip tab moves it.");
+	const FVector OwnViewLocation(-600.0, 250.0, 300.0);
+	const FRotator OwnViewRotation(-10.0, 30.0, 0.0);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Walk, LookThroughName, OwnViewLocation, OwnViewRotation]
+	{
+		if (FLevelEditorViewportClient* View = GetActiveViewClient(); TestNotNull(TEXT("The level editor has an active view"), View))
+		{
+			View->SetViewLocation(OwnViewLocation);
+			View->SetViewRotation(OwnViewRotation);
+		}
+		TestTrue(TEXT("Enter is pressed on Look Through"), PressControlCalled(*Walk->Panel, LookThroughName));
+		return true;
+	}));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk, LookThroughName, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]
+	{
+		ULevelEditorSubsystem* LevelEditor = GEditor->GetEditorSubsystem<ULevelEditorSubsystem>();
+		TestTrue(TEXT("The view looks through the camera"), WeakCamera.IsValid() && LevelEditor->GetPilotLevelActor() == WeakCamera.Get());
+		TestTrue(TEXT("Enter is pressed on Look Through again"), PressControlCalled(*Walk->Panel, LookThroughName));
+	}, 0.3f));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, OwnViewLocation, OwnViewRotation]
+	{
+		TestNull(TEXT("The view no longer looks through the camera"), GEditor->GetEditorSubsystem<ULevelEditorSubsystem>()->GetPilotLevelActor());
+		if (const FLevelEditorViewportClient* View = GetActiveViewClient())
+		{
+			AddInfo(FString::Printf(TEXT("The view is back at %s looking %s"), *View->GetViewLocation().ToString(), *View->GetViewRotation().ToString()));
+			TestTrue(TEXT("The view is back where it was"), View->GetViewLocation().Equals(OwnViewLocation, 0.01));
+			TestTrue(TEXT("And looks where it looked"), View->GetViewRotation().Equals(OwnViewRotation, 0.01));
+		}
 	}, 0.3f));
 
 	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]

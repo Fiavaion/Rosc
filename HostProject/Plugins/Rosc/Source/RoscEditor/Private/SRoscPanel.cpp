@@ -6,7 +6,10 @@
 #include "Editor.h"
 #include "EngineUtils.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "LevelEditor.h"
 #include "LevelEditorSubsystem.h"
+#include "LevelEditorViewport.h"
+#include "SLevelViewport.h"
 #include "SRoscAITab.h"
 #include "SRoscCameraTab.h"
 #include "SRoscDeliverTab.h"
@@ -287,14 +290,31 @@ void SRoscPanel::OnLookThroughChanged(bool bLookThrough)
 	{
 		return;
 	}
+	// The subsystem looks through a camera in the active viewport.
+	const TSharedPtr<ILevelEditor> Editor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor").GetFirstLevelEditor();
+	const TSharedPtr<SLevelViewport> Viewport = Editor.IsValid() ? Editor->GetActiveViewportInterface() : nullptr;
 	if (bLookThrough)
 	{
+		// Where the view was, to go back to when the user stops looking through the camera.
+		ViewBeforeLookThrough.Reset();
+		if (Viewport.IsValid() && !Viewport->GetLevelViewportClient().GetActiveActorLock().IsValid())
+		{
+			const FLevelEditorViewportClient& View = Viewport->GetLevelViewportClient();
+			ViewBeforeLookThrough = FViewBeforeLookThrough{ Viewport, View.GetViewLocation(), View.GetViewRotation() };
+		}
 		LevelEditor->PilotLevelActor(Target->GetCamera());
+		return;
 	}
-	else
+
+	LevelEditor->EjectPilotLevelActor();
+	if (ViewBeforeLookThrough.IsSet() && ViewBeforeLookThrough->Viewport.Pin() == Viewport && Viewport.IsValid())
 	{
-		LevelEditor->EjectPilotLevelActor();
+		FLevelEditorViewportClient& View = Viewport->GetLevelViewportClient();
+		View.SetViewLocation(ViewBeforeLookThrough->Location);
+		View.SetViewRotation(ViewBeforeLookThrough->Rotation);
+		View.Invalidate();
 	}
+	ViewBeforeLookThrough.Reset();
 }
 
 FReply SRoscPanel::OnNewCameraClicked()
