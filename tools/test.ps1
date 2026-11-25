@@ -3,7 +3,9 @@
 #   -Rendering   start the editor with a real GPU device (needed by tests that render frames).
 #   -EditorArgs  more arguments for the editor's command line (tools/evals.ps1 uses this).
 param(
-	[string]$Filter = "Rosc",
+	# LESSON-TOOL-006: with its dot. The engine matches a filter anywhere in a test's name, and "Rosc" alone is
+	# also in "SuperOscillator".
+	[string]$Filter = "Rosc.",
 	[switch]$Rendering,
 	[string]$EditorArgs = ""
 )
