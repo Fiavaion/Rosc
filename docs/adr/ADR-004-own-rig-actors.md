@@ -1,4 +1,4 @@
-# ADR-004: Rigs are UEcine actors on stable engine primitives
+# ADR-004: Rigs are Rosc actors on stable engine primitives
 
 **Date:** 2026-11-11
 **Status:** Accepted
@@ -7,29 +7,29 @@
 ## Context
 Epic ships geometric rigs: the classic rail and crane, and the Beta CineCameraRigs plugin
 (`ACineCameraRigRail`). They have no physical limits, and reported bugs include a rail
-position that would not keyframe (5.6). UEcine needs speed, acceleration, reach and head-rate
+position that would not keyframe (5.6). Rosc needs speed, acceleration, reach and head-rate
 limits, telescoping arms and operator imperfection. Rig class names are saved into levels.
 
 ## Decision
-UEcine defines its own rig actors (`AUEcineRig` and subclasses) built on release-quality
+Rosc defines its own rig actors (`ARoscRig` and subclasses) built on release-quality
 primitives: `USplineComponent` for track, scene components for the kinematic chain, and the
 standard `ACineCameraActor` attached to the rig's camera mount. The kinematics and limits are
-pure functions in `UEcineCore`. Animation is authored as rig-state keys and can be baked to
+pure functions in `RoscCore`. Animation is authored as rig-state keys and can be baked to
 plain camera transform keys.
 
 ## Consequences
 - ✅ No dependency on a Beta plugin; rig behaviour is fully testable.
 - ✅ Baked shots need no plugin.
 - ❌ Epic's per-point spline metadata (focal length and focus on the spline) is not reused;
-  UEcine keeps lens and focus on its own Sequencer keys.
+  Rosc keeps lens and focus on its own Sequencer keys.
 
 ## Alternatives considered
 1. Extend `ACineCameraRigRail` — rejected: Beta dependency and its known bugs become ours.
 2. Control Rig based rigs — rejected: heavier authoring, harder to express speed limits.
 
 ## Addendum 2026-11-11: as built in Phase 2
-- **One actor class, not subclasses.** `AUEcineRig` carries a rig type and per-axis limits
-  (`FUEcineRigSpec`); the kinematics switch on the type in `UEcineCore`. Changing a camera from
+- **One actor class, not subclasses.** `ARoscRig` carries a rig type and per-axis limits
+  (`FRoscRigSpec`); the kinematics switch on the type in `RoscCore`. Changing a camera from
   a jib to a crane keeps the same actor, and saved levels reference one class name.
 - **Nine axis properties are the saved and keyed surface:** `Travel`, `Traverse`, `Lift`,
   `Swing`, `Boom`, `Extension`, `Pan`, `Tilt`, `Roll`. Sequencer float tracks refer to them by

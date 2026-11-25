@@ -4,8 +4,8 @@
 
 $ueRoot = if ($env:UE_ROOT) { $env:UE_ROOT } else { "D:\Program Files\Epic Games\UE_5.8" }
 $repo = Split-Path -Parent $PSScriptRoot
-$uplugin = Join-Path $repo "HostProject\Plugins\UEcine\UEcine.uplugin"
-$outDir = Join-Path $repo ".scratch\Packaged\UEcine"
+$uplugin = Join-Path $repo "HostProject\Plugins\Rosc\Rosc.uplugin"
+$outDir = Join-Path $repo ".scratch\Packaged\Rosc"
 $logDir = Join-Path $repo ".scratch\logs"
 New-Item -ItemType Directory -Force $logDir | Out-Null
 if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
@@ -21,10 +21,10 @@ Select-String -Path $log -Pattern "\): (error|warning) |: fatal error |error LNK
 # What a buyer needs must be in the package, and every source file must say whose it is.
 if ($code -eq 0) {
 	$needed = @(
-		"UEcine.uplugin", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
-		"Content\Sample\UEcineSampleStage.umap", "Resources\Icon128.png", "Resources\Icons\Panel.svg",
-		"Resources\Database\lenses.json", "Resources\AI\models.json", "Resources\AI\uecine_ai_server.py",
-		"Shaders\Private\UEcineMonitor.usf", "Binaries\Win64\UnrealEditor-UEcineEditor.dll"
+		"Rosc.uplugin", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
+		"Content\Sample\RoscSampleStage.umap", "Resources\Icon128.png", "Resources\Icons\Panel.svg",
+		"Resources\Database\lenses.json", "Resources\AI\models.json", "Resources\AI\rosc_ai_server.py",
+		"Shaders\Private\RoscMonitor.usf", "Binaries\Win64\UnrealEditor-RoscEditor.dll"
 	)
 	$missing = @($needed | Where-Object { -not (Test-Path (Join-Path $outDir $_)) })
 	$unsigned = @(Get-ChildItem -Recurse -File (Join-Path $outDir "Source"), (Join-Path $outDir "Shaders") -Include *.h, *.cpp, *.cs, *.usf |

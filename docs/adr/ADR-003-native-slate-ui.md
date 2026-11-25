@@ -9,7 +9,7 @@ The product is judged on UI quality. Unreal offers native Slate (C++), Editor Ut
 (UMG assets) and an immediate-mode Slate plugin. The choice decides how every panel is written.
 
 ## Decision
-All UI is native Slate in `UEcineEditor`, with one style set (`FUEcineStyle`) holding colours,
+All UI is native Slate in `RoscEditor`, with one style set (`FRoscStyle`) holding colours,
 fonts, icons and spacing. The panel is a dockable nomad tab with one sub-tab per department.
 Custom controls (lens selector, exposure strip, move timeline) are Slate widgets.
 

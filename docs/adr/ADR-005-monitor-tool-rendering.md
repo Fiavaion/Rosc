@@ -32,16 +32,16 @@ Candidate A was built first and met all four criteria, so B and C were not built
 
 | Criterion | Result | How it was checked |
 |---|---|---|
-| 1. No more than 1.5 ms | False colour and waveform together add 0.14 to 0.26 ms to a 1920×1080 frame; all five tools together add 0.16 to 0.26 ms (median of 100 frames, three runs, RTX 5070 Ti, waiting for the graphics card after every frame) | `UEcine.Monitor.Cost`, which also fails if the cost goes over the budget |
-| 2. Never in a render | The pass is active only for views drawn through a level editor viewport. A scene capture taken with every tool on is the same picture as with the tools off, and a monitor nobody has activated draws nowhere | `UEcine.Editor.Monitor.Viewport`, `UEcine.Monitor.Picture`. A Movie Render Graph render with the tools left on is added to the Phase 5 acceptance checks |
-| 3. Level and cinematic viewports | Drawn in the real level viewport of a headless editor: the whole picture turns to bands and greys, and the scope panel appears | `UEcine.Editor.Monitor.Viewport`. Piloting a camera and the Sequencer cinematic viewport use the same viewport class; both are on the Phase 3 hand-check list |
+| 1. No more than 1.5 ms | False colour and waveform together add 0.14 to 0.26 ms to a 1920×1080 frame; all five tools together add 0.16 to 0.26 ms (median of 100 frames, three runs, RTX 5070 Ti, waiting for the graphics card after every frame) | `Rosc.Monitor.Cost`, which also fails if the cost goes over the budget |
+| 2. Never in a render | The pass is active only for views drawn through a level editor viewport. A scene capture taken with every tool on is the same picture as with the tools off, and a monitor nobody has activated draws nowhere | `Rosc.Editor.Monitor.Viewport`, `Rosc.Monitor.Picture`. A Movie Render Graph render with the tools left on is added to the Phase 5 acceptance checks |
+| 3. Level and cinematic viewports | Drawn in the real level viewport of a headless editor: the whole picture turns to bands and greys, and the scope panel appears | `Rosc.Editor.Monitor.Viewport`. Piloting a camera and the Sequencer cinematic viewport use the same viewport class; both are on the Phase 3 hand-check list |
 | 4. No change to user assets | Nothing is added to cameras, volumes or materials; the tools are per-user editor preferences | by construction |
 
 ## Decision
-Candidate A. `FUEcineMonitorViewExtension` (module `UEcineMonitor`) adds one full-screen pass
+Candidate A. `FRoscMonitorViewExtension` (module `RoscMonitor`) adds one full-screen pass
 after tone mapping that applies false colour, zebras and peaking and draws the scopes, plus one
 small compute pass that counts signal levels for the waveform and histogram when a scope is on.
-`UUEcineMonitorSubsystem` (module `UEcineEditor`) owns which tools are on and names the views
+`URoscMonitorSubsystem` (module `RoscEditor`) owns which tools are on and names the views
 the pass may draw in.
 
 ## Consequences
@@ -52,11 +52,11 @@ the pass may draw in.
   graphics card (every second pixel at 1920), with no read-back to the CPU.
 - ✅ Tools are view state: not part of undo history, saved per user, never in a render.
 - ❌ The false colour bands are set against the engine's default tone curve (the figures are
-  in `UEcineMonitorTypes.cpp` and re-measured by `UEcine.Monitor.Picture`). A project that
+  in `RoscMonitorTypes.cpp` and re-measured by `Rosc.Monitor.Picture`). A project that
   replaces the tone curve or adds a display transform moves where grey sits, and the bands do
   not follow. An engine update that changes the tone curve fails that test, which is the
   prompt to re-measure.
-- ❌ The pass needs Shader Model 5 and a plugin shader directory, so `UEcineMonitor` loads
+- ❌ The pass needs Shader Model 5 and a plugin shader directory, so `RoscMonitor` loads
   before the engine compiles its global shaders (`PostConfigInit`).
 - ✅ Lines and words (frame lines, safe areas, centre mark, data readout, scope titles, the
   false colour legend) are drawn by the same pass with the engine's canvas
@@ -66,7 +66,7 @@ the pass may draw in.
   rejected: it is not in the pixels read back, so it could not be checked headlessly.
 - Frame lines and the data readout belong to a camera, not to the view settings. The pass is
   told per view (keyed by what the view renders to) which camera it looks through;
-  `UUEcineMonitorSubsystem` works that out every editor tick from each level viewport's
+  `URoscMonitorSubsystem` works that out every editor tick from each level viewport's
   locked camera, so piloting and Sequencer camera cuts both count.
 - ❌ The words use the engine's small stats font, scaled with the viewport's DPI scale. Its
   size is not ours to choose; whether it reads well on a 4K display is a hand check.

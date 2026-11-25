@@ -14,18 +14,18 @@ job, how the plugin talks to a helper process or a remote machine, where models 
 consent means, and how the shot assistant acts on the scene.
 
 ## Decision
-1. **Module `UEcineAI` (Editor).** It owns jobs, backends, the model list and consent. The AI
-   tab is in `UEcineEditor`. Nothing else in the plugin depends on it: with no model installed
+1. **Module `RoscAI` (Editor).** It owns jobs, backends, the model list and consent. The AI
+   tab is in `RoscEditor`. Nothing else in the plugin depends on it: with no model installed
    and no server set, every other department works as before.
 2. **A job is a task on one picture.** Tasks: depth, matte, focal length. A request names the
    task and the picture, a file on disk (a frame grab is written to a file first). A result is
    a picture (depth or matte) or a field of view. Jobs run one at a time, off the game thread,
-   report a stage in words and a fraction, and can be cancelled. `UUEcineAISubsystem` runs
-   them; backends implement `IUEcineAIBackend` (the host it sends to, whether it can run a
+   report a stage in words and a fraction, and can be cancelled. `URoscAISubsystem` runs
+   them; backends implement `IRoscAIBackend` (the host it sends to, whether it can run a
    task and if not why, run, progress, cancel).
 3. **Three backends, two implementations.**
    - *In the editor*: NNE with ONNX Runtime on DirectML. All three tasks run here.
-   - *Helper on this machine*: `Resources/AI/uecine_ai_server.py`, a small server the plugin
+   - *Helper on this machine*: `Resources/AI/rosc_ai_server.py`, a small server the plugin
      starts with the user's own Python (it needs `onnxruntime`, `numpy` and `pillow`),
      listening on 127.0.0.1 only, with a key made for that run. It stops when the editor does:
      it watches its input, which closes with the editor. It is for machines where the
@@ -34,7 +34,7 @@ consent means, and how the shot assistant acts on the scene.
      with a key. This is the cloud backend: it is the user's own compute, and no third-party
      paid service is built in. The script refuses to listen beyond its own machine without a
      key.
-   The helper and the remote server speak one protocol, `uecine-ai/1`, over HTTP:
+   The helper and the remote server speak one protocol, `rosc-ai/1`, over HTTP:
    `GET /v1/health` (protocol, tasks it can do), `POST /v1/jobs?task=` (the picture as PNG, at
    most 2048 pixels on its long side), `GET /v1/jobs/{id}` (state, stage, fraction, result),
    `GET /v1/jobs/{id}/picture` (the result as PNG), `DELETE /v1/jobs/{id}`. One client class
@@ -54,13 +54,13 @@ consent means, and how the shot assistant acts on the scene.
    listed; RMBG is not, being non-commercial. What was checked is each model's card and
    licence tag, not the licence text or the training data, and MoGe's MIT is a tag only:
    counsel reviews these before release (`notes/TODOs.md`). Files live in a per-user folder
-   shared by all projects (`%LOCALAPPDATA%/UEcine/Models`, or the folder in the settings). The
+   shared by all projects (`%LOCALAPPDATA%/Rosc/Models`, or the folder in the settings). The
    AI tab shows the licence and downloads a file only when the user presses Download; a
    download is hashed before it is given its name, and a file is hashed again each time a
    model is brought into memory, so a file changed or put there by hand is caught.
 6. **Results are files.** Depth is a 16-bit grey PNG (near is bright; it is relative depth,
    not a distance, and the tab says so); a matte is an 8-bit grey PNG. They are written to
-   `Saved/UEcine/AI/<picture name>/` and shown in the tab. A focal-length estimate is shown as
+   `Saved/Rosc/AI/<picture name>/` and shown in the tab. A focal-length estimate is shown as
    a field of view and as the focal length on the panel camera's recording format, with one
    button that puts the nearest lens of the camera's kit on, as one undoable change.
 7. **The shot assistant plans, the user applies.** The user describes a shot in words. The
@@ -75,7 +75,7 @@ consent means, and how the shot assistant acts on the scene.
    One request, one structured answer: no agent loop and no tool results sent back.
 8. **The assistant's model is Claude, through the Messages API, with the user's own key.**
    It is a cloud backend: off until a key is set and consent given. The key is in per-user
-   editor settings. The provider sits behind one interface (`IUEcineAssistantModel`) so that
+   editor settings. The provider sits behind one interface (`IRoscAssistantModel`) so that
    another can be added without touching the plan or the tools. The request is plain HTTPS
    from the engine's HTTP module (there is no C++ SDK).
 9. **Evals for the assistant** are cases of a description and a scene with checks on the plan

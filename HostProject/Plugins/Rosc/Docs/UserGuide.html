@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosc User Guide</title>
+<style>
+	:root {
+		--page: #f6f5f2;
+		--surface: #ffffff;
+		--text: #1c1d20;
+		--muted: #575b63;
+		--line: #d9d7d1;
+		--accent: #0b5cad;
+		--note: #eef3f9;
+		--key: #ecebe7;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--page: #17181b;
+			--surface: #1f2125;
+			--text: #e9e9e6;
+			--muted: #a9adb5;
+			--line: #34373d;
+			--accent: #7db7f2;
+			--note: #1c2734;
+			--key: #2a2d32;
+		}
+	}
+	* { box-sizing: border-box; }
+	html { scroll-behavior: smooth; }
+	body {
+		margin: 0;
+		background: var(--page);
+		color: var(--text);
+		font: 17px/1.6 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+	}
+	main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1rem 5rem; }
+	h1 { font-size: 2.2rem; line-height: 1.15; margin: 0 0 0.4rem; letter-spacing: -0.01em; }
+	h2 { font-size: 1.5rem; line-height: 1.25; margin: 3.2rem 0 0.8rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+	h3 { font-size: 1.12rem; margin: 2rem 0 0.4rem; }
+	p, ul, ol, table, figure { margin: 0 0 1rem; }
+	.lead { font-size: 1.15rem; color: var(--muted); margin-bottom: 1.6rem; }
+	a { color: var(--accent); }
+	a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	ol, ul { padding-left: 1.4rem; }
+	li { margin-bottom: 0.45rem; }
+	nav ol { columns: 2; column-gap: 2rem; padding-left: 1.4rem; }
+	@media (max-width: 34rem) { nav ol { columns: 1; } }
+	b.ui { font-weight: 600; background: var(--key); border-radius: 4px; padding: 0.05em 0.35em; white-space: nowrap; }
+	.note { background: var(--note); border-left: 4px solid var(--accent); border-radius: 4px; padding: 0.8rem 1rem; margin: 0 0 1rem; }
+	.note p:last-child { margin-bottom: 0; }
+	figure { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0.6rem; }
+	figure img { display: block; max-width: 100%; height: auto; margin: 0 auto; border-radius: 3px; }
+	figcaption { color: var(--muted); font-size: 0.92rem; padding: 0.5rem 0.2rem 0; }
+	.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+	@media (max-width: 34rem) { .pair { grid-template-columns: 1fr; } }
+	.table-wrap { overflow-x: auto; }
+	table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+	th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); }
+	th { color: var(--muted); font-weight: 600; }
+	code { font: 0.9em Consolas, "Cascadia Mono", Menlo, monospace; background: var(--key); border-radius: 4px; padding: 0.05em 0.3em; overflow-wrap: anywhere; }
+	footer { margin-top: 4rem; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Rosc User Guide</h1>
+<p class="lead">A camera department inside Unreal Engine. Build a real camera package, put it on a dolly or a crane, block the move, judge exposure and focus, and deliver a review movie and a VFX handoff, all from one panel.</p>
+
+<nav aria-label="Contents">
+<ol>
+	<li><a href="#install">Install and open</a></li>
+	<li><a href="#first-shot">Your first shot</a></li>
+	<li><a href="#panel">The panel</a></li>
+	<li><a href="#camera">Camera</a></li>
+	<li><a href="#grip">Grip</a></li>
+	<li><a href="#focus">Focus</a></li>
+	<li><a href="#monitor">Monitor</a></li>
+	<li><a href="#shots">Shots</a></li>
+	<li><a href="#deliver">Deliver</a></li>
+	<li><a href="#ai">AI (optional)</a></li>
+	<li><a href="#files">Where files go</a></li>
+	<li><a href="#limits">Good to know</a></li>
+	<li><a href="#trouble">If something is wrong</a></li>
+</ol>
+</nav>
+
+<h2 id="install">1. Install and open</h2>
+<p>Rosc works in Unreal Engine 5.8 on Windows.</p>
+<ol>
+	<li>Install Rosc to the engine from Fab, or copy the <code>Rosc</code> folder into your project's <code>Plugins</code> folder.</li>
+	<li>In the editor choose <b class="ui">Edit &gt; Plugins</b>, find Rosc under Cinematics, turn it on and restart the editor. The engine plugins it needs for rendering (Movie Render Pipeline and Apple ProRes Media among them) are turned on with it.</li>
+	<li>Open the panel with <b class="ui">Window &gt; Cinematics &gt; Rosc</b>. Dock it beside the viewport; it is laid out to work as a narrow column.</li>
+</ol>
+<p>The <b class="ui">?</b> button at the top of the panel opens this guide.</p>
+
+<h2 id="first-shot">2. Your first shot</h2>
+<p>Rosc comes with a small sample stage: a set in daylight, a stand-in called Anna behind a table, a lamp nearer the camera, and an ARRI ALEXA 35 with a 75 mm on a 30 ft telescoping crane. The lens is nearly wide open, so Anna is sharp and the rest of the set is soft. This walk-through takes it from an empty Sequencer to delivered files in about ten minutes.</p>
+
+<figure>
+	<div class="pair">
+		<img src="images/sample-stage-peaking.png" alt="The sample stage seen through its camera: a grey stand-in figure in sharp focus with a red edge drawn round it, and a lamp beside it out of focus with no edge.">
+		<img src="images/sample-stage-false-colour.png" alt="The same picture in false colour, with a legend naming each band of signal level.">
+	</div>
+	<figcaption>The sample stage through A Cam with peaking on: the red edge is on Anna, who is in focus, and not on the lamp, which is not. Beside it, the same picture in false colour.</figcaption>
+</figure>
+
+<ol>
+	<li><strong>Open the stage.</strong> In the Content Browser open <b class="ui">Settings</b> and turn on <b class="ui">Show Plugin Content</b>. Then open <b class="ui">Plugins &gt; Rosc Content &gt; Sample &gt; RoscSampleStage</b>. Save a copy into your own project (<b class="ui">File &gt; Save Current Level As</b>) so that your work is kept there.</li>
+	<li><strong>Choose the camera.</strong> In the picker at the top of the panel choose <b class="ui">A Cam</b>. Press <b class="ui">Look Through</b> to see its picture in the viewport.</li>
+	<li><strong>Look at the camera package.</strong> The <b class="ui">Camera</b> tab shows the body, its recording format and the lens kit. Press another focal length in the kit to change lens, then press 75 again. The camera is exposed like a real one: T2.8 at ISO 400 with a 180° shutter and ND 2.1, for full sun.</li>
+	<li><strong>Judge the exposure.</strong> In the <b class="ui">Monitor</b> tab turn on <b class="ui">False Colour</b>. The legend in the picture names each band: Anna sits in middle grey and the sunlit floor a stop over. Open the iris a stop in the Camera tab and watch the bands move, then put it back. Turn False Colour off.</li>
+	<li><strong>Walk the move.</strong> In the <b class="ui">Grip</b> tab the camera is on a crane, with two marks. Press <b class="ui">Mark 2</b> to put the crane on its end position and <b class="ui">Mark 1</b> to come back. The move between them takes four seconds.</li>
+	<li><strong>Make the shot.</strong> In the <b class="ui">Shots</b> tab press <b class="ui">New Shot</b>. Rosc makes a sequence, opens it in Sequencer and adds a shot through A Cam.</li>
+	<li><strong>Bake the move.</strong> Back in the Grip tab press <b class="ui">Bake to Sequencer</b>. Play the shot in Sequencer: the crane booms up and swings as a crew would move it.</li>
+	<li><strong>Check the focus.</strong> The <b class="ui">Focus</b> tab says the focus is following Anna, and shows the near and far limits of what is sharp. In the Monitor tab turn on <b class="ui">Peaking</b>: a coloured edge is drawn on Anna and on nothing else, because only she is in focus. Press <b class="ui">Pick Focus</b> and click the lamp, and the edge moves to the lamp.</li>
+	<li><strong>Deliver for review.</strong> In the <b class="ui">Deliver</b> tab choose <b class="ui">Review</b>. Preflight looks through the sequence; when it says <b class="ui">Ready to render</b>, press <b class="ui">Render Review</b>. <b class="ui">Open Folder</b> shows the movie, with its slate and burn-ins.</li>
+	<li><strong>Deliver for visual effects.</strong> Choose <b class="ui">VFX Passes</b> and press <b class="ui">Render VFX Passes</b>. Each frame is an OpenEXR file with depth, normals, motion vectors and mattes, and beside the frames are the camera as FBX and a file of camera and lens data.</li>
+</ol>
+<div class="note"><p>Everything you do in the panel is one step in Unreal's undo history. <b class="ui">Ctrl+Z</b> takes back a lens change, a mark or a bake like any other edit.</p></div>
+
+<h2 id="panel">3. The panel</h2>
+<figure>
+	<img src="images/panel-camera.png" alt="The Rosc panel on its Camera tab: the camera picker, Look Through and Add Camera Here at the top, the row of department tabs, then Camera, Lens and Exposure sections." width="420">
+	<figcaption>The panel on its Camera tab.</figcaption>
+</figure>
+<ul>
+	<li><strong>The camera picker</strong> at the top names the camera the panel is working on. Selecting a Cine Camera in the level switches to it; selecting a light or a prop keeps the camera you had.</li>
+	<li><strong>Look Through</strong> shows that camera's picture in the viewport. A free camera then moves with the viewport. A camera on a support is held by the support, and the Grip tab moves it.</li>
+	<li><strong>Add Camera Here</strong> makes a new Cine Camera from the view you have now. Move through the level as usual; when you like the framing, press it. The new camera is where the viewport is, looks the same way, and has the lens of its kit that takes in the same view, in a camera package ready to edit.</li>
+	<li><strong>The departments</strong> are the tabs below: Camera, Grip, Focus, Monitor, Shots, Deliver and AI.</li>
+</ul>
+<p>Every control can be reached with <b class="ui">Tab</b> and worked with <b class="ui">Enter</b>, <b class="ui">Space</b> and the arrow keys, and each has a tooltip that says what it does. Warnings carry an icon and a sentence that says what is wrong and what to do about it.</p>
+<p>Distances are shown in metres, or in feet and inches. Choose which under <b class="ui">Edit &gt; Editor Preferences &gt; Plugins &gt; Rosc</b>.</p>
+
+<h2 id="camera">4. Camera</h2>
+<p>A camera package is a real body, one of its recording formats, and a lens from a real kit.</p>
+<ul>
+	<li><b class="ui">Body</b> and <b class="ui">Format</b> set the sensor area and resolution the camera records. Film gauges are in the list beside digital bodies.</li>
+	<li><b class="ui">Kit</b> chooses a lens kit, spherical or anamorphic. The buttons under it are the focal lengths that exist in that kit; a zoom has a <b class="ui">Zoom</b> control that stays inside its range.</li>
+	<li>Below the lens are the facts a DOP asks for: angle of view, full-frame equivalent, image aspect, close focus and hyperfocal distance.</li>
+	<li><b class="ui">T-stop</b>, <b class="ui">ISO</b>, <b class="ui">Shutter</b>, <b class="ui">ND</b> and <b class="ui">Frame rate</b> step the way the controls on a camera do: thirds of a stop for iris and ISO, whole stops for ND.</li>
+	<li><b class="ui">Physical exposure</b> decides what those settings do. Turned on, they set how bright the picture is, as on a real camera, and the set must be lit at real-world light levels. Turned off, they set depth of field and motion blur only, and the level's own exposure is left alone. <b class="ui">Offset</b> brightens or darkens the picture in stops when it is on.</li>
+</ul>
+<p>Rosc tells you when a combination would not work on a real set, such as a lens whose image circle does not cover the recording format. It advises; it does not stop you.</p>
+<p>A camera that has no package yet shows <b class="ui">Build Camera Package</b>, which starts from the camera's current focal length and aperture.</p>
+
+<h2 id="grip">5. Grip</h2>
+<p>A free camera goes wherever you put it. On a support it moves the way that equipment moves, and Rosc tells you when a move asks for more than the equipment can do.</p>
+<div class="table-wrap">
+<table>
+	<thead><tr><th>Support</th><th>How it moves</th></tr></thead>
+	<tbody>
+		<tr><td>Tripod with fluid head</td><td>Pans and tilts in place.</td></tr>
+		<tr><td>Slider, 1 m or 1.5 m</td><td>Slides along a short rail.</td></tr>
+		<tr><td>Dolly on track</td><td>Travels along straight or curved track, with a rising column.</td></tr>
+		<tr><td>Jib, 2 m or 4 m arm</td><td>A fixed arm that swings and booms.</td></tr>
+		<tr><td>Telescoping crane, 22, 30 or 50 ft</td><td>Swings, booms and extends, with a remote head.</td></tr>
+		<tr><td>Steadicam, handheld, drone</td><td>Go where the operator or pilot takes them, at the speed each can manage.</td></tr>
+	</tbody>
+</table>
+</div>
+<ol>
+	<li>Choose the support in <b class="ui">Camera on</b>. It is stood up under the camera, so the camera does not move when you choose one.</li>
+	<li>Set the support with the controls under <b class="ui">Position</b>. Each is an axis of that equipment (travel, lift, swing, boom, extension, pan, tilt, roll) and stays inside its range.</li>
+	<li>Where the shot starts, press <b class="ui">Mark Position</b>. Set the support where the shot ends and press it again. A move runs from each mark to the next; a shot can have several.</li>
+	<li>For each move set <b class="ui">Move time</b>, and <b class="ui">Ease in</b> and <b class="ui">Ease out</b>: how much of the move is spent getting up to speed and coming to rest.</li>
+	<li>Under <b class="ui">Operator</b> choose whose hands the camera is in (locked off, fluid head, remote head, Steadicam, handheld, drone) and how much they move. Each <b class="ui">Take</b> moves a little differently, and the same take number always gives the same movement.</li>
+	<li>Press <b class="ui">Bake to Sequencer</b>. The move is written into the open sequence from the playhead, as keys on the support's axes with the operator's movement on the camera.</li>
+</ol>
+<h3>Dolly zoom</h3>
+<p>On a dolly or a slider, each move has a <b class="ui">Dolly Zoom</b> switch. Turned on, the lens zooms as the camera travels so that what the focus is on stays the same size in the frame while the background stretches or closes in behind it.</p>
+<ul>
+	<li>Put a zoom lens on the camera in the Camera tab. A prime cannot zoom, and the tab says so.</li>
+	<li>Hold the focus on the subject first, with <b class="ui">Pick and Hold</b> or <b class="ui">Follow Selected</b> in the Focus tab. The subject the focus is held on is the one kept at its size.</li>
+	<li>The tab shows the focal lengths the move starts and ends on. If the move asks for more than the lens has, it says so, and the zoom stops at the end of the lens's range.</li>
+	<li><b class="ui">Bake to Sequencer</b> writes the zoom into the sequence with the move.</li>
+</ul>
+<p>If a move is faster than the support can travel, or a mark is past the end of its reach, the tab says which axis, by how much, and the shortest time the move could take. You can bake it all the same: it is a CG camera, and the choice is yours.</p>
+<p>After a bake, changing a mark or the operator does not change what Sequencer plays. The tab says so until you bake again.</p>
+<p>To curve a dolly's track, select the dolly in the level and move the points of its track in the viewport.</p>
+
+<h2 id="focus">6. Focus</h2>
+<ul>
+	<li><b class="ui">Pick Focus</b>, then click a subject or any part of one in the viewport, sets the focus to the distance of what you clicked. <b class="ui">Distance</b> sets it by hand.</li>
+	<li><b class="ui">Pick and Hold</b>, then click, holds the focus on the very point you clicked: an eye, a hand, a place on the floor. When the camera or the subject moves, the focus is pulled to keep that point sharp. The tab says what the focus is <b class="ui">Held on</b>.</li>
+	<li><b class="ui">Follow Selected</b> keeps the focus on the actor selected in the level, as a whole, as it and the camera move. <b class="ui">Let Go</b> leaves the focus where it is.</li>
+	<li><b class="ui">Depth of Field</b> shows the near limit, far limit, depth of field and hyperfocal distance for the lens, stop and focus distance, as they change.</li>
+	<li><b class="ui">Mark Focus</b> stores what the focus is on as a focus mark: the point or subject it is held on, or else its distance. Make as many as the shot needs. A mark on a point says what it is on, and its distance is measured to where the point is now.</li>
+	<li>Pressing a mark goes to it. <b class="ui">Rack</b> beside a mark pulls focus from where it is to that mark over the <b class="ui">Rack time</b>, and writes the rack into Sequencer from the playhead. A rack to a point keeps the point sharp for the rest of the shot, even while the camera travels.</li>
+</ul>
+<p>A lens does not focus nearer than its close focus. When the subject is nearer than that, the tab says so and says what would put it right.</p>
+
+<h2 id="monitor">7. Monitor</h2>
+<p>The monitor's tools are drawn over the picture in the level viewport, as on an on-set monitor. They are never in a render, and they are your own view settings: they are not saved in the level and they are not part of the undo history.</p>
+<div class="table-wrap">
+<table>
+	<thead><tr><th>Tool</th><th>What it shows</th></tr></thead>
+	<tbody>
+		<tr><td>False Colour</td><td>Signal level as bands of colour, from crushed black through middle grey to clipped white, with a legend in the picture.</td></tr>
+		<tr><td>Zebras</td><td>Stripes on everything at or above the <b class="ui">Zebra level</b>.</td></tr>
+		<tr><td>Waveform, Histogram</td><td>Scopes of the whole picture, drawn in its corners.</td></tr>
+		<tr><td>Peaking</td><td>An edge in a colour of your choice on what is in focus, and only on that. It shows best with a shallow depth of field: a long lens, a wide stop, a near subject. When everything in the frame is within the depth of field, everything has an edge.</td></tr>
+		<tr><td>Frame Lines</td><td>The frame the shot is delivered in, chosen in <b class="ui">Deliver in</b> (2.39:1, 1.85:1 and so on).</td></tr>
+		<tr><td>Safe Areas, Centre Mark</td><td>Action and title safe, and the centre of the frame.</td></tr>
+		<tr><td>Data Readout</td><td>The camera's lens and exposure settings, written in the picture.</td></tr>
+	</tbody>
+</table>
+</div>
+<p>The tools measure the picture as it is displayed, after Unreal's tone mapping, which is what a monitor on set measures.</p>
+
+<h2 id="shots">8. Shots</h2>
+<ul>
+	<li><b class="ui">Shot List</b> lists the shots of the sequence open in Sequencer. <b class="ui">New Shot</b> adds one through the panel's camera, and starts a sequence if none is open. Choosing a shot puts the playhead at its start.</li>
+	<li><b class="ui">This Shot</b> holds its scene, size (wide, medium, close-up and the rest), move and notes. Camera, lens, support, start and running time are read from the shot itself, so they are never out of date.</li>
+	<li><b class="ui">Grab Frame</b> keeps the picture at the playhead as a storyboard frame of the shot.</li>
+	<li><b class="ui">Overhead Plan</b> draws the shot from above: where the camera starts (A) and ends (B), its track, what the lens takes in and the subjects near it.</li>
+	<li><b class="ui">Export Paperwork</b> writes the shot list and the camera report as CSV files, and a page with the storyboard frames and plans to print or save as PDF from a web browser.</li>
+</ul>
+
+<h2 id="deliver">9. Deliver</h2>
+<p>Choose what the delivery is for. Rosc sets up the render.</p>
+<div class="table-wrap">
+<table>
+	<thead><tr><th>Delivery</th><th>What is written</th></tr></thead>
+	<tbody>
+		<tr><td>Draft</td><td>A small, quick MP4 movie of each shot at half the review size, with burn-ins, to look at while you work. It plays in any player.</td></tr>
+		<tr><td>Review</td><td>A light ProRes movie of each shot in its delivery frame, with a slate and burn-ins if you want them, to pass around and comment on.</td></tr>
+		<tr><td>VFX Passes</td><td>Every frame of each shot as a scene-linear OpenEXR file with depth, normals, motion vectors and mattes; the camera as FBX; a file of camera and lens data for every frame; and a copy of the sequence that opens without Rosc.</td></tr>
+		<tr><td>Master</td><td>The finished picture of each shot as a ProRes 4444 movie in its delivery frame, with smooth motion blur and nothing drawn over it.</td></tr>
+		<tr><td>YouTube</td><td>The finished picture of each shot as an H.264 MP4 file at the settings YouTube asks for, at 1080p or 4K. The file is made on your computer; uploading it is up to you.</td></tr>
+		<tr><td>DCP Source</td><td>The finished picture of each shot as a ProRes 4444 movie in the cinema's frame, at 2K or 4K: 2048 by 858 for a 2.39:1 picture and 1998 by 1080 for 1.85:1. A DCP program such as DCP-o-matic makes the cinema package from it. Rosc does not write the DCP itself.</td></tr>
+	</tbody>
+</table>
+</div>
+<ul>
+	<li><b class="ui">Size</b>, for YouTube and DCP Source, chooses between 1080p or 2K and 4K. 4K takes about four times as long to render.</li>
+	<li><b class="ui">Files</b>: the folder deliveries are written under, and the name of each file. <b class="ui">Browse</b> picks the folder, a folder dragged from Explorer can be dropped on the box, and <b class="ui">Show in Explorer</b> opens it. <b class="ui">Add Token</b> puts in parts that change, such as the shot's name, the scene, the camera or a version that counts up by itself. The first file of each shot is shown before you render.</li>
+	<li><b class="ui">Preflight</b> looks through the sequence for the mistakes that spoil renders: a shot with no camera cut, a camera whose frame rate is not the sequence's, exposure left to adapt by itself, two shots with one name, a DCP source that does not play at 24 frames a second. Each finding says whether it stops the render or is only worth knowing, and most have a button that puts it right.</li>
+	<li><b class="ui">Render</b> starts the delivery. The editor is busy until it is done; <b class="ui">Stop</b> ends it and keeps what was written.</li>
+	<li><b class="ui">Bake for Handoff</b> makes the copy of the sequence that plays on plain Cine Cameras and Sequencer keys, without rendering. A VFX Passes delivery makes it by itself.</li>
+</ul>
+<div class="note"><p>Visual effects usually ask for ACEScg. Preflight tells you when the project does not work in it and offers <b class="ui">Work in ACEScg</b>, which takes effect when the editor is restarted. Until then the files are scene-linear in the project's own colour space, and say so in their metadata.</p></div>
+
+<h2 id="ai">10. AI (optional)</h2>
+<p>Nothing in this tab is needed for anything else in Rosc, and nothing leaves your machine until you have agreed to it in the tab, for this project and for the place it is sent.</p>
+
+<h3>Shot Assistant</h3>
+<p>Describe a shot in your own words, such as “Crane up over the table to reveal Anna, about eight seconds, and keep her sharp.” The assistant answers with a plan in the steps Rosc's tabs would take: the support, the marks, the timing, the focus. Read it, then <b class="ui">Apply Plan</b> or <b class="ui">Discard</b>. Applying is one step you can undo.</p>
+<ul>
+	<li>The assistant is a Claude model, asked with your own Claude API key. Put the key in <b class="ui">Open AI Settings</b> (Editor Preferences &gt; Plugins &gt; Rosc AI). It is kept in your own settings, not in the project.</li>
+	<li>Planning a shot sends the words you type and a description of the set: the camera and its support, the names, sizes and positions of the things near the camera, and the names of the shots in the open sequence. No pictures are sent. Each request is billed to your key.</li>
+	<li><b class="ui">Withdraw Agreement</b> takes back your agreement at any time.</li>
+</ul>
+
+<h3>Pictures</h3>
+<p>A depth map, a matte or a lens estimate for a still or a frame of a plate: pictures Unreal did not render. Depth and mattes of what Unreal renders come exactly, with a VFX delivery.</p>
+<ul>
+	<li><b class="ui">Picture</b> is the still or frame to work on. Press <b class="ui">Browse</b> to pick it, or drag the file from Explorer and drop it on the box; there is no need to type its path. <b class="ui">Show in Explorer</b> opens the folder it is in.</li>
+	<li><b class="ui">Depth Map</b> and <b class="ui">Matte</b> write image files beside each other in the project's saved folder.</li>
+	<li><b class="ui">Estimate Lens</b> reads the field of view a reference picture looks to have been taken with, and names the lens of the camera's kit that comes nearest. <b class="ui">Put On</b> puts that lens on the camera.</li>
+	<li><b class="ui">Run on</b> chooses where the work is done: in the editor, on this machine's graphics card; in a helper program on this machine, which needs a Python installation with <code>onnxruntime</code>, <code>numpy</code> and <code>pillow</code>; or on a server your studio runs, which asks for your agreement first because the picture leaves this machine.</li>
+</ul>
+
+<h3>Models</h3>
+<p>The models are not part of Rosc. Each is downloaded once from its makers' page, under its makers' licence, into a folder all your projects share. Read the licence before you download; the <b class="ui">Licence</b> button beside each model opens it.</p>
+<div class="table-wrap">
+<table>
+	<thead><tr><th>Model</th><th>Used for</th><th>Licence stated by its makers</th></tr></thead>
+	<tbody>
+		<tr><td>Depth Anything V2 Small</td><td>Depth map</td><td>Apache-2.0</td></tr>
+		<tr><td>BiRefNet Lite</td><td>Matte</td><td>MIT</td></tr>
+		<tr><td>MoGe-2 Small</td><td>Lens estimate</td><td>MIT</td></tr>
+	</tbody>
+</table>
+</div>
+
+<h2 id="files">11. Where files go</h2>
+<div class="table-wrap">
+<table>
+	<thead><tr><th>What</th><th>Where, unless you choose another folder</th></tr></thead>
+	<tbody>
+		<tr><td>Deliveries</td><td><code>Saved/Rosc/Deliveries</code> in the project, with a folder for each sequence. Change it in the Deliver tab.</td></tr>
+		<tr><td>Paperwork</td><td><code>Saved/Rosc/Paperwork</code> in the project, with a folder for each sequence. Change it in the Shots tab.</td></tr>
+		<tr><td>Depth maps and mattes</td><td><code>Saved/Rosc/AI</code> in the project, with a folder for each picture.</td></tr>
+		<tr><td>Models</td><td><code>%LOCALAPPDATA%\Rosc\Models</code>, shared by all projects. Change it in the AI settings.</td></tr>
+		<tr><td>Sequences and shots</td><td>Level Sequence assets in your project's content, where Sequencer's own settings put them.</td></tr>
+	</tbody>
+</table>
+</div>
+<p>What Rosc makes is standard Unreal data: Cine Camera properties, Sequencer keys and Movie Render Graph renders. The copy made by <b class="ui">Bake for Handoff</b> opens in a project that does not have Rosc.</p>
+
+<h2 id="limits">12. Good to know</h2>
+<ul>
+	<li><strong>Physical exposure needs real light.</strong> With it on, a sun at a few lux gives a black picture, as it would on set. Light the level at real-world levels (full sun is about 100,000 lux) or leave Physical exposure off.</li>
+	<li><strong>False colour is set for Unreal's standard look.</strong> The bands are placed for the engine's default tone curve. If your project replaces the tone curve or adds a display transform, the picture is still measured correctly as a signal level, but middle grey may not fall in the band named for it.</li>
+	<li><strong>The monitor's tools are for the level viewport.</strong> They are kept out of every render.</li>
+	<li><strong>A slated review movie is two frames longer than its shot:</strong> the slate before it and a tail frame after.</li>
+	<li><strong>One camera to a shot.</strong> A delivery is one movie, one lens and one line of the shot list for each shot. Make each camera cut a shot of its own.</li>
+	<li><strong>The editor is busy while a render runs</strong>, as with Unreal's own local renders.</li>
+	<li><strong>A camera on a support is locked in place</strong> with Unreal's own Lock Actor Movement, and freed when it comes off the support or the support is deleted. If you open a level in a project that does not have Rosc, the support is not there but the lock still is: right-click the camera and turn off <b class="ui">Transform &gt; Lock Actor Movement</b> to move it by hand. What Sequencer plays is not affected.</li>
+	<li><strong>A matte made in the editor holds the editor still.</strong> The matte's model needs about 10 GB of graphics memory. Run in the editor on a 16 GB card, the viewport can stand still for ten seconds or more while it works, and comes back when the matte is done; the memory is given back then too. Do not start a matte while a render is running. A server on another machine does the same job without holding this one, and so does the helper when its Python works on the processor. Depth maps and lens estimates do not do this.</li>
+	<li><strong>A lens estimate is an estimate.</strong> It reads perspective from one picture. Treat it as a starting point and check it against something of known size in the frame.</li>
+	<li><strong>The camera database is a reference, not a specification.</strong> Sensor areas, formats and lens data come from the manufacturers' published figures; check anything a shoot depends on against the manufacturer.</li>
+</ul>
+
+<h2 id="trouble">13. If something is wrong</h2>
+<div class="table-wrap">
+<table>
+	<thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+	<tbody>
+		<tr><td>Rosc is not in the Window menu</td><td>Turn the plugin on under Edit &gt; Plugins and restart the editor.</td></tr>
+		<tr><td>The panel says there is no camera</td><td>Press <b class="ui">Add Camera Here</b>, or select a Cine Camera Actor in the level.</td></tr>
+		<tr><td>Peaking draws an edge on everything</td><td>Everything is within the depth of field. Open the iris, use a longer lens or move nearer the subject; the Focus tab shows the near and far limits.</td></tr>
+		<tr><td>Dolly Zoom is not in the Grip tab</td><td>It is offered on a dolly or a slider. It needs a zoom lens, and the focus held on the subject.</td></tr>
+		<tr><td>The sample stage is not in the Content Browser</td><td>Turn on Show Plugin Content in the Content Browser's settings.</td></tr>
+		<tr><td>The picture goes black or white with Physical exposure on</td><td>The level is not lit at real-world levels. Read <b class="ui">Exposes for</b> in the Camera tab, then change the light or the stop, or turn Physical exposure off.</td></tr>
+		<tr><td>The camera will not move in the viewport</td><td>It is on a support. Move the support in the Grip tab, or choose <b class="ui">No support</b> to free it.</td></tr>
+		<tr><td>Sequencer plays the old move</td><td>The marks changed after the bake. Press <b class="ui">Bake to Sequencer</b> again.</td></tr>
+		<tr><td>Render is greyed out</td><td>A preflight finding stops the render. Put it right under Preflight, then render.</td></tr>
+		<tr><td>A delivery did not finish</td><td>The Output Log (Window &gt; Output Log) says why. What was written is kept.</td></tr>
+		<tr><td>A picture job on the helper does not start</td><td>Set <b class="ui">Python</b> in the AI settings to a Python that has onnxruntime, numpy and pillow.</td></tr>
+		<tr><td>The assistant asks for a key or an agreement</td><td>Put your Claude API key in the AI settings, then agree in the AI tab to send shot descriptions.</td></tr>
+	</tbody>
+</table>
+</div>
+
+<footer>
+	<p>Rosc 0.1.0 for Unreal Engine 5.8. Camera, lens and equipment names are trademarks of their owners and are used to identify the equipment described; Rosc is not affiliated with or endorsed by them. Third-party notices are in <code>THIRD_PARTY_NOTICES.md</code> in the plugin's folder.</p>
+</footer>
+
+</main>
+</body>
+</html>

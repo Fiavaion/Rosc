@@ -1,16 +1,16 @@
-# Runs UEcine automation tests in a headless editor and prints pass/fail counts.
-# Usage: powershell -File tools/test.ps1 [-Filter UEcine.Core.Optics] [-Rendering] [-EditorArgs "..."]
+# Runs Rosc automation tests in a headless editor and prints pass/fail counts.
+# Usage: powershell -File tools/test.ps1 [-Filter Rosc.Core.Optics] [-Rendering] [-EditorArgs "..."]
 #   -Rendering   start the editor with a real GPU device (needed by tests that render frames).
 #   -EditorArgs  more arguments for the editor's command line (tools/evals.ps1 uses this).
 param(
-	[string]$Filter = "UEcine",
+	[string]$Filter = "Rosc",
 	[switch]$Rendering,
 	[string]$EditorArgs = ""
 )
 
 $ueRoot = if ($env:UE_ROOT) { $env:UE_ROOT } else { "D:\Program Files\Epic Games\UE_5.8" }
 $repo = Split-Path -Parent $PSScriptRoot
-$uproject = Join-Path $repo "HostProject\UEcineHost.uproject"
+$uproject = Join-Path $repo "HostProject\RoscHost.uproject"
 $logDir = Join-Path $repo ".scratch\logs"
 $reportDir = Join-Path $repo ".scratch\test-report"
 New-Item -ItemType Directory -Force $logDir | Out-Null

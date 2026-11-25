@@ -1,0 +1,182 @@
+// Copyright 2026 Fiavaion. All rights reserved.
+
+// Rosc monitor tools: false colour, zebras, peaking, waveform and histogram.
+// Both shaders work on the picture after tone mapping, so every level here is a displayed
+// (gamma-encoded) signal level between 0 and 1.
+
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+
+Texture2D SceneColorTexture;
+
+// Rec. 709 luma of a displayed colour. Kept in step with Rosc::Monitor::GetSignalPercent.
+float GetSignal(float3 DisplayedColour)
+{
+	return dot(saturate(DisplayedColour), float3(0.2126, 0.7152, 0.0722));
+}
+
+#if COMPUTESHADER
+
+RWTexture2D<uint> RWWaveformTexture;
+RWTexture2D<uint> RWHistogramTexture;
+int2 ViewMin;
+int2 ViewSize;
+int SampleStep;
+
+// Adds one picture sample to its column and level of the waveform and to its level of the histogram.
+[numthreads(8, 8, 1)]
+void ScopeCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+	const int2 Pixel = int2(DispatchThreadId.xy) * SampleStep + SampleStep / 2;
+	if (any(Pixel >= ViewSize))
+	{
+		return;
+	}
+
+	const float Signal = GetSignal(SceneColorTexture.Load(int3(ViewMin + Pixel, 0)).rgb);
+	const uint Level = min(uint(Signal * ROSC_SCOPE_LEVELS), uint(ROSC_SCOPE_LEVELS - 1));
+	const uint Column = uint(Pixel.x) * ROSC_SCOPE_COLUMNS / uint(ViewSize.x);
+	InterlockedAdd(RWWaveformTexture[uint2(Column, Level)], 1u);
+	InterlockedAdd(RWHistogramTexture[uint2(Level, 0)], 1u);
+}
+
+#endif
+
+#if PIXELSHADER
+
+// Tool bits. Kept in step with RoscMonitorViewExtension.cpp.
+#define TOOL_FALSE_COLOUR 1u
+#define TOOL_ZEBRAS 2u
+#define TOOL_PEAKING 4u
+
+SCREEN_PASS_TEXTURE_VIEWPORT(Input)
+SamplerState SceneColorSampler;
+uint Tools;
+float4 FalseColourRanges[ROSC_MAX_FALSE_COLOUR_BANDS];
+float4 FalseColourColours[ROSC_MAX_FALSE_COLOUR_BANDS];
+int FalseColourBandCount;
+float ZebraLevel;
+float3 PeakingColour;
+float PeakingThreshold;
+
+float GetSignalAt(float2 UV)
+{
+	return GetSignal(Texture2DSampleLevel(SceneColorTexture, SceneColorSampler, clamp(UV, Input_UVViewportBilinearMin, Input_UVViewportBilinearMax), 0).rgb);
+}
+
+#if ROSC_SCOPES
+
+Texture2D<uint> WaveformTexture;
+Texture2D<uint> HistogramTexture;
+// Left, top, right, bottom in picture pixels. All zero when the scope is off.
+float4 WaveformRect;
+float4 HistogramRect;
+float WaveformScale;
+float HistogramScale;
+
+bool IsInside(float2 Pixel, float4 Rect)
+{
+	return all(Pixel >= Rect.xy) && all(Pixel < Rect.zw);
+}
+
+// The dimmed picture behind a scope, with a line at every quarter of the signal range.
+float3 GetScopePanel(float3 Picture, float HeightFraction, float HeightInPixels)
+{
+	const float PixelsToQuarterLine = abs(frac(HeightFraction * 4.0 + 0.5) - 0.5) * HeightInPixels / 4.0;
+	return PixelsToQuarterLine < 0.75 ? float3(0.42, 0.42, 0.42) : Picture * 0.15;
+}
+
+float3 DrawScopes(float3 Picture, float2 Pixel)
+{
+	if (IsInside(Pixel, WaveformRect))
+	{
+		const float2 Size = WaveformRect.zw - WaveformRect.xy;
+		const float HeightFraction = (WaveformRect.w - Pixel.y) / Size.y;
+		const int Column = min(int((Pixel.x - WaveformRect.x) / Size.x * ROSC_SCOPE_COLUMNS), ROSC_SCOPE_COLUMNS - 1);
+
+		// A scope shorter than the number of levels shows the busiest of the levels each pixel covers.
+		const float LevelsPerPixel = ROSC_SCOPE_LEVELS / Size.y;
+		const int FirstLevel = int(floor(HeightFraction * ROSC_SCOPE_LEVELS - LevelsPerPixel * 0.5 + 0.001));
+		const int LevelCount = clamp(int(ceil(LevelsPerPixel)), 1, 4);
+		uint Count = 0;
+		for (int LevelOffset = 0; LevelOffset < LevelCount; ++LevelOffset)
+		{
+			Count = max(Count, WaveformTexture.Load(int3(Column, clamp(FirstLevel + LevelOffset, 0, ROSC_SCOPE_LEVELS - 1), 0)));
+		}
+
+		const float Trace = saturate(sqrt(Count * WaveformScale));
+		return lerp(GetScopePanel(Picture, HeightFraction, Size.y), float3(0.8, 1.0, 0.8), Trace);
+	}
+
+	if (IsInside(Pixel, HistogramRect))
+	{
+		const float2 Size = HistogramRect.zw - HistogramRect.xy;
+		const float HeightFraction = (HistogramRect.w - Pixel.y) / Size.y;
+
+		// A scope narrower than the number of levels shows the fullest of the levels each pixel covers.
+		const float LevelsPerPixel = ROSC_SCOPE_LEVELS / Size.x;
+		const int FirstLevel = int(floor((Pixel.x - HistogramRect.x) / Size.x * ROSC_SCOPE_LEVELS - LevelsPerPixel * 0.5 + 0.001));
+		const int LevelCount = clamp(int(ceil(LevelsPerPixel)), 1, 4);
+		uint Count = 0;
+		for (int LevelOffset = 0; LevelOffset < LevelCount; ++LevelOffset)
+		{
+			Count = max(Count, HistogramTexture.Load(int3(clamp(FirstLevel + LevelOffset, 0, ROSC_SCOPE_LEVELS - 1), 0, 0)));
+		}
+
+		const float BarHeight = saturate(sqrt(Count * HistogramScale));
+		return HeightFraction < BarHeight ? float3(0.85, 0.85, 0.85) : GetScopePanel(Picture, HeightFraction, Size.y);
+	}
+
+	return Picture;
+}
+
+#endif
+
+float4 PicturePS(noperspective float4 UVAndScreenPos : TEXCOORD0) : SV_Target0
+{
+	const float2 UV = UVAndScreenPos.xy;
+	const float4 SceneColor = Texture2DSampleLevel(SceneColorTexture, SceneColorSampler, UV, 0);
+	const float Signal = GetSignal(SceneColor.rgb);
+	// Position in the picture, in pixels from its top left corner.
+	const float2 Pixel = UV * Input_Extent - Input_ViewportMin;
+	float3 Picture = SceneColor.rgb;
+
+	if ((Tools & TOOL_FALSE_COLOUR) != 0)
+	{
+		Picture = Signal;
+		for (int BandIndex = 0; BandIndex < FalseColourBandCount; ++BandIndex)
+		{
+			if (Signal >= FalseColourRanges[BandIndex].x && Signal < FalseColourRanges[BandIndex].y)
+			{
+				Picture = FalseColourColours[BandIndex].rgb;
+			}
+		}
+	}
+
+	// Diagonal stripes four pixels wide: a pattern, so it does not rely on colour.
+	if ((Tools & TOOL_ZEBRAS) != 0 && Signal >= ZebraLevel && frac((Pixel.x + Pixel.y) / 8.0) < 0.5)
+	{
+		Picture = 0.0;
+	}
+
+	if ((Tools & TOOL_PEAKING) != 0)
+	{
+		// How far this pixel stands out from the four around it: large only on fine, sharp detail.
+		const float2 Step = Input_ExtentInverse;
+		const float Detail = abs(4.0 * Signal
+			- GetSignalAt(UV + float2(Step.x, 0.0)) - GetSignalAt(UV - float2(Step.x, 0.0))
+			- GetSignalAt(UV + float2(0.0, Step.y)) - GetSignalAt(UV - float2(0.0, Step.y)));
+		if (Detail >= PeakingThreshold)
+		{
+			Picture = PeakingColour;
+		}
+	}
+
+#if ROSC_SCOPES
+	Picture = DrawScopes(Picture, Pixel);
+#endif
+
+	return float4(Picture, SceneColor.a);
+}
+
+#endif

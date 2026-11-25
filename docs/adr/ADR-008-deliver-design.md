@@ -35,14 +35,14 @@ Render Graph in 5.8"):
   chromaticities.
 
 ## Decision
-1. **A new editor module, `UEcineRender`**, holds everything that touches Movie Render
+1. **A new editor module, `RoscRender`**, holds everything that touches Movie Render
    Pipeline: building graphs, running a render, the burn-in widget. It takes plain data and
-   knows nothing about the shot list or the panel; `UEcineEditor` gathers that data and calls
+   knows nothing about the shot list or the panel; `RoscEditor` gathers that data and calls
    it. Recipes that need no engine (what each intent asks for, file names, preflight rules,
-   slate and burn-in text, the sidecar file) are pure functions in `UEcineCore`.
+   slate and burn-in text, the sidecar file) are pure functions in `RoscCore`.
 2. **Graphs are generated, one per shot, from engine nodes only.** A graph is built in memory
    for each shot when a render starts, with that shot's file names and metadata written into
-   it, and is given to the shot (the first also to the job). Nothing in a graph is a UEcine
+   it, and is given to the shot (the first also to the job). Nothing in a graph is a Rosc
    node class, so a graph saved for a render farm loads without the plugin. The one soft
    reference is the burn-in widget class.
 3. **Renders run in the editor through the PIE executor** on a private queue, with unsaved
@@ -50,11 +50,11 @@ Render Graph in 5.8"):
    delegates. (Spike #3.)
 4. **Metadata has one source.** Camera body, format, lens, ISO, shutter angle, ND, T-stop,
    delivery frame, scene, shot and size go into the graph's Set Metadata Attributes node as
-   `uecine/...` keys. EXR headers get them from the engine; the burn-in widget and the slate
+   `rosc/...` keys. EXR headers get them from the engine; the burn-in widget and the slate
    read the same attributes from the evaluated graph. What changes during a shot (focal
    length, aperture, focus distance, camera position) is already written per frame by the
    engine, and is also written to the sidecar file from the same samples bake for handoff uses.
-5. **The burn-in widget is a native class**, `UUEcineBurnInWidget`, built in Slate. It takes
+5. **The burn-in widget is a native class**, `URoscBurnInWidget`, built in Slate. It takes
    the engine's per-frame Blueprint event by overriding `UObject::ProcessEvent`, which avoids
    shipping a Widget Blueprint that would have to be authored and kept in step by hand.
    (Spike #3.)
@@ -95,7 +95,7 @@ from an automation test with latent commands, on a six-frame shot at 640 pixels 
   brief's "ProRes" becomes a finding in the phase report.
 
 ## Spike #3 — result (2026-11-11)
-`UEcine.Editor.Deliver.RenderTwoShots`, run with `tools/test.ps1 -Rendering`: two six-frame
+`Rosc.Editor.Deliver.RenderTwoShots`, run with `tools/test.ps1 -Rendering`: two six-frame
 shots of one unsaved sequence in Template_Default, rendered in one job in about a second.
 - **Executor: kept.** The generated graphs rendered to completion unattended. The executor
   listed nine files, all on disk in the folder asked for: eight EXR files for the first shot
@@ -106,7 +106,7 @@ shots of one unsaved sequence in Template_Default, rendered in one job in about 
   layer; the `.mov` was decoded with ffmpeg by hand and showed the slate on frame 0 and the
   strip over the picture on frame 3.
 - **Per-shot graphs: kept.** Each file was named for its shot and carried its own shot's
-  metadata (`uecine/lens/kit` differed between the EXR header and the movie's slate).
+  metadata (`rosc/lens/kit` differed between the EXR header and the movie's slate).
 - **ProRes by reflection: kept.** ffprobe reads the movie as ProRes 422 LT, 10-bit, Rec.709,
   24 fps, eight frames, with a timecode track.
 
@@ -125,12 +125,12 @@ What the run added to the design:
   it: the recipes size each render from the recording format and delivery frame.
 
 ## Decisions added while building the editor side (2026-11-11)
-- **A delivery has one version.** UEcine fills in `{version}` itself: the latest version of any
+- **A delivery has one version.** Rosc fills in `{version}` itself: the latest version of any
   of the delivery's names already in the intent's folder, plus one, for every shot. The
   engine's own version counting is per file and would number the shots of one delivery apart.
 - **Where files go.** `<delivery folder>/<sequence>/<Review|VFX|Master>/`. A VFX shot's frames
   are in a folder of the shot's file name, with its sidecar (`.json`) and camera (`.fbx`)
-  beside them under the same name. The delivery folder defaults to `Saved/UEcine/Deliveries`.
+  beside them under the same name. The delivery folder defaults to `Saved/Rosc/Deliveries`.
 - **A VFX handoff bakes for handoff first**, replacing the sequence's `_Handoff` copies, and
   each shot's FBX camera is exported from its copy at the time it has in the whole sequence.
 - **One camera per shot.** A shot that cuts between cameras stops the render in preflight: its
@@ -161,7 +161,7 @@ What the run added to the design:
   own player.
 - **YouTube** is H.264 High in MP4, the delivery frame fitted into 1920 by 1080 at 12 Mbit/s or
   3840 by 2160 at 50 Mbit/s (inside YouTube's published upload ranges), eight temporal samples,
-  clean. It is a file on the user's machine. UEcine does not upload: that would send footage
+  clean. It is a file on the user's machine. Rosc does not upload: that would send footage
   off the machine and need accounts and keys the plugin has no other use for.
 - **DCP Source is a movie for a DCP program, not a DCP.** Writing a DCP needs JPEG 2000 and MXF
   libraries the engine does not have. The source is ProRes 4444 (12 bits, Rec.709) at the
@@ -175,7 +175,7 @@ What the run added to the design:
 
 ## Consequences
 - ✅ One code path for the panel button and the acceptance test.
-- ✅ Graphs are standard data; nothing of UEcine is needed to load one.
+- ✅ Graphs are standard data; nothing of Rosc is needed to load one.
 - ✅ No hand-authored binary asset in the plugin.
 - ❌ Renders need a renderer: the delivery tests only run with `tools/test.ps1 -Rendering`.
 - ❌ A slated review file is two frames longer than its shot, not one.
@@ -193,7 +193,7 @@ What the run added to the design:
 1. Saved graph assets in the plugin's content, adjusted by job variables — rejected: binary
    assets that cannot be reviewed or generated in this repository, and file names and metadata
    per shot are awkward to drive through variables.
-2. A custom graph node that writes UEcine metadata each frame — rejected: a saved graph would
+2. A custom graph node that writes Rosc metadata each frame — rejected: a saved graph would
    then need the plugin, against the project's "standard data" rule.
 3. Quick Render — rejected: no completion hook and no file list.
 4. A slate rendered as a separate still beside the movie — rejected: the slate would not be in

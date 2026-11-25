@@ -69,6 +69,6 @@ operators.
 
 ## Changing the figures
 
-The presets live in `UEcineCore/Private/UEcineRigTypes.cpp`. A preset's id is saved in levels,
+The presets live in `RoscCore/Private/RoscRigTypes.cpp`. A preset's id is saved in levels,
 so ids are not renamed or removed once a release has shipped; figures can be corrected at any
 time, and this document is updated in the same change.

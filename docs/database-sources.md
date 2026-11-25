@@ -1,6 +1,6 @@
 # Camera and lens database: sources and open items
 
-The shipped data in `HostProject/Plugins/UEcine/Resources/Database/` was checked against
+The shipped data in `HostProject/Plugins/Rosc/Resources/Database/` was checked against
 manufacturer documents on 2026-11-11. Rule: a value that cannot be traced to a source is left
 out, not guessed. "Derived" means a size calculated from the published photosite pitch.
 

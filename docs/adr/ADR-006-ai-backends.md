@@ -13,7 +13,7 @@ models are non-commercial; the commercially safe set is listed in
 coupling.
 
 ## Decision (fixed parts)
-- One job interface (`IUEcineAIBackend`: submit, progress, cancel, result) used by every AI
+- One job interface (`IRoscAIBackend`: submit, progress, cancel, result) used by every AI
   feature. Features never talk to a model directly.
 - Cloud is off by default. Any backend that sends data off the machine shows a consent gate
   naming what is sent and where, per project.
@@ -80,15 +80,15 @@ job ends, at the cost of loading again for the next picture (about a second for 
 model).
 
 Rule 3 is met for the depth map, which is what the spike and the roadmap asked of the
-in-editor backend, and not for the matte. `UEcine.AI.Editor.Pictures` measures the pause for
+in-editor backend, and not for the matte. `Rosc.AI.Editor.Pictures` measures the pause for
 each job and requires under a second for the depth map and the lens estimate; the Matte button
 and the user guide say what to expect; the pause that remains is logged as TD-002.
 
 ## Consequences
-- `UEcineAI` depends on the engine plugin NNERuntimeORT (Beta) and its module `NNE`. The
+- `RoscAI` depends on the engine plugin NNERuntimeORT (Beta) and its module `NNE`. The
   in-engine backend makes the session and runs on a worker thread, one job at a time.
 - The model file is not in the plugin. The user downloads it (the AI tab says from where,
-  shows the licence, and checks the file) into the per-user UEcine models folder.
+  shows the licence, and checks the file) into the per-user Rosc models folder.
 - The first depth map of a session takes about a second longer than the rest; the job reports
   "loading the model" as its first stage.
 - Heavy models (mattes, focal length, larger depth) run in the sidecar; the cloud backend is
