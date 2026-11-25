@@ -4,9 +4,15 @@
 #include "CineCameraActor.h"
 #include "CineCameraComponent.h"
 #include "Editor.h"
+#include "EditorModeManager.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "LevelEditor.h"
+#include "LevelEditorViewport.h"
+#include "SLevelViewport.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
+#include "Misc/App.h"
 #include "Misc/AutomationTest.h"
 #include "MovieScene.h"
 #include "MovieSceneSequencePlayer.h"
@@ -91,6 +97,38 @@ bool FRoscFocusPullTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The camera is waiting for a click to focus on"), IsPickingFocus(Camera));
 	EndPickFocus();
 	TestFalse(TEXT("Picking is called off"), IsPickingFocus(Camera));
+
+	// The first click of a fresh editor, where no viewport is current yet, focuses: the view looks
+	// along the camera at a wall that fills it, wherever the click lands. The picker looks through
+	// the viewport's picture, so this needs a renderer (tools/test.ps1 -Rendering).
+	const TSharedPtr<ILevelEditor> LevelEditor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor").GetFirstLevelEditor();
+	const TSharedPtr<SLevelViewport> ActiveViewport = LevelEditor.IsValid() ? LevelEditor->GetActiveViewportInterface() : nullptr;
+	if (!FApp::CanEverRender())
+	{
+		AddInfo(TEXT("Skipped the first click in the viewport: it needs a renderer (tools/test.ps1 -Rendering)."));
+	}
+	else if (TestTrue(TEXT("The level editor has an active viewport"), ActiveViewport.IsValid()))
+	{
+		FLevelEditorViewportClient& View = ActiveViewport->GetLevelViewportClient();
+		const FVector ViewLocationBefore = View.GetViewLocation();
+		const FRotator ViewRotationBefore = View.GetViewRotation();
+		View.SetViewLocation(FVector::ZeroVector);
+		View.SetViewRotation(FRotator::ZeroRotator);
+		AStaticMeshActor* Wall = World->SpawnActor<AStaticMeshActor>(FVector(700.0, 0.0, 0.0), FRotator::ZeroRotator);
+		Wall->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Wall->SetActorScale3D(FVector(0.2, 60.0, 60.0));
+		{
+			TGuardValue<FLevelEditorViewportClient*> FreshEditor(GCurrentLevelEditingViewportClient, nullptr);
+			BeginPickFocus(Camera);
+			TestTrue(TEXT("Picking makes the active viewport the current one"), GCurrentLevelEditingViewportClient == &View);
+			GLevelEditorModeTools().InputKey(&View, View.Viewport, EKeys::LeftMouseButton, IE_Pressed);
+		}
+		TestEqual(TEXT("The first click focuses on the wall's face"), GetFocusDistance(Camera), 690.0f, 1.0f);
+		EndPickFocus();
+		World->EditorDestroyActor(Wall, false);
+		View.SetViewLocation(ViewLocationBefore);
+		View.SetViewRotation(ViewRotationBefore);
+	}
 
 	// Follow focus: the focus stays on a subject as it moves.
 	AStaticMeshActor* Subject = World->SpawnActor<AStaticMeshActor>(FVector(800.0, 200.0, 0.0), FRotator::ZeroRotator);

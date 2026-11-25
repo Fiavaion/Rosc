@@ -7,6 +7,7 @@
 #include "CineCameraComponent.h"
 #include "Editor.h"
 #include "Engine/World.h"
+#include "LevelEditor.h"
 #include "LevelEditorViewport.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
@@ -15,6 +16,7 @@
 #include "MovieSceneSequencePlayer.h"
 #include "SceneDepthPickerMode.h"
 #include "ScopedTransaction.h"
+#include "SLevelViewport.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Tracks/MovieSceneFloatTrack.h"
 #include "RoscCameraPackageComponent.h"
@@ -231,6 +233,16 @@ void Rosc::FocusEditing::BeginPickFocus(ACineCameraActor* Camera, bool bHold)
 	}
 	PickingCamera = Camera;
 	bPickingToHold = bHold;
+	// The engine's picker takes a click from the current level viewport only and calls picking off
+	// at a click anywhere else. In a fresh editor no viewport is current until one has been clicked,
+	// so the active viewport is made current now, as the click would have made it.
+	if (const TSharedPtr<ILevelEditor> LevelEditor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor").GetFirstLevelEditor())
+	{
+		if (const TSharedPtr<SLevelViewport> Viewport = LevelEditor->GetActiveViewportInterface())
+		{
+			Viewport->GetLevelViewportClient().SetCurrentViewport();
+		}
+	}
 	FSceneDepthPickerModeModule& Picker = FModuleManager::LoadModuleChecked<FSceneDepthPickerModeModule>(DepthPickerModuleName);
 	Picker.BeginSceneDepthPickingMode(FOnSceneDepthLocationSelected::CreateLambda([](FVector Location)
 	{
