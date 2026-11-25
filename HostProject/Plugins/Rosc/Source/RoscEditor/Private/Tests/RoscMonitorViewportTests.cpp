@@ -104,7 +104,9 @@ namespace
 			int32 Total = 0;
 			for (int32 Y = Size.Y / 20; Y < Size.Y * 35 / 100; Y += 4)
 			{
-				for (int32 X = Size.X / 10; X < Size.X * 9 / 10; X += 4)
+				// LESSON-TEST-010: from a quarter of the way across. The legend's panel is drawn over the top left of the
+				// picture and takes the colour of whatever is behind it.
+				for (int32 X = Size.X / 4; X < Size.X * 9 / 10; X += 4)
 				{
 					const FColor& Pixel = At(X, Y);
 					const bool bGrey = FMath::Abs(Pixel.R - Pixel.G) <= 6 && FMath::Abs(Pixel.G - Pixel.B) <= 6;
