@@ -163,6 +163,7 @@ void SRoscShotsTab::Tick(const FGeometry& AllottedGeometry, const double InCurre
 	{
 		CurrentLayoutKey = NewKey;
 		RebuildLayout();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 
 	// Drawing the plan plays through the shot, which must not happen under a sequence that is playing.

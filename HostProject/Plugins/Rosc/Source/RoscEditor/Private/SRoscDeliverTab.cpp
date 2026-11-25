@@ -127,6 +127,7 @@ void SRoscDeliverTab::Tick(const FGeometry& AllottedGeometry, const double InCur
 	{
 		CurrentLayoutKey = MoveTemp(NewKey);
 		RebuildLayout();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 }
 

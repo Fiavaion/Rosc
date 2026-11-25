@@ -52,10 +52,12 @@ void SRoscFocusTab::Tick(const FGeometry& AllottedGeometry, const double InCurre
 	{
 		CurrentLayoutKey = NewKey;
 		RebuildLayout();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 	else if (GetMarkCount() != ShownMarkCount)
 	{
 		RebuildMarks();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 }
 

@@ -68,6 +68,7 @@ void SRoscCameraTab::Tick(const FGeometry& AllottedGeometry, const double InCurr
 	{
 		CurrentLayoutKey = NewKey;
 		RebuildLayout();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 	RefreshResolvedCamera();
 }

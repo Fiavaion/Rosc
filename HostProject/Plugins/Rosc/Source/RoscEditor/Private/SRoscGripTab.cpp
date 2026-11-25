@@ -101,10 +101,12 @@ void SRoscGripTab::Tick(const FGeometry& AllottedGeometry, const double InCurren
 	{
 		CurrentLayoutKey = NewKey;
 		RebuildLayout();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 	else if (const ARoscRig* Rig = GetRig(); Rig != nullptr && Rig->Marks.Num() != ShownMarkCount)
 	{
 		RebuildMarks();
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 }
 

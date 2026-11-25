@@ -377,6 +377,12 @@ void Rosc::Widgets::Notify(const FText& Message, bool bSucceeded)
 	}
 }
 
+void Rosc::Widgets::MeasureRebuiltContent(SWidget& Tab, const FGeometry& AllottedGeometry)
+{
+	// The geometry's scale is the layout scale the frame's measuring pass gave the tab.
+	Tab.SlatePrepass(AllottedGeometry.Scale);
+}
+
 bool Rosc::Widgets::ResolveDroppedPath(const TArray<FString>& Dropped, const bool bFolder, const TArray<FString>& Extensions, FString& OutPath, FText& OutError)
 {
 	if (Dropped.IsEmpty())

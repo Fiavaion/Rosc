@@ -254,23 +254,31 @@ void SRoscAITab::Tick(const FGeometry& AllottedGeometry, const double InCurrentT
 	}
 	LastRefreshTime = InCurrentTime;
 
+	bool bRebuilt = false;
 	FAssistantKey NewAssistant = ReadAssistantKey();
 	if (!(NewAssistant == AssistantKey))
 	{
 		AssistantKey = MoveTemp(NewAssistant);
 		RebuildAssistant();
+		bRebuilt = true;
 	}
 	FPicturesKey NewPictures = ReadPicturesKey();
 	if (!(NewPictures == PicturesKey))
 	{
 		PicturesKey = MoveTemp(NewPictures);
 		RebuildPictures();
+		bRebuilt = true;
 	}
 	FModelsKey NewModels = ReadModelsKey();
 	if (!(NewModels == ModelsKey))
 	{
 		ModelsKey = MoveTemp(NewModels);
 		RebuildModels();
+		bRebuilt = true;
+	}
+	if (bRebuilt)
+	{
+		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
 }
 
@@ -939,13 +947,15 @@ FText SRoscAITab::GetLensMatchText() const
 		return FText::GetEmpty();
 	}
 	const FText FieldOfView = Rosc::Units::FormatNumber(JobResult->FieldOfViewDeg, 0);
+	// The model reads the lens from the perspective in the picture; where there is little, it guesses wide.
+	const FText Caution = LOCTEXT("LensEstimateCaution", "It is an estimate from the picture alone. A picture with little perspective in it, such as a plain wall or a long lens with shallow focus, often reads much wider than it was shot: check it against what you know of the shot.");
 	Rosc::CameraEditing::FLensMatch Match;
 	if (!Rosc::CameraEditing::MatchLensToFieldOfView(Target->GetCamera(), JobResult->FieldOfViewDeg, Match))
 	{
-		return FText::Format(LOCTEXT("LensEstimateNoCamera", "The picture looks to have been taken with a horizontal field of view of about {0}°. Choose a camera, and Rosc works out the lens that matches on its recording format."), FieldOfView);
+		return FText::Format(LOCTEXT("LensEstimateNoCamera", "The picture looks to have been taken with a horizontal field of view of about {0}°. Choose a camera, and Rosc works out the lens that matches on its recording format. {1}"), FieldOfView, Caution);
 	}
-	return FText::Format(LOCTEXT("LensEstimate", "The picture looks to have been taken with a horizontal field of view of about {0}°. On this camera's recording format that is a {1} mm lens; the nearest in its kit is the {2}. It is an estimate: check it against the picture."),
-		FieldOfView, Rosc::Units::FormatNumber(Match.FocalLengthMm, 0), FText::FromString(Match.LensName));
+	return FText::Format(LOCTEXT("LensEstimate", "The picture looks to have been taken with a horizontal field of view of about {0}°. On this camera's recording format that is a {1} mm lens; the nearest in its kit is the {2}. {3}"),
+		FieldOfView, Rosc::Units::FormatNumber(Match.FocalLengthMm, 0), FText::FromString(Match.LensName), Caution);
 }
 
 FText SRoscAITab::GetPutOnLensLabel() const

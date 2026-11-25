@@ -688,6 +688,8 @@ bool FRoscDeliverPreflightFixesTest::RunTest(const FString& Parameters)
 	const TSharedRef<SRoscDeliverTab> Tab = SNew(SRoscDeliverTab);
 	const TCHAR* const FrameRateTitle = TEXT("frame rate is not the sequence's");
 	Tab->Tick(FGeometry(), 0.0, 0.0f);
+	// Slate ticks a tab while painting it, after measuring: content rebuilt then is measured at once, or it is drawn with no height.
+	TestTrue(TEXT("A tab rebuilt as it ticks is measured before it is drawn"), Tab->GetDesiredSize().Y > 0.0f);
 	TestFalse(TEXT("The tab finds nothing wrong with the frame rate yet"), Rosc::WidgetTests::ShowsText(Tab, FrameRateTitle));
 	TestTrue(TEXT("The camera is set to 25 fps"), Rosc::CameraEditing::EditPackage(Package, FText::FromString(TEXT("Change Frame Rate")), [](FRoscCameraPackage& Edited) { Edited.FramesPerSecond = 25.0f; }, Error));
 	Tab->Tick(FGeometry(), 0.0, 0.0f);

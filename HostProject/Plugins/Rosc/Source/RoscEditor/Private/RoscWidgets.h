@@ -145,4 +145,11 @@ namespace Rosc::Widgets
 
 	/** Tells the user how something they asked for turned out, in a toast with a tick or a cross. */
 	void Notify(const FText& Message, bool bSucceeded);
+
+	/**
+	 * Measures a tab whose content was rebuilt in its Tick. Slate ticks a widget while painting it,
+	 * after the frame's measuring pass, so new rows would be drawn once with no height, on top of
+	 * each other; that frame stays on screen whenever the next one is late.
+	 */
+	void MeasureRebuiltContent(SWidget& Tab, const FGeometry& AllottedGeometry);
 }
