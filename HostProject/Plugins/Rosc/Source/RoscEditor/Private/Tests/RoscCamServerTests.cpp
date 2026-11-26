@@ -16,6 +16,9 @@
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "MovieScene.h"
 #include "MovieSceneSequencePlayer.h"
 #include "RoscCam.h"
@@ -248,27 +251,22 @@ namespace
 		}
 	}
 
-	/** The mean brightness of each cell of a grid laid over a picture, 0 to 255. */
-	TArray<double> GridBrightness(const TArray<uint8>& Jpeg, int32 Columns, int32 Rows)
+	/** The mean brightness of each cell of a grid laid over part of an image, 0 to 255. */
+	TArray<double> GridBrightness(const FImage& Decoded, const FIntRect& Area, int32 Columns, int32 Rows)
 	{
-		FImage Decoded;
-		TArray<double> Cells;
-		if (!FImageUtils::DecompressImage(Jpeg.GetData(), Jpeg.Num(), Decoded))
-		{
-			return Cells;
-		}
 		FImage Image;
 		Decoded.CopyTo(Image, ERawImageFormat::BGRA8, EGammaSpace::sRGB);
 		const TArrayView64<FColor> Pixels = Image.AsBGRA8();
+		TArray<double> Cells;
 		Cells.SetNumZeroed(Columns * Rows);
 		TArray<int32> Counts;
 		Counts.SetNumZeroed(Columns * Rows);
-		for (int32 Y = 0; Y < Image.SizeY; ++Y)
+		for (int32 Y = Area.Min.Y; Y < Area.Max.Y; ++Y)
 		{
-			for (int32 X = 0; X < Image.SizeX; ++X)
+			for (int32 X = Area.Min.X; X < Area.Max.X; ++X)
 			{
 				const FColor& Pixel = Pixels[int64(Y) * Image.SizeX + X];
-				const int32 Cell = (Y * Rows / Image.SizeY) * Columns + X * Columns / Image.SizeX;
+				const int32 Cell = ((Y - Area.Min.Y) * Rows / Area.Height()) * Columns + (X - Area.Min.X) * Columns / Area.Width();
 				Cells[Cell] += (Pixel.R + Pixel.G + Pixel.B) / 3.0;
 				++Counts[Cell];
 			}
@@ -278,6 +276,26 @@ namespace
 			Cells[Cell] /= FMath::Max(Counts[Cell], 1);
 		}
 		return Cells;
+	}
+
+	TArray<double> GridBrightness(const TArray<uint8>& Jpeg, int32 Columns, int32 Rows)
+	{
+		FImage Decoded;
+		if (!FImageUtils::DecompressImage(Jpeg.GetData(), Jpeg.Num(), Decoded))
+		{
+			return TArray<double>();
+		}
+		return GridBrightness(Decoded, FIntRect(0, 0, Decoded.SizeX, Decoded.SizeY), Columns, Rows);
+	}
+
+	double LargestDifference(const TArray<double>& A, const TArray<double>& B)
+	{
+		double Largest = 0.0;
+		for (int32 Cell = 0; Cell < FMath::Min(A.Num(), B.Num()); ++Cell)
+		{
+			Largest = FMath::Max(Largest, FMath::Abs(A[Cell] - B[Cell]));
+		}
+		return Largest;
 	}
 
 	FIntPoint JpegSize(const TArray<uint8>& Jpeg)
@@ -671,17 +689,172 @@ bool FRoscCamPictureTest::RunTest(const FString& Parameters)
 			const TArray<double> Seen = GridBrightness(Storyboard.Jpeg, 8, 4);
 			if (TestTrue(TEXT("Both pictures are read"), Sent.Num() == 32 && Seen.Num() == 32))
 			{
-				double Largest = 0.0;
-				for (int32 Cell = 0; Cell < Sent.Num(); ++Cell)
-				{
-					Largest = FMath::Max(Largest, FMath::Abs(Sent[Cell] - Seen[Cell]));
-				}
+				const double Largest = LargestDifference(Sent, Seen);
 				const double WallSide = (Sent[8] + Sent[9] + Sent[16] + Sent[17]) / 4.0;
 				const double OpenSide = (Sent[14] + Sent[15] + Sent[22] + Sent[23]) / 4.0;
 				AddInfo(FString::Printf(TEXT("Largest difference from the storyboard picture %.1f of 255; wall side %.1f, open side %.1f"), Largest, WallSide, OpenSide));
 				TestTrue(TEXT("The picture is the camera's view"), Largest < 20.0);
 				TestTrue(TEXT("with the wall in it"), FMath::Abs(WallSide - OpenSide) > 10.0);
 			}
+		}
+		CleanUp();
+		return true;
+	}));
+	return true;
+}
+
+/**
+ * The RoscCam app itself, on the Android emulator, against this editor: tools/test-rosccam.ps1
+ * starts the app and this test with -RoscCamDevice=<folder>, and the two take turns through files
+ * in that folder. The app connects and pairs with the code this test writes; the script turns the
+ * device 30° right, and the support pans by the same amount; then the script grabs the device's
+ * screen, which has to show the camera's picture. Without the folder there is nothing to do.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscCamDeviceTest, "Rosc.Editor.RoscCam.Device", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FRoscCamDeviceTest::RunTest(const FString& Parameters)
+{
+	FString Folder;
+	if (!FParse::Value(FCommandLine::Get(), TEXT("RoscCamDevice="), Folder))
+	{
+		AddInfo(TEXT("Skipped: run by tools/test-rosccam.ps1, with the app on the Android emulator."));
+		return true;
+	}
+	if (!FApp::CanEverRender())
+	{
+		AddError(TEXT("The device test needs a renderer (-Rendering)."));
+		return false;
+	}
+	URoscCamServer* Server = URoscCamServer::Get();
+	URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+
+	struct FRun
+	{
+		FString Folder;
+		ARoscRig* Rig = nullptr;
+		ACineCameraActor* Camera = nullptr;
+		int32 Stage = 0;
+		double StageSeconds = 0.0;
+		double StartPan = 0.0;
+		double LastPan = 0.0;
+		double SteadySince = 0.0;
+	};
+	const TSharedRef<FRun> Run = MakeShared<FRun>();
+	Run->Folder = Folder;
+	Run->Camera = MakeCameraOnTripod(World, Run->Rig);
+	const auto Write = [Run](const TCHAR* Name, const FString& Text)
+	{
+		FFileHelper::SaveStringToFile(Text, *FPaths::Combine(Run->Folder, Name));
+	};
+	const auto CleanUp = [Server, Operating, World, Run]
+	{
+		Operating->StopOperating();
+		Server->Stop();
+		RemoveCamera(World, Run->Camera);
+		GEditor->ResetTransaction(FText::FromString(TEXT("Rosc RoscCam device test")));
+	};
+	FText Error;
+	if (Run->Rig == nullptr || !Server->Start(Run->Camera, Error))
+	{
+		AddError(FString::Printf(TEXT("The server did not start for a camera on a tripod: %s"), *Error.ToString()));
+		CleanUp();
+		return false;
+	}
+	Write(TEXT("running.txt"), TEXT("The RoscCam server is running."));
+	Run->StageSeconds = FPlatformTime::Seconds();
+
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Run, Server, Operating, Write, CleanUp]
+	{
+		const double Now = FPlatformTime::Seconds();
+		const double Pan = Run->Rig->GetPose().Pan;
+		const auto Next = [&Run, Now] { ++Run->Stage; Run->StageSeconds = Now; };
+		const auto Fail = [this, &CleanUp](const FString& Why) { AddError(Why); CleanUp(); return true; };
+		const TCHAR* const Waits[] = { TEXT("the app to connect"), TEXT("the app to pair and send its motion"), TEXT("the support to pan"), TEXT("the screen grab") };
+		if (Now - Run->StageSeconds > (Run->Stage == 0 ? 120.0 : 60.0))
+		{
+			return Fail(FString::Printf(TEXT("Waited too long for %s."), Waits[Run->Stage]));
+		}
+		switch (Run->Stage)
+		{
+		case 0:
+			if (!Server->GetPairingCode().IsEmpty())
+			{
+				AddInfo(FString::Printf(TEXT("%s asks to pair."), *Server->GetDeviceName()));
+				Write(TEXT("code.txt"), Server->GetPairingCode());
+				Next();
+			}
+			return false;
+		case 1:
+			if (Server->IsPaired() && Server->IsMotionArriving())
+			{
+				// As Operate on the Grip tab does, with the device the tab chooses.
+				FText OperateError;
+				if (!Operating->StartOperating(Run->Rig, Server->GetSubjectName(), OperateError))
+				{
+					return Fail(FString::Printf(TEXT("Operate failed: %s"), *OperateError.ToString()));
+				}
+				Run->StartPan = Pan;
+				Run->LastPan = Pan;
+				Run->SteadySince = Now;
+				Write(TEXT("operating.txt"), FString::Printf(TEXT("%.3f"), Pan));
+				Next();
+			}
+			return false;
+		case 2:
+			if (!FMath::IsNearlyEqual(Pan, Run->LastPan, 0.01))
+			{
+				Run->LastPan = Pan;
+				Run->SteadySince = Now;
+			}
+			// The turn has come when the head has moved, and then held still for half a second.
+			if (FMath::Abs(Pan - Run->StartPan) > 1.0 && Now - Run->SteadySince > 0.5)
+			{
+				const double Turned = Pan - Run->StartPan;
+				AddInfo(FString::Printf(TEXT("The device turned 30° right; the tripod panned %.2f°."), Turned));
+				TestEqual(TEXT("Turning the device 30° right pans the support 30° right, within 1°"), Turned, 30.0, 1.0);
+				Write(TEXT("panned.txt"), FString::Printf(TEXT("%.3f"), Turned));
+				Next();
+			}
+			return false;
+		default:
+			break;
+		}
+
+		const FString Screen = FPaths::Combine(Run->Folder, TEXT("screen.png"));
+		FString Density;
+		if (!FPaths::FileExists(FPaths::Combine(Run->Folder, TEXT("grabbed.txt")))
+			|| !FFileHelper::LoadFileToString(Density, *FPaths::Combine(Run->Folder, TEXT("density.txt"))))
+		{
+			return false;
+		}
+		FImage Grab;
+		if (!FImageUtils::LoadImage(*Screen, Grab))
+		{
+			return Fail(TEXT("The screen grab could not be read."));
+		}
+		// The app draws the picture as large as it fits left of its controls (railWidth, 248 dp).
+		const double PixelsPerDp = FCString::Atod(*Density) / 160.0;
+		const double AreaWidth = Grab.SizeX - 248.0 * PixelsPerDp;
+		// The picture has the camera's shape (a 3:2 sensor sends 960 x 640).
+		const double Aspect = Run->Camera->GetCineCameraComponent()->AspectRatio;
+		const double Width = FMath::Min(AreaWidth, Grab.SizeY * Aspect);
+		const double Height = Width / Aspect;
+		const FIntRect Picture(FMath::RoundToInt32((AreaWidth - Width) / 2.0), FMath::RoundToInt32((Grab.SizeY - Height) / 2.0),
+			FMath::RoundToInt32((AreaWidth + Width) / 2.0), FMath::RoundToInt32((Grab.SizeY + Height) / 2.0));
+		AddInfo(FString::Printf(TEXT("Screen %d x %d at %s dpi; the picture is at %s"), Grab.SizeX, Grab.SizeY, *Density.TrimStartAndEnd(), *Picture.ToString()));
+
+		FRoscStoryboardFrame Storyboard;
+		if (TestTrue(TEXT("Grid sizes fit"), Picture.Width() > 64 && Picture.Height() > 32 && Picture.Max.X <= Grab.SizeX && Picture.Max.Y <= Grab.SizeY)
+			&& TestTrue(TEXT("The storyboard picture of the camera is taken"), Rosc::ShotEditing::TakeStoryboardPicture(*Run->Camera, Storyboard)))
+		{
+			const TArray<double> OnDevice = GridBrightness(Grab, Picture, 8, 4);
+			const TArray<double> Seen = GridBrightness(Storyboard.Jpeg, 8, 4);
+			const double Largest = LargestDifference(OnDevice, Seen);
+			const double Spread = FMath::Max(Seen) - FMath::Min(Seen);
+			AddInfo(FString::Printf(TEXT("On the device the picture differs from the camera's view by %.1f of 255 at most; the view's own cells spread over %.1f."), Largest, Spread));
+			TestTrue(TEXT("The camera's view has something in it to match"), Spread > 20.0);
+			TestTrue(TEXT("The device's screen shows the camera's picture"), Largest < 25.0);
 		}
 		CleanUp();
 		return true;
