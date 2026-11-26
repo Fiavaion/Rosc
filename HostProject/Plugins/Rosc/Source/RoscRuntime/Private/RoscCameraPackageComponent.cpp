@@ -144,6 +144,19 @@ void URoscCameraPackageComponent::BeginPlay()
 	UpdateDeliveryFrameCrop();
 }
 
+void URoscCameraPackageComponent::PostLoad()
+{
+	Super::PostLoad();
+	// A camera saved before its lens kit gained lenses names its lens by its old place in the kit.
+	if (!HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
+	{
+		if (const FRoscLensKit* Kit = FRoscCameraDatabase::Get().FindLensKit(Package.LensKitId))
+		{
+			Package.MatchLensToFocalLength(*Kit);
+		}
+	}
+}
+
 #if WITH_EDITOR
 void URoscCameraPackageComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {

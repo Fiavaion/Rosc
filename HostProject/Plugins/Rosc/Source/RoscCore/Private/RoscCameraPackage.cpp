@@ -53,6 +53,25 @@ void FRoscCameraPackage::SelectLens(const FRoscLensKit& Kit, int32 NewLensIndex)
 	TStop = static_cast<float>(FMath::Clamp<double>(TStop, Lens.TStop, Kit.MinApertureTStop));
 }
 
+bool FRoscCameraPackage::MatchLensToFocalLength(const FRoscLensKit& Kit)
+{
+	const auto Takes = [this](const FRoscLens& Lens)
+	{
+		return FocalLengthMm >= Lens.FocalLengthMm - UE_KINDA_SMALL_NUMBER && FocalLengthMm <= Lens.MaxFocalLengthMm + UE_KINDA_SMALL_NUMBER;
+	};
+	if (Kit.Lenses.IsValidIndex(LensIndex) && Takes(Kit.Lenses[LensIndex]))
+	{
+		return false;
+	}
+	const int32 Match = Kit.Lenses.IndexOfByPredicate(Takes);
+	if (Match == INDEX_NONE)
+	{
+		return false;
+	}
+	LensIndex = Match;
+	return true;
+}
+
 bool Rosc::ResolveCameraPackage(const FRoscCameraDatabase& Database, const FRoscCameraPackage& Package, FRoscResolvedCamera& OutCamera, FText& OutError)
 {
 	const FRoscCameraBody* Body = Database.FindBody(Package.BodyId);

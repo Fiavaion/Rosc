@@ -80,6 +80,14 @@ struct FRoscCameraPackage
 
 	/** Puts a lens of the kit on the camera, keeping the T-stop within what the lens can do. */
 	ROSCCORE_API void SelectLens(const FRoscLensKit& Kit, int32 NewLensIndex);
+
+	/**
+	 * Finds the lens on the camera again by its focal length. A package names its lens by its place
+	 * in the kit, and a kit that gains lenses moves them: when the lens at LensIndex cannot take
+	 * FocalLengthMm, LensIndex moves to the lens of the kit that can. Nothing changes otherwise.
+	 * @return true when LensIndex moved.
+	 */
+	ROSCCORE_API bool MatchLensToFocalLength(const FRoscLensKit& Kit);
 };
 
 /** A camera package turned into the numbers a camera needs, with limits applied. */

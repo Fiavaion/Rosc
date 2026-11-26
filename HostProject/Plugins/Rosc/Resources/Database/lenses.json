@@ -58,16 +58,20 @@
 			"minApertureTStop": 22,
 			"irisBlades": 16,
 			"lenses": [
+				{ "focalMm": 15, "tStop": 1.8, "closeFocusM": 0.35 },
+				{ "focalMm": 18, "tStop": 1.5, "closeFocusM": 0.35 },
 				{ "focalMm": 21, "tStop": 1.5, "closeFocusM": 0.35 },
 				{ "focalMm": 25, "tStop": 1.5, "closeFocusM": 0.26 },
 				{ "focalMm": 29, "tStop": 1.5, "closeFocusM": 0.33 },
 				{ "focalMm": 35, "tStop": 1.5, "closeFocusM": 0.32 },
+				{ "focalMm": 40, "tStop": 1.5, "closeFocusM": 0.42 },
 				{ "focalMm": 50, "tStop": 1.5, "closeFocusM": 0.45 },
 				{ "focalMm": 65, "tStop": 1.5, "closeFocusM": 0.6 },
 				{ "focalMm": 85, "tStop": 1.5, "closeFocusM": 0.84 },
 				{ "focalMm": 100, "tStop": 1.5, "closeFocusM": 1.1 },
-				{ "focalMm": 135, "tStop": 1.5, "closeFocusM": 1.35 },
-				{ "focalMm": 150, "tStop": 1.8, "closeFocusM": 1.5 }
+				{ "focalMm": 135, "tStop": 1.5, "closeFocusM": 1.4 },
+				{ "focalMm": 150, "tStop": 1.8, "closeFocusM": 1.5 },
+				{ "focalMm": 200, "tStop": 2.2, "closeFocusM": 2.0 }
 			]
 		},
 		{
@@ -90,6 +94,27 @@
 			]
 		},
 		{
+			"id": "sigma-ff-high-speed-prime",
+			"manufacturer": "SIGMA",
+			"name": "FF High Speed Prime",
+			"imageCircleMm": 43.3,
+			"minApertureTStop": 16,
+			"irisBlades": 9,
+			"lenses": [
+				{ "focalMm": 14, "tStop": 2.0, "closeFocusM": 0.27 },
+				{ "focalMm": 20, "tStop": 1.5, "closeFocusM": 0.28 },
+				{ "focalMm": 24, "tStop": 1.5, "closeFocusM": 0.25 },
+				{ "focalMm": 28, "tStop": 1.5, "closeFocusM": 0.28 },
+				{ "focalMm": 35, "tStop": 1.5, "closeFocusM": 0.3 },
+				{ "focalMm": 40, "tStop": 1.5, "closeFocusM": 0.4 },
+				{ "focalMm": 50, "tStop": 1.5, "closeFocusM": 0.4 },
+				{ "focalMm": 65, "tStop": 1.5, "closeFocusM": 0.65 },
+				{ "focalMm": 85, "tStop": 1.5, "closeFocusM": 0.85 },
+				{ "focalMm": 105, "tStop": 1.5, "closeFocusM": 1.0 },
+				{ "focalMm": 135, "tStop": 2.0, "closeFocusM": 0.88 }
+			]
+		},
+		{
 			"id": "angenieux-optimo-lightweight",
 			"manufacturer": "Angénieux",
 			"name": "Optimo lightweight zooms",
@@ -109,6 +134,16 @@
 			"minApertureTStop": 22,
 			"lenses": [
 				{ "focalMm": 24, "zoomToMm": 290, "tStop": 2.8, "closeFocusM": 1.22 }
+			]
+		},
+		{
+			"id": "angenieux-optimo-s35-zooms",
+			"manufacturer": "Angénieux",
+			"name": "Optimo 19.5-94 and 28-340",
+			"imageCircleMm": 31.4,
+			"lenses": [
+				{ "focalMm": 19.5, "zoomToMm": 94, "tStop": 2.6, "closeFocusM": 0.62 },
+				{ "focalMm": 28, "zoomToMm": 340, "tStop": 3.2, "closeFocusM": 1.23 }
 			]
 		}
 	]

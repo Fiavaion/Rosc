@@ -88,6 +88,40 @@ bool FRoscCameraPackageSelectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscCameraPackageLensFoundAgainTest, "Rosc.Core.CameraPackage.LensFoundAgain", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FRoscCameraPackageLensFoundAgainTest::RunTest(const FString& Parameters)
+{
+	const FRoscCameraDatabase Database = MakeTestDatabase(*this);
+	const FRoscLensKit& Primes = *Database.FindLensKit(TEXT("primes"));
+
+	// Saved on the 35 mm when it was the first lens of the kit; the kit has since gained a 25 mm.
+	FRoscCameraPackage Saved;
+	Saved.LensIndex = 0;
+	Saved.FocalLengthMm = 35.0f;
+	TestTrue(TEXT("A lens that moved in its kit is found again"), Saved.MatchLensToFocalLength(Primes));
+	TestEqual(TEXT("The 35 mm is found by its focal length"), Saved.LensIndex, 1);
+	TestFalse(TEXT("Found again, it stays"), Saved.MatchLensToFocalLength(Primes));
+
+	FRoscCameraPackage Zoomed;
+	Zoomed.LensIndex = 3;
+	Zoomed.FocalLengthMm = 135.0f;
+	TestFalse(TEXT("A zoom set inside its range keeps its place"), Zoomed.MatchLensToFocalLength(Primes));
+
+	FRoscCameraPackage PastTheEnd;
+	PastTheEnd.LensIndex = 9;
+	PastTheEnd.FocalLengthMm = 50.0f;
+	TestTrue(TEXT("A place past the end of the kit is found again"), PastTheEnd.MatchLensToFocalLength(Primes));
+	TestEqual(TEXT("The 50 mm is found"), PastTheEnd.LensIndex, 2);
+
+	FRoscCameraPackage NoSuchLens;
+	NoSuchLens.LensIndex = 0;
+	NoSuchLens.FocalLengthMm = 40.0f;
+	TestFalse(TEXT("A focal length no lens of the kit takes leaves the lens where it was"), NoSuchLens.MatchLensToFocalLength(Primes));
+	TestEqual(TEXT("The lens stays"), NoSuchLens.LensIndex, 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscCameraPackageResolveTest, "Rosc.Core.CameraPackage.Resolve", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
 bool FRoscCameraPackageResolveTest::RunTest(const FString& Parameters)
