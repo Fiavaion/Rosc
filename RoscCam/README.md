@@ -22,6 +22,11 @@ The APK is in `RoscCam/build/app/outputs/flutter-apk/`. Install it on a phone wi
 `adb install app-release.apk`, or copy it to the phone and open it there (allow installing from
 that source when Android asks).
 
+A release build is signed with the key that `android/key.properties` names (`storeFile`,
+`storePassword`, `keyAlias`, `keyPassword`; the file and the key are never committed). Without
+that file it is signed with the computer's Android debug key. Android installs an update only
+over an app signed with the same key, so moving to another key means uninstalling the app first.
+
 ## Test
 
 - `flutter test` in this folder runs the app's own tests (the protocol, the link, the screens).
