@@ -4,6 +4,7 @@
 #include "CineCameraActor.h"
 #include "Dom/JsonObject.h"
 #include "Editor.h"
+#include "Engine/Brush.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "LevelSequence.h"
@@ -90,6 +91,18 @@ bool FRoscShotAssistantTest::RunTest(const FString& Parameters)
 	Table->GetStaticMeshComponent()->SetStaticMesh(Cube);
 	Table->SetActorLabel(TEXT("Table"));
 	Camera->SetActorLabel(TEXT("A Cam"));
+	// The level's builder brush, put where the shot is: it is the editor's tool, not a subject.
+	ABrush* BuilderBrush = World->GetDefaultBrush();
+	if (!TestNotNull(TEXT("The level has a builder brush"), BuilderBrush))
+	{
+		return false;
+	}
+	const FVector BuilderBrushWasAt = BuilderBrush->GetActorLocation();
+	BuilderBrush->SetActorLocation(FVector(200.0, 0.0, 100.0));
+	ON_SCOPE_EXIT
+	{
+		BuilderBrush->SetActorLocation(BuilderBrushWasAt);
+	};
 	URoscCameraPackageComponent* Component = URoscCameraPackageComponent::Find(Camera);
 	const FRoscCameraPackage PackageBefore = Component->Package;
 

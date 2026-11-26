@@ -7,6 +7,7 @@
 #include "CineCameraComponent.h"
 #include "Dom/JsonObject.h"
 #include "Editor.h"
+#include "Engine/Brush.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "LevelSequence.h"
@@ -55,7 +56,8 @@ namespace
 		for (TActorIterator<AActor> It(Camera->GetWorld()); It; ++It)
 		{
 			AActor* Actor = *It;
-			if (Actor == Camera || Actor->IsA<ARoscRig>() || Actor->IsA<ACameraActor>() || Actor->IsHiddenEd() || Actor->IsEditorOnly())
+			// A brush is the level's built geometry, a volume, or the editor's builder brush: never what a shot is about.
+			if (Actor == Camera || Actor->IsA<ARoscRig>() || Actor->IsA<ACameraActor>() || Actor->IsA<ABrush>() || Actor->IsHiddenEd() || Actor->IsEditorOnly())
 			{
 				continue;
 			}
