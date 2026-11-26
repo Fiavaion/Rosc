@@ -67,7 +67,8 @@ bool FRoscCameraLoadTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Its focal length is kept"), LoadedComponent->Package.FocalLengthMm, 21.0f);
 	}
 
-	UEditorLoadingAndSavingUtils::NewBlankMap(false);
+	// The tests after this one look through cameras in the lit level the editor starts with.
+	UEditorLoadingAndSavingUtils::NewMapFromTemplate(TEXT("/Engine/Maps/Templates/Template_Default"), false);
 	const FString File = FPackageName::LongPackageNameToFilename(MapPath, FPackageName::GetMapPackageExtension());
 	TestTrue(TEXT("The test level is deleted"), IFileManager::Get().Delete(*File, false, true));
 	IFileManager::Get().DeleteDirectory(*FPaths::GetPath(File));
