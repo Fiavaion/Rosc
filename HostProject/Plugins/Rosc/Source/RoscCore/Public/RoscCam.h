@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Math/RandomStream.h"
 
 /**
  * The RoscCam protocol (ADR-014, docs/rosccam-protocol.md): the messages between the RoscCam app

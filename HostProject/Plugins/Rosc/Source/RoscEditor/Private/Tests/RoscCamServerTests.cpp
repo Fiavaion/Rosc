@@ -13,6 +13,7 @@
 #include "ImageUtils.h"
 #include "Interfaces/IPv4/IPv4Endpoint.h"
 #include "LevelSequence.h"
+#include "Materials/MaterialInterface.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
@@ -626,6 +627,8 @@ bool FRoscCamPictureTest::RunTest(const FString& Parameters)
 	Run->Wall = World->SpawnActor<AStaticMeshActor>(FVector(700.0, -350.0, 150.0), FRotator::ZeroRotator);
 	Run->Wall->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
 	Run->Wall->SetActorScale3D(FVector(0.2, 7.0, 10.0));
+	// Black whatever the level's light, so it stands out in any project's level.
+	Run->Wall->GetStaticMeshComponent()->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineDebugMaterials/BlackUnlitMaterial.BlackUnlitMaterial")));
 
 	const auto CleanUp = [Server, World, Run]
 	{
@@ -703,7 +706,7 @@ bool FRoscCamPictureTest::RunTest(const FString& Parameters)
 				const double OpenSide = (Sent[14] + Sent[15] + Sent[22] + Sent[23]) / 4.0;
 				AddInfo(FString::Printf(TEXT("Largest difference from the storyboard picture %.1f of 255; wall side %.1f, open side %.1f"), Largest, WallSide, OpenSide));
 				TestTrue(TEXT("The picture is the camera's view"), Largest < 20.0);
-				TestTrue(TEXT("with the wall in it"), FMath::Abs(WallSide - OpenSide) > 10.0);
+				TestTrue(TEXT("with the black wall in it"), OpenSide - WallSide > 40.0);
 			}
 		}
 		CleanUp();
