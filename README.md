@@ -64,7 +64,7 @@ powershell -File tools/build.ps1                                # build the edit
 powershell -File tools/test.ps1                                 # all Rosc tests, headless
 powershell -File tools/test.ps1 -Filter Rosc.Core.Optics        # some of them
 powershell -File tools/test.ps1 -Rendering                      # include the tests that read pixels
-powershell -File tools/package.ps1                              # package the plugin as Fab would
+powershell -File tools/package.ps1 -Rendering                   # package it, install it in a new project, test it there
 ```
 
 The design decisions are recorded in [`docs/adr/`](docs/adr/).

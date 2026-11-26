@@ -1,6 +1,12 @@
 # Packages the plugin the way Fab does (RunUAT BuildPlugin), to catch errors that only show
-# up outside the host project. Output goes to .scratch/Packaged (gitignored).
-# Usage: powershell -File tools/package.ps1
+# up outside the host project, then installs the package in a new Blueprint-only project and
+# runs the Rosc tests there, as a user who has no C++ toolchain would have it.
+# Output goes to .scratch/Packaged and .scratch/InstallCheck (gitignored).
+# Usage: powershell -File tools/package.ps1 [-Rendering]
+#   -Rendering   run the installed copy's tests with a real GPU device, as tools/test.ps1 does.
+param(
+	[switch]$Rendering
+)
 
 $ueRoot = if ($env:UE_ROOT) { $env:UE_ROOT } else { "D:\Program Files\Epic Games\UE_5.8" }
 $repo = Split-Path -Parent $PSScriptRoot
@@ -34,6 +40,19 @@ if ($code -eq 0) {
 	$files = @(Get-ChildItem -Recurse -File $outDir).Count
 	Write-Output ("package contents: {0} files, {1} missing, {2} source files without a copyright and licence notice" -f $files, $missing.Count, $unsigned.Count)
 	if ($missing.Count -gt 0 -or $unsigned.Count -gt 0) { $code = 1 }
+}
+
+# The package in a project of its own: nothing but a .uproject that turns Rosc on.
+if ($code -eq 0) {
+	$checkDir = Join-Path $repo ".scratch\InstallCheck"
+	if (Test-Path $checkDir) { Remove-Item -Recurse -Force $checkDir }
+	New-Item -ItemType Directory -Force (Join-Path $checkDir "Plugins") | Out-Null
+	Copy-Item -Recurse $outDir (Join-Path $checkDir "Plugins\Rosc")
+	$checkProject = Join-Path $checkDir "RoscInstallCheck.uproject"
+	Set-Content -Path $checkProject -Encoding utf8 -Value '{ "FileVersion": 3, "EngineAssociation": "5.8", "Plugins": [ { "Name": "Rosc", "Enabled": true } ] }'
+	Write-Output "installed in a new project: $checkProject"
+	& (Join-Path $PSScriptRoot "test.ps1") -Project $checkProject -Rendering:$Rendering
+	if ($LASTEXITCODE -ne 0) { $code = 1 }
 }
 
 Write-Output "package exit code: $code   log: $log"

@@ -1,18 +1,20 @@
 # Runs Rosc automation tests in a headless editor and prints pass/fail counts.
-# Usage: powershell -File tools/test.ps1 [-Filter Rosc.Core.Optics] [-Rendering] [-EditorArgs "..."]
+# Usage: powershell -File tools/test.ps1 [-Filter Rosc.Core.Optics] [-Rendering] [-EditorArgs "..."] [-Project path	o.uproject]
 #   -Rendering   start the editor with a real GPU device (needed by tests that render frames).
 #   -EditorArgs  more arguments for the editor's command line.
+#   -Project     run in another project than the host project (tools/package.ps1 uses this).
 param(
 	# LESSON-TOOL-006: with its dot. The engine matches a filter anywhere in a test's name, and "Rosc" alone is
 	# also in "SuperOscillator".
 	[string]$Filter = "Rosc.",
 	[switch]$Rendering,
-	[string]$EditorArgs = ""
+	[string]$EditorArgs = "",
+	[string]$Project = ""
 )
 
 $ueRoot = if ($env:UE_ROOT) { $env:UE_ROOT } else { "D:\Program Files\Epic Games\UE_5.8" }
 $repo = Split-Path -Parent $PSScriptRoot
-$uproject = Join-Path $repo "HostProject\RoscHost.uproject"
+$uproject = if ($Project) { $Project } else { Join-Path $repo "HostProject\RoscHost.uproject" }
 $logDir = Join-Path $repo ".scratch\logs"
 $reportDir = Join-Path $repo ".scratch\test-report"
 New-Item -ItemType Directory -Force $logDir | Out-Null
