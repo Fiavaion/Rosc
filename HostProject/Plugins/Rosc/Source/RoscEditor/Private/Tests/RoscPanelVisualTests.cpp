@@ -7,6 +7,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "ImageUtils.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
@@ -25,7 +26,9 @@
 #include "TextureResource.h"
 #include "Tests/RoscDeliverChoicesBefore.h"
 #include "Tests/RoscRenderedFiles.h"
+#include "Tests/RoscTestDevice.h"
 #include "Tests/RoscWidgetTestUtils.h"
+#include "RoscOperatingSubsystem.h"
 #include "UObject/StrongObjectPtr.h"
 #include "RoscAISettings.h"
 #include "RoscAISubsystem.h"
@@ -297,6 +300,70 @@ bool FRoscGripTabVisualTest::RunTest(const FString& Parameters)
 	});
 
 	QueuePanelCaptures(*this, CameraActor, TEXT("grip-tab"), ERoscDepartment::Grip, 1000.0f);
+	return true;
+}
+
+/**
+ * Pictures of the Grip tab's Device section with a take kept: a Steadicam operated from a
+ * device that was carried forward with a quick pan at the end, so the take's settings, the
+ * position lock and a warning are all shown.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscGripTabDeviceVisualTest, "Rosc.Editor.Visual.GripTabDevice", VisualTestFlags)
+
+bool FRoscGripTabDeviceVisualTest::RunTest(const FString& Parameters)
+{
+	using namespace Rosc::DeviceTests;
+
+	ILiveLinkClient* LiveLink = GetLiveLinkClient();
+	URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	if (!CanDrawPanel(*this) || !TestNotNull(TEXT("Live Link is on"), LiveLink) || !TestNotNull(TEXT("The operating subsystem exists"), Operating))
+	{
+		return true;
+	}
+
+	ACineCameraActor* CameraActor = Rosc::CameraEditing::SpawnCamera(GEditor->GetEditorWorldContext().World(), FTransform(FVector(0.0, 0.0, 150.0)));
+	ARoscRig* Rig = Rosc::GripEditing::PutCameraOnRig(CameraActor, Rosc::Rig::GetDefaultPreset(ERoscRigType::Steadicam));
+	const TSharedRef<FTestDeviceSource> Source = FTestDeviceSource::Add(*LiveLink);
+	ULevelSequence* Sequence = NewObject<ULevelSequence>(GetTransientPackage(), NAME_None, RF_Transactional);
+	Sequence->Initialize();
+	Sequence->GetMovieScene()->SetDisplayRate(FFrameRate(24, 1));
+	Sequence->GetMovieScene()->SetPlaybackRange(TRange<FFrameNumber>(0, Sequence->GetMovieScene()->GetTickResolution().AsFrameNumber(10.0).Value));
+	const TStrongObjectPtr<ULevelSequence> KeepSequence(Sequence);
+
+	FText Error;
+	Source->Hold(FRotator::ZeroRotator);
+	bool bRecording = TestNotNull(TEXT("A camera on a Steadicam to show"), Rig)
+		&& TestTrue(TEXT("The sequence opens in Sequencer"), ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(Sequence))
+		&& TestTrue(TEXT("The Steadicam is operated from the device"), Operating->StartOperating(Rig, TestDevice, Error));
+	if (bRecording)
+	{
+		Operating->Update();
+		bRecording = TestTrue(TEXT("A take is recorded"), Operating->StartRecording(Error));
+	}
+	if (bRecording)
+	{
+		const double Start = FPlatformTime::Seconds();
+		for (double Elapsed = 0.0; Elapsed < 1.0; Elapsed = FPlatformTime::Seconds() - Start)
+		{
+			const double Yaw = Elapsed < 0.7 ? 10.0 * Elapsed : 7.0 + 400.0 * (Elapsed - 0.7);
+			Source->Hold(FRotator(0.0, Yaw, 0.0), FVector(120.0 * Elapsed, 0.0, 0.0));
+			Operating->Update();
+			FPlatformProcess::Sleep(1.0f / 96.0f);
+		}
+		Operating->StopRecording();
+		Operating->StopOperating();
+		AddInfo(FString::Printf(TEXT("The take has %d frames and %d findings"), Operating->GetTake().Poses.Num(), Operating->GetTakeFindings().Num()));
+		TestTrue(TEXT("The take is kept to show"), Operating->HasTake());
+	}
+
+	QueuePanelCaptures(*this, CameraActor, TEXT("grip-tab-device"), ERoscDepartment::Grip, 1700.0f);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Operating, Source, KeepSequence]
+	{
+		Operating->DiscardTake();
+		Source->Remove();
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+		return true;
+	}));
 	return true;
 }
 

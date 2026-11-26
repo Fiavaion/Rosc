@@ -19,14 +19,6 @@ namespace
 		return 1.0 / (1.0 - 0.5 * (Normalized.EaseInFraction + Normalized.EaseOutFraction));
 	}
 
-	/** "1.8 m/s" or "40°/s"; with bSquared, "/s²". */
-	FText FormatRate(ERoscRigAxis Axis, double Value, ERoscDistanceUnits Units, bool bSquared)
-	{
-		return FText::Format(
-			bSquared ? LOCTEXT("PerSecondSquared", "{0}/s²") : LOCTEXT("PerSecond", "{0}/s"),
-			Rosc::Rig::FormatAxisValue(Axis, Value, Units));
-	}
-
 	FText FormatSeconds(double Seconds)
 	{
 		// Round up so the suggested duration is always enough.
@@ -227,6 +219,13 @@ TArray<FRoscMoveFinding> Rosc::Move::MostLimiting(TConstArrayView<FRoscMoveFindi
 		Kept.Add(*NeedsMostTime);
 	}
 	return Kept;
+}
+
+FText Rosc::Move::FormatRate(ERoscRigAxis Axis, double Value, ERoscDistanceUnits Units, bool bSquared)
+{
+	return FText::Format(
+		bSquared ? LOCTEXT("PerSecondSquared", "{0}/s²") : LOCTEXT("PerSecond", "{0}/s"),
+		Rosc::Rig::FormatAxisValue(Axis, Value, Units));
 }
 
 FText Rosc::Move::Describe(const FRoscMoveFinding& Finding, ERoscRigType RigType, ERoscDistanceUnits Units)

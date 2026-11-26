@@ -41,7 +41,7 @@ void SRoscPanel::Construct(const FArguments& InArgs)
 	Target = MakeShared<FRoscCameraTarget>();
 
 	const FText CameraToolTip = LOCTEXT("CameraPickerToolTip", "The camera this panel is working on. Selecting a camera in the level also switches to it.");
-	const FText LookThroughToolTip = LOCTEXT("LookThroughToolTip", "Look through this camera in the viewport. Moving the viewport then moves the camera, unless it is on a support: a support holds the camera, and the Grip tab moves it.");
+	const FText LookThroughToolTip = LOCTEXT("LookThroughToolTip", "Look through this camera in the viewport. Moving the viewport then moves the camera. On a support, turning the view pans and tilts the head, and the camera stays on its mount.");
 	const FText UserGuideToolTip = LOCTEXT("UserGuideToolTip", "User guide: open the Rosc guide in your web browser.");
 	const FText NewCameraToolTip = LOCTEXT("AddCameraHereToolTip", "Add a camera where the viewport is looking from. Move through the level until you like the view, then press this: the new camera stands there, with the lens of its kit that frames nearest to what you saw.");
 

@@ -130,6 +130,9 @@ namespace Rosc::Move
 	/** A finding as a sentence that says what is wrong and what would fix it. */
 	ROSCCORE_API FText Describe(const FRoscMoveFinding& Finding, ERoscRigType RigType, ERoscDistanceUnits Units);
 
+	/** "1.8 m/s" or "40°/s"; with bSquared, "/s²". */
+	ROSCCORE_API FText FormatRate(ERoscRigAxis Axis, double Value, ERoscDistanceUnits Units, bool bSquared);
+
 	/** The keys that draw one axis of the move as a curve, in time order. */
 	ROSCCORE_API TArray<FRoscMoveKey> MakeKeys(double StartValue, double EndValue, const FRoscMoveTiming& Timing);
 

@@ -385,7 +385,7 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 	}, 0.3f));
 
 	// Look Through and back: the view returns to where it was, not left where the camera is.
-	const TCHAR* const LookThroughName = TEXT("Look through this camera in the viewport. Moving the viewport then moves the camera, unless it is on a support: a support holds the camera, and the Grip tab moves it.");
+	const TCHAR* const LookThroughName = TEXT("Look through this camera in the viewport. Moving the viewport then moves the camera. On a support, turning the view pans and tilts the head, and the camera stays on its mount.");
 	const FVector OwnViewLocation(-600.0, 250.0, 300.0);
 	const FRotator OwnViewRotation(-10.0, 30.0, 0.0);
 	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Walk, LookThroughName, OwnViewLocation, OwnViewRotation]

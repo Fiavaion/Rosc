@@ -15,15 +15,18 @@
 #include "RoscEditorSettings.h"
 #include "RoscGripEditing.h"
 #include "RoscMove.h"
+#include "RoscOperatingSubsystem.h"
 #include "RoscOperator.h"
 #include "RoscRig.h"
 #include "RoscStyle.h"
 #include "RoscUnits.h"
+#include "UnrealEdMisc.h"
 #include "Widgets/Input/NumericUnitTypeInterface.inl"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -174,6 +177,9 @@ void SRoscGripTab::RebuildLayout()
 
 			Add(FRoscStyle::SectionPadding, MakeSectionHeader(LOCTEXT("SequencerSection", "Sequencer")));
 			Add(FRoscStyle::RowPadding, BuildBakeRows());
+
+			Add(FRoscStyle::SectionPadding, MakeSectionHeader(LOCTEXT("DeviceSection", "Device")));
+			Add(FRoscStyle::RowPadding, BuildDeviceRows());
 		}
 		else
 		{
@@ -595,6 +601,347 @@ TSharedRef<SWidget> SRoscGripTab::BuildBakeRows()
 				.OnClicked(this, &SRoscGripTab::OnBakeClicked)
 			]
 		];
+}
+
+FName SRoscGripTab::GetChosenDevice() const
+{
+	const TArray<FName> Devices = URoscOperatingSubsystem::GetDevices();
+	if (Devices.Contains(ChosenDevice))
+	{
+		return ChosenDevice;
+	}
+	return Devices.IsEmpty() ? NAME_None : Devices[0];
+}
+
+bool SRoscGripTab::IsOperatingRig() const
+{
+	const URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	return Operating != nullptr && Operating->IsOperating() && Operating->GetOperatedRig() == GetRig();
+}
+
+bool SRoscGripTab::HasTakeOfRig() const
+{
+	const URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	return Operating != nullptr && Operating->HasTake() && Operating->GetTakeRig() == GetRig();
+}
+
+FText SRoscGripTab::GetDeviceStatus() const
+{
+	const URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	if (!IsOperatingRig() || !Operating->IsDeviceLive())
+	{
+		return FText::GetEmpty();
+	}
+	if (Operating->IsRecording())
+	{
+		return FText::Format(LOCTEXT("DeviceRecording", "Recording a take from {0}: {1} s. Sequencer plays the shot while you operate."),
+			FText::FromName(Operating->GetDevice()), Rosc::Units::FormatNumber(Operating->GetTakeSeconds(), 1));
+	}
+	return FText::Format(LOCTEXT("DeviceLive", "{0} has the head: turn the device to pan, tilt and roll. Zero takes the way you hold it now as the start."),
+		FText::FromName(Operating->GetDevice()));
+}
+
+FText SRoscGripTab::GetDeviceWarning() const
+{
+	const URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	if (IsOperatingRig() && !Operating->IsDeviceLive())
+	{
+		return FText::Format(LOCTEXT("DeviceSilent", "No motion is arriving from {0}. Check that the app is running and connected to this computer."),
+			FText::FromName(Operating->GetDevice()));
+	}
+	return FText::GetEmpty();
+}
+
+FText SRoscGripTab::GetTakeSummary() const
+{
+	if (!HasTakeOfRig())
+	{
+		return FText::GetEmpty();
+	}
+	const URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+	const ULevelSequence* Sequence = Operating->GetTakeSequence();
+	return FText::Format(LOCTEXT("TakeSummary", "Take of {0} s ({1} frames) in {2}, from frame {3}. It is kept until you discard it or record another, so you can change the settings below and bake it again."),
+		Rosc::Units::FormatNumber(Operating->GetTakeSeconds(), 1), FText::AsNumber(Operating->GetTake().Poses.Num()),
+		Sequence != nullptr ? FText::FromString(Sequence->GetName()) : FText::GetEmpty(), FText::AsNumber(Operating->GetTakeStartFrame().Value));
+}
+
+FText SRoscGripTab::GetTakeWarnings() const
+{
+	const ARoscRig* Rig = GetRig();
+	if (!HasTakeOfRig() || Rig == nullptr)
+	{
+		return FText::GetEmpty();
+	}
+	TArray<FString> Lines;
+	for (const FRoscMoveFinding& Finding : URoscOperatingSubsystem::Get()->GetTakeFindings())
+	{
+		Lines.Add(Rosc::Take::Describe(Finding, Rig->GetSpec().Type, URoscEditorSettings::GetDistanceUnits()).ToString());
+	}
+	return FText::FromString(FString::Join(Lines, TEXT("\n")));
+}
+
+TSharedRef<SWidget> SRoscGripTab::MakeDeviceMenu()
+{
+	FMenuBuilder MenuBuilder(true, nullptr);
+	const TArray<FName> Devices = URoscOperatingSubsystem::GetDevices();
+	for (const FName Device : Devices)
+	{
+		MenuBuilder.AddMenuEntry(
+			FText::FromName(Device),
+			FText::Format(LOCTEXT("DeviceEntryToolTip", "Operate the support with {0}."), FText::FromName(Device)),
+			FSlateIcon(),
+			FUIAction(
+				FExecuteAction::CreateSPLambda(this, [this, Device] { ChosenDevice = Device; }),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateSPLambda(this, [this, Device] { return GetChosenDevice() == Device; })),
+			NAME_None,
+			EUserInterfaceActionType::RadioButton);
+	}
+	if (Devices.IsEmpty())
+	{
+		MenuBuilder.AddMenuEntry(
+			LOCTEXT("NoDeviceEntry", "No device found"),
+			LOCTEXT("NoDeviceEntryToolTip", "Open the Unreal VCam app and connect it to this computer, or start another Live Link source, and it is listed here."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction(), FCanExecuteAction::CreateLambda([] { return false; })));
+	}
+	return MenuBuilder.MakeWidget();
+}
+
+TSharedRef<SWidget> SRoscGripTab::BuildDeviceRows()
+{
+	const TSharedRef<SVerticalBox> Rows = SNew(SVerticalBox);
+	const auto Add = [&Rows](const FMargin& Padding, const TSharedRef<SWidget>& Widget)
+	{
+		Rows->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
+	};
+
+	Add(FMargin(0.0f), MakeNote(LOCTEXT("DeviceIntro", "Operate the support with a phone or tablet held like a camera: the Unreal VCam app on an iPad or iPhone, or a tracker that Live Link brings in.")));
+
+	// The shot on the device.
+	if (URoscOperatingSubsystem::IsVirtualCameraOn())
+	{
+		Add(FRoscStyle::ButtonRowPadding, MakeToggleButton(LOCTEXT("ShowOnDevice", "Show on Device"),
+			LOCTEXT("ShowOnDeviceToolTip", "Stream this camera's picture to the Unreal VCam app. On the device, open the app and connect it to this computer; the device is then listed below."),
+			TAttribute<bool>::CreateSPLambda(this, [this] { return URoscOperatingSubsystem::IsShownOnDevice(Target->GetCamera()); }),
+			[this](bool bTurnOn)
+			{
+				ACineCameraActor* Camera = Target->GetCamera();
+				FText Error;
+				if (!bTurnOn)
+				{
+					URoscOperatingSubsystem::StopShowingOnDevice(Camera);
+				}
+				else if (!URoscOperatingSubsystem::ShowOnDevice(Camera, Error))
+				{
+					Notify(Error, false);
+				}
+			}));
+	}
+	else
+	{
+		Add(FRoscStyle::RowPadding, MakeNote(LOCTEXT("VirtualCameraOff", "To show the shot on the device, Rosc uses the engine's Virtual Camera plugin, which is off in this project.")));
+		Add(FRoscStyle::ButtonRowPadding, MakeButton(LOCTEXT("TurnOnVirtualCamera", "Turn On Virtual Camera and Restart"),
+			LOCTEXT("TurnOnVirtualCameraToolTip", "Turn on the engine's Virtual Camera plugin for this project and restart the editor so that it loads. The editor offers to save your work before it closes."),
+			FOnClicked::CreateLambda([]
+			{
+				FText Error;
+				if (URoscOperatingSubsystem::TurnOnVirtualCamera(Error))
+				{
+					FUnrealEdMisc::Get().RestartEditor(true);
+				}
+				else
+				{
+					Notify(Error, false);
+				}
+				return FReply::Handled();
+			})));
+	}
+
+	// The device and what it does.
+	const FText DeviceLabel = LOCTEXT("DeviceLabel", "Device");
+	const FText DeviceToolTip = LOCTEXT("DeviceToolTip", "The phone, tablet or tracker that operates the support. Every Live Link source that tracks a position and a direction is listed.");
+	Add(FRoscStyle::RowPadding, MakeRow(DeviceLabel, DeviceToolTip,
+		MakeComboButton(DeviceLabel, DeviceToolTip,
+			TAttribute<FText>::CreateSPLambda(this, [this]
+			{
+				const FName Device = GetChosenDevice();
+				return Device.IsNone() ? LOCTEXT("NoDeviceValue", "None found") : FText::FromName(Device);
+			}),
+			FOnGetContent::CreateSP(this, &SRoscGripTab::MakeDeviceMenu))));
+	Add(FRoscStyle::RowPadding, MakeNote(TAttribute<FText>::CreateLambda([]
+	{
+		return URoscOperatingSubsystem::GetDevices().IsEmpty()
+			? LOCTEXT("NoDevices", "No device found yet. Open the Unreal VCam app and connect it to this computer, or start another Live Link source, and it is listed here.")
+			: FText::GetEmpty();
+	})));
+
+	const TSharedRef<SWrapBox> Controls = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(8.0f, FRoscStyle::RowSpacing));
+	Controls->AddSlot()
+	[
+		SNew(SBox)
+		.IsEnabled_Lambda([this] { return IsOperatingRig() || !GetChosenDevice().IsNone(); })
+		[
+			MakeToggleButton(LOCTEXT("OperateButton", "Operate"),
+				LOCTEXT("OperateToolTip", "Hand the support's head to the device: as you turn it, the head pans, tilts and rolls, and a Steadicam, handheld rig or drone also goes where you carry it. Turn it off to keep where the device left the support, as one undo step."),
+				TAttribute<bool>::CreateSP(this, &SRoscGripTab::IsOperatingRig),
+				[this](bool bTurnOn)
+				{
+					URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+					FText Error;
+					if (!bTurnOn)
+					{
+						Operating->StopOperating();
+					}
+					else if (!Operating->StartOperating(GetRig(), GetChosenDevice(), Error))
+					{
+						Notify(Error, false);
+					}
+				})
+		]
+	];
+	Controls->AddSlot()
+	[
+		MakeButton(LOCTEXT("ZeroButton", "Zero"),
+			LOCTEXT("ZeroToolTip", "Take the way you hold the device now as the support's present direction, to rest your arms or turn round without moving the shot."),
+			FOnClicked::CreateLambda([] { URoscOperatingSubsystem::Get()->Zero(); return FReply::Handled(); }),
+			TAttribute<bool>::CreateSP(this, &SRoscGripTab::IsOperatingRig))
+	];
+	Controls->AddSlot()
+	[
+		SNew(SBox)
+		.IsEnabled_Lambda([this] { return IsOperatingRig() && URoscOperatingSubsystem::Get()->IsDeviceLive(); })
+		[
+			MakeToggleButton(
+				TAttribute<FText>::CreateLambda([] { return URoscOperatingSubsystem::Get()->IsRecording() ? LOCTEXT("StopRecordingButton", "Stop") : LOCTEXT("RecordButton", "Record"); }),
+				LOCTEXT("RecordToolTip", "Record a take: Sequencer plays the open shot from the playhead while you operate, and the device's motion is kept one frame at a time. With no sequence open, one is made."),
+				TAttribute<bool>::CreateLambda([] { return URoscOperatingSubsystem::Get()->IsRecording(); }),
+				[](bool bTurnOn)
+				{
+					URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+					FText Error;
+					if (!bTurnOn)
+					{
+						Operating->StopRecording();
+					}
+					else if (!Operating->StartRecording(Error))
+					{
+						Notify(Error, false);
+					}
+				})
+		]
+	];
+	Add(FRoscStyle::ButtonRowPadding, Controls);
+	Add(FRoscStyle::RowPadding, MakeStatusLine("Icons.InfoWithColor", TAttribute<FText>::CreateSP(this, &SRoscGripTab::GetDeviceStatus)));
+	Add(FRoscStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SRoscGripTab::GetDeviceWarning)));
+
+	Rows->AddSlot()
+	.AutoHeight()
+	[
+		SNew(SBox)
+		.Visibility_Lambda([this] { return HasTakeOfRig() ? EVisibility::Visible : EVisibility::Collapsed; })
+		[
+			BuildTakeRows()
+		]
+	];
+	return Rows;
+}
+
+TSharedRef<SWidget> SRoscGripTab::BuildTakeRows()
+{
+	const TSharedRef<SVerticalBox> Rows = SNew(SVerticalBox);
+	const auto Add = [&Rows](const FMargin& Padding, const TSharedRef<SWidget>& Widget)
+	{
+		Rows->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
+	};
+	// The processing only changes how the take will be baked, so it is not an undo step.
+	const auto EditProcessing = [](TFunction<void(FRoscTakeProcessing&)> Edit)
+	{
+		URoscOperatingSubsystem* Operating = URoscOperatingSubsystem::Get();
+		FRoscTakeProcessing Processing = Operating->GetProcessing();
+		Edit(Processing);
+		Operating->SetProcessing(Processing);
+	};
+
+	Add(FRoscStyle::RowPadding, MakeNote(TAttribute<FText>::CreateSP(this, &SRoscGripTab::GetTakeSummary)));
+
+	TArray<FChoice> Smoothings;
+	for (const ERoscTakeSmoothing Smoothing : { ERoscTakeSmoothing::Off, ERoscTakeSmoothing::Light, ERoscTakeSmoothing::Medium, ERoscTakeSmoothing::Heavy })
+	{
+		Smoothings.Add({ Rosc::Take::GetSmoothingName(Smoothing),
+			[Smoothing] { return URoscOperatingSubsystem::Get()->GetProcessing().Smoothing == Smoothing; },
+			[EditProcessing, Smoothing] { EditProcessing([Smoothing](FRoscTakeProcessing& Processing) { Processing.Smoothing = Smoothing; }); } });
+	}
+	Add(FRoscStyle::RowPadding, MakeChoiceRow(LOCTEXT("SmoothingLabel", "Smoothing"),
+		LOCTEXT("SmoothingToolTip", "Takes the jitter out of the take: the tremor of a hand and the noise of the tracking. It adds no lag: a move starts and stops on the frames it did."),
+		TAttribute<FText>::CreateLambda([] { return Rosc::Take::GetSmoothingName(URoscOperatingSubsystem::Get()->GetProcessing().Smoothing); }),
+		MoveTemp(Smoothings)));
+
+	FSpinBoxArgs Stabilise;
+	Stabilise.Name = LOCTEXT("StabiliseLabel", "Stabilise");
+	Stabilise.ToolTip = LOCTEXT("StabiliseToolTip", "Takes the operator's shake out and keeps the move, like a stabilised head. 0 % leaves the shake in; more stabilising also softens quick moves, so a whip pan lands a little more gently.");
+	Stabilise.TransactionName = LOCTEXT("StabiliseTransaction", "Stabilise Take");
+	Stabilise.Value = TAttribute<float>::CreateLambda([] { return static_cast<float>(URoscOperatingSubsystem::Get()->GetProcessing().Stabilise * 100.0); });
+	Stabilise.MinValue = TOptional<float>(0.0f);
+	Stabilise.MaxValue = TOptional<float>(100.0f);
+	Stabilise.Delta = 5.0f;
+	Stabilise.MaxFractionalDigits = 0;
+	Stabilise.TypeInterface = MakeUnitInterface(EUnit::Percentage);
+	Stabilise.OnDrag = [EditProcessing](float Percent) { EditProcessing([Percent](FRoscTakeProcessing& Processing) { Processing.Stabilise = Percent / 100.0; }); };
+	Stabilise.OnCommit = Stabilise.OnDrag;
+	const FText StabiliseName = Stabilise.Name;
+	const TAttribute<FText> StabiliseToolTip = Stabilise.ToolTip;
+	Add(FRoscStyle::RowPadding, MakeRow(StabiliseName, StabiliseToolTip, MakeSpinBox(MoveTemp(Stabilise))));
+
+	const TSharedRef<SWrapBox> Locks = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(8.0f, FRoscStyle::RowSpacing));
+	const auto AddLock = [&Locks, EditProcessing](const FText& Label, const FText& ToolTip, bool FRoscTakeProcessing::* Lock)
+	{
+		Locks->AddSlot()
+		[
+			MakeToggleButton(Label, ToolTip,
+				TAttribute<bool>::CreateLambda([Lock] { return URoscOperatingSubsystem::Get()->GetProcessing().*Lock; }),
+				[EditProcessing, Lock](bool bTurnOn) { EditProcessing([Lock, bTurnOn](FRoscTakeProcessing& Processing) { Processing.*Lock = bTurnOn; }); })
+		];
+	};
+	AddLock(LOCTEXT("LockPan", "Lock Pan"), LOCTEXT("LockPanToolTip", "Hold the pan where the take began."), &FRoscTakeProcessing::bLockPan);
+	AddLock(LOCTEXT("LockTilt", "Lock Tilt"), LOCTEXT("LockTiltToolTip", "Hold the tilt where the take began."), &FRoscTakeProcessing::bLockTilt);
+	AddLock(LOCTEXT("LockRoll", "Lock Roll"), LOCTEXT("LockRollToolTip", "Hold the roll where the take began, so the horizon stays as it was."), &FRoscTakeProcessing::bLockRoll);
+	if (const ARoscRig* Rig = GetRig(); Rig != nullptr && Rosc::Take::IsFreeMoving(Rig->GetSpec().Type))
+	{
+		AddLock(LOCTEXT("LockPosition", "Lock Position"), LOCTEXT("LockPositionToolTip", "Hold the support where the take began, so only the head moves."), &FRoscTakeProcessing::bLockPosition);
+	}
+	Add(FRoscStyle::ButtonRowPadding, Locks);
+	Add(FRoscStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SRoscGripTab::GetTakeWarnings)));
+
+	const TSharedRef<SWrapBox> Buttons = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(8.0f, FRoscStyle::RowSpacing));
+	Buttons->AddSlot()
+	[
+		SNew(SBox)
+		.MinDesiredHeight(FRoscStyle::MinTargetSize)
+		[
+			SNew(SButton)
+			.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("PrimaryButton"))
+			.VAlign(VAlign_Center)
+			.Text(LOCTEXT("BakeTakeButton", "Bake Take"))
+			.ToolTipText(LOCTEXT("BakeTakeToolTip", "Write the take, smoothed, stabilised and locked as set above, into Sequencer as a key on every frame of the support's axes, from the frame where recording began. Keys already there in that time are replaced."))
+			.IsEnabled_Lambda([] { return !URoscOperatingSubsystem::Get()->IsRecording(); })
+			.OnClicked_Lambda([]
+			{
+				FText Error;
+				const ULevelSequence* Sequence = URoscOperatingSubsystem::Get()->BakeTake(Error);
+				Notify(Sequence != nullptr ? FText::Format(LOCTEXT("TakeBaked", "Take baked into {0}."), FText::FromString(Sequence->GetName())) : Error, Sequence != nullptr);
+				return FReply::Handled();
+			})
+		]
+	];
+	Buttons->AddSlot()
+	[
+		MakeButton(LOCTEXT("DiscardTakeButton", "Discard Take"),
+			LOCTEXT("DiscardTakeToolTip", "Throw the take away. What was baked from it stays in Sequencer."),
+			FOnClicked::CreateLambda([] { URoscOperatingSubsystem::Get()->DiscardTake(); return FReply::Handled(); }))
+	];
+	Add(FRoscStyle::ButtonRowPadding, Buttons);
+	return Rows;
 }
 
 TSharedRef<SWidget> SRoscGripTab::MakeSupportMenu()

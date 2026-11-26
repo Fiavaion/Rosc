@@ -228,6 +228,41 @@ TArray<FRoscMoveFinding> Rosc::Take::Check(const FRoscRigSpec& Spec, TConstArray
 	return Findings;
 }
 
+FText Rosc::Take::Describe(const FRoscMoveFinding& Finding, ERoscRigType RigType, ERoscDistanceUnits Units)
+{
+	FFormatNamedArguments Args;
+	Args.Add(TEXT("Axis"), Rosc::Rig::GetAxisName(RigType, Finding.Axis));
+	Args.Add(TEXT("Rig"), Rosc::Rig::GetTypeName(RigType).ToLower());
+
+	switch (Finding.Problem)
+	{
+	case ERoscMoveProblem::BelowRange:
+	case ERoscMoveProblem::AboveRange:
+		Args.Add(TEXT("Value"), Rosc::Rig::FormatAxisValue(Finding.Axis, Finding.Value, Units));
+		Args.Add(TEXT("Limit"), Rosc::Rig::FormatAxisValue(Finding.Axis, Finding.Limit, Units));
+		return FText::Format(Finding.Problem == ERoscMoveProblem::BelowRange
+			? LOCTEXT("TakeBelowRange", "{Axis} goes to {Value}; this {Rig} stops at {Limit}. Zero the device nearer the middle of the move and record again, or choose a larger {Rig}.")
+			: LOCTEXT("TakeAboveRange", "{Axis} goes to {Value}; this {Rig} reaches {Limit}. Zero the device nearer the middle of the move and record again, or choose a larger {Rig}."), Args);
+
+	case ERoscMoveProblem::FixedAxisMoved:
+		Args.Add(TEXT("From"), Rosc::Rig::FormatAxisValue(Finding.Axis, Finding.Limit, Units));
+		Args.Add(TEXT("To"), Rosc::Rig::FormatAxisValue(Finding.Axis, Finding.Value, Units));
+		return FText::Format(LOCTEXT("TakeFixedAxisMoved", "{Axis} changes from {From} to {To}, but on a {Rig} it is set before the shot and cannot move during it. Lock it, or choose a support that can make this move."), Args);
+
+	case ERoscMoveProblem::TooFast:
+		Args.Add(TEXT("Value"), Rosc::Move::FormatRate(Finding.Axis, Finding.Value, Units, false));
+		Args.Add(TEXT("Limit"), Rosc::Move::FormatRate(Finding.Axis, Finding.Limit, Units, false));
+		return FText::Format(LOCTEXT("TakeTooFast", "{Axis} peaks at {Value}; this {Rig} manages {Limit}. Operate more slowly and record again, or stabilise more."), Args);
+
+	case ERoscMoveProblem::TooAbrupt:
+		Args.Add(TEXT("Value"), Rosc::Move::FormatRate(Finding.Axis, Finding.Value, Units, true));
+		Args.Add(TEXT("Limit"), Rosc::Move::FormatRate(Finding.Axis, Finding.Limit, Units, true));
+		return FText::Format(LOCTEXT("TakeTooAbrupt", "{Axis} changes speed by {Value}; this {Rig} manages {Limit}. Start and stop the move more gently and record again, or stabilise more."), Args);
+	}
+	checkNoEntry();
+	return FText::GetEmpty();
+}
+
 FText Rosc::Take::GetSmoothingName(ERoscTakeSmoothing Smoothing)
 {
 	switch (Smoothing)

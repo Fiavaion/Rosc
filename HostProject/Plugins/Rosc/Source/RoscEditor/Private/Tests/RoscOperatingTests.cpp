@@ -5,76 +5,33 @@
 #include "CineCameraActor.h"
 #include "CineCameraComponent.h"
 #include "Editor.h"
-#include "Features/IModularFeatures.h"
 #include "HAL/PlatformProcess.h"
-#include "ILiveLinkClient.h"
-#include "ILiveLinkSource.h"
 #include "LevelEditorViewport.h"
-#include "LiveLinkSourceSettings.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Misc/AutomationTest.h"
 #include "MovieScene.h"
 #include "MovieSceneSequencePlayer.h"
-#include "Roles/LiveLinkTransformRole.h"
-#include "Roles/LiveLinkTransformTypes.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Tracks/MovieSceneFloatTrack.h"
 #include "RoscCameraEditing.h"
+#include "RoscCameraTarget.h"
 #include "RoscGripEditing.h"
 #include "RoscOperatingSubsystem.h"
 #include "RoscRig.h"
 #include "RoscSequenceUtils.h"
+#include "RoscTestDevice.h"
+#include "RoscWidgetTestUtils.h"
+#include "SRoscGripTab.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
 namespace
 {
-	const FName TestDevice(TEXT("RoscTestDevice"));
-
-	/** A Live Link source of the test's own: a device whose every move the test makes. */
-	class FTestDeviceSource : public ILiveLinkSource
-	{
-	public:
-		virtual void ReceiveClient(ILiveLinkClient* InClient, FGuid InSourceGuid) override
-		{
-			Client = InClient;
-			Guid = InSourceGuid;
-		}
-		virtual bool IsSourceStillValid() const override { return true; }
-		virtual bool RequestSourceShutdown() override { return true; }
-		virtual FText GetSourceType() const override { return FText::FromString(TEXT("Rosc test device")); }
-		virtual FText GetSourceMachineName() const override { return FText::FromString(TEXT("Test")); }
-		virtual FText GetSourceStatus() const override { return FText::FromString(TEXT("Moving")); }
-
-		void Start()
-		{
-			FLiveLinkStaticDataStruct StaticData(FLiveLinkTransformStaticData::StaticStruct());
-			Client->PushSubjectStaticData_AnyThread(FLiveLinkSubjectKey(Guid, TestDevice), ULiveLinkTransformRole::StaticClass(), MoveTemp(StaticData));
-			Client->ForceTick();
-		}
-
-		/** Holds the device so, and has Live Link take it in at once. */
-		void Hold(const FRotator& Rotation, const FVector& Location = FVector::ZeroVector)
-		{
-			FLiveLinkFrameDataStruct Frame(FLiveLinkTransformFrameData::StaticStruct());
-			Frame.Cast<FLiveLinkTransformFrameData>()->Transform = FTransform(Rotation, Location);
-			Frame.GetBaseData()->WorldTime = FLiveLinkWorldTime(FPlatformTime::Seconds());
-			Client->PushSubjectFrameData_AnyThread(FLiveLinkSubjectKey(Guid, TestDevice), MoveTemp(Frame));
-			Client->ForceTick();
-		}
-
-		ILiveLinkClient* Client = nullptr;
-		FGuid Guid;
-	};
-
-	ILiveLinkClient* GetLiveLinkClient()
-	{
-		IModularFeatures& Features = IModularFeatures::Get();
-		return Features.IsModularFeatureAvailable(ILiveLinkClient::ModularFeatureName)
-			? &Features.GetModularFeature<ILiveLinkClient>(ILiveLinkClient::ModularFeatureName)
-			: nullptr;
-	}
+	using Rosc::WidgetTests::FindButtonShowing;
+	using Rosc::WidgetTests::FindToggleShowing;
+	using Rosc::WidgetTests::ShowsText;
+	using namespace Rosc::DeviceTests;
 
 	/** A camera on a tripod, locked off, looking along +X. */
 	ARoscRig* MakeTripod(UWorld* World, ACineCameraActor*& OutCamera)
@@ -143,13 +100,7 @@ bool FRoscOperateDeviceTest::RunTest(const FString& Parameters)
 	UWorld* World = GEditor->GetEditorWorldContext().World();
 	ACineCameraActor* Camera = nullptr;
 	ARoscRig* Rig = MakeTripod(World, Camera);
-	TSharedPtr<FTestDeviceSource> Source = MakeShared<FTestDeviceSource>();
-	const FGuid SourceGuid = Client->AddSource(Source);
-	// The engine's clock does not move inside a test, so the test's device is read at its latest frame.
-	if (ULiveLinkSourceSettings* SourceSettings = Client->GetSourceSettings(SourceGuid))
-	{
-		SourceSettings->Mode = ELiveLinkSourceMode::Latest;
-	}
+	const TSharedRef<FTestDeviceSource> Source = FTestDeviceSource::Add(*Client);
 	ULevelSequence* Sequence = NewObject<ULevelSequence>(GetTransientPackage(), NAME_None, RF_Transactional);
 	Sequence->Initialize();
 	Sequence->GetMovieScene()->SetDisplayRate(FFrameRate(24, 1));
@@ -159,8 +110,7 @@ bool FRoscOperateDeviceTest::RunTest(const FString& Parameters)
 		Operating->DiscardTake();
 		Operating->StopOperating();
 		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
-		Client->RemoveSource(SourceGuid);
-		Client->ForceTick();
+		Source->Remove();
 		RemoveTripod(World, Camera);
 		GEditor->ResetTransaction(FText::FromString(TEXT("Rosc operating test")));
 	};
@@ -168,7 +118,6 @@ bool FRoscOperateDeviceTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	Source->Start();
 	Source->Hold(FRotator(0.0, 30.0, 0.0));
 	TestTrue(TEXT("The device is listed"), URoscOperatingSubsystem::GetDevices().Contains(TestDevice));
 
@@ -215,9 +164,36 @@ bool FRoscOperateDeviceTest::RunTest(const FString& Parameters)
 	ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(12), EUpdatePositionMethod::Scrub));
 	const FRoscRigPose TakeStart = Rig->GetPose();
 	Source->Hold(FRotator::ZeroRotator);
-	TestTrue(TEXT("Operating again"), Operating->StartOperating(Rig, TestDevice, Error));
+
+	// The take is made from the Grip tab, as the operator would.
+	const TSharedRef<FRoscCameraTarget> Target = MakeShared<FRoscCameraTarget>();
+	Target->SetCamera(Camera);
+	const TSharedRef<SRoscGripTab> Tab = SNew(SRoscGripTab, Target);
+	// A tab on screen is ticked, then laid out, which is when the widgets read what they bind to (whether they are shown).
+	const auto Look = [&Tab]
+	{
+		Tab->Tick(FGeometry(), FPlatformTime::Seconds(), 0.0f);
+		Tab->SlatePrepass(1.0f);
+	};
+	const auto Toggle = [this, &Tab, &Look](const TCHAR* Label)
+	{
+		Look();
+		const TSharedPtr<SCheckBox> Button = FindToggleShowing(Tab, Label);
+		if (TestNotNull(*FString::Printf(TEXT("The tab has %s"), Label), Button.Get()))
+		{
+			Button->ToggleCheckedState();
+		}
+	};
+	Look();
+	TestTrue(TEXT("The tab shows the device"), ShowsText(Tab, *TestDevice.ToString()));
+	TestFalse(TEXT("No take is shown before one is recorded"), ShowsText(Tab, TEXT("Smoothing")));
+	Toggle(TEXT("Operate"));
+	TestTrue(TEXT("Operate on the tab operates the tripod from the device"), Operating->IsOperating() && Operating->GetOperatedRig() == Rig);
 	Operating->Update();
-	TestTrue(TEXT("Recording starts"), Operating->StartRecording(Error));
+	Look();
+	TestTrue(TEXT("The tab says the device has the head"), ShowsText(Tab, TEXT("has the head")));
+	Toggle(TEXT("Record"));
+	TestTrue(TEXT("Record on the tab starts recording"), Operating->IsRecording());
 	const double Start = FPlatformTime::Seconds();
 	double Elapsed = 0.0;
 	while ((Elapsed = FPlatformTime::Seconds() - Start) < 1.5)
@@ -227,14 +203,22 @@ bool FRoscOperateDeviceTest::RunTest(const FString& Parameters)
 		Operating->Update();
 		FPlatformProcess::Sleep(1.0f / 96.0f);
 	}
-	Operating->StopRecording();
-	TestFalse(TEXT("Recording stops"), Operating->IsRecording());
-	Operating->StopOperating();
-	TestTrue(TEXT("The take is kept when operating stops"), Operating->HasTake());
-	if (!TestTrue(TEXT("A take is kept"), Operating->HasTake()))
+	Toggle(TEXT("Stop"));
+	TestFalse(TEXT("Stop on the tab stops recording"), Operating->IsRecording());
+	Toggle(TEXT("Operate"));
+	TestFalse(TEXT("Operate on the tab again hands the head back"), Operating->IsOperating());
+	if (!TestTrue(TEXT("The take is kept when operating stops"), Operating->HasTake()))
 	{
 		return false;
 	}
+	Look();
+	TestTrue(TEXT("The tab shows the take"), ShowsText(Tab, TEXT("Take of")));
+	TestTrue(TEXT("and its smoothing"), ShowsText(Tab, TEXT("Smoothing")));
+	TestFalse(TEXT("A tripod stays put, so the tab has no position lock"), ShowsText(Tab, TEXT("Lock Position")));
+	Toggle(TEXT("Lock Tilt"));
+	TestTrue(TEXT("Lock Tilt on the tab locks the take's tilt"), Operating->GetProcessing().bLockTilt);
+	Toggle(TEXT("Lock Tilt"));
+	TestFalse(TEXT("and again unlocks it"), Operating->GetProcessing().bLockTilt);
 	const FRoscTake& Take = Operating->GetTake();
 	AddInfo(FString::Printf(TEXT("Take: %d frames at %.0f fps"), Take.Poses.Num(), Take.FramesPerSecond));
 	TestEqual(TEXT("The take is at the sequence's frame rate"), Take.FramesPerSecond, 24.0, 1.e-9);
@@ -250,8 +234,14 @@ bool FRoscOperateDeviceTest::RunTest(const FString& Parameters)
 			static_cast<int32>(Finding.Axis), static_cast<int32>(Finding.Problem), Finding.Value, Finding.Limit));
 	}
 
-	// Bake, then scrub the real Sequencer and see where the head is.
-	TestTrue(TEXT("The take bakes into the sequence it was recorded against"), Operating->BakeTake(Error) == Sequence);
+	// Bake from the tab, then scrub the real Sequencer and see where the head is.
+	Look();
+	const TSharedPtr<SButton> Bake = FindButtonShowing(Tab, TEXT("Bake Take"));
+	if (!TestNotNull(TEXT("The tab has Bake Take"), Bake.Get()))
+	{
+		return false;
+	}
+	Bake->SimulateClick();
 	TestFalse(TEXT("The bake leaves no undo step open"), GEditor->IsTransactionActive());
 	const FMovieSceneFloatChannel* Pan = FindPanChannel(Sequence, Rig);
 	if (!TestNotNull(TEXT("The pan has a track"), Pan))
@@ -346,7 +336,9 @@ bool FRoscOperateViewportTest::RunTest(const FString& Parameters)
 /**
  * Show on Device (ADR-013, Spike #4): the camera's picture goes to the Unreal VCam app through the
  * engine's Virtual Camera plugin, which does not move the camera. With the plugin off, Rosc says
- * what to turn on.
+ * what to turn on. The host project keeps the plugin off, as a new project does (it changes every
+ * render, LESSON-TEST-014); run this test with it on through
+ * tools/test.ps1 -Filter Rosc.Editor.Operate.ShowOnDevice -EditorArgs "-EnablePlugins=VirtualCamera".
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscOperateShowOnDeviceTest, "Rosc.Editor.Operate.ShowOnDevice", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 
@@ -372,7 +364,7 @@ bool FRoscOperateShowOnDeviceTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("With the Virtual Camera plugin off, the shot is not shown on a device"), URoscOperatingSubsystem::ShowOnDevice(Camera, Error));
 		TestTrue(TEXT("and Rosc says which plugin to turn on"), Error.ToString().Contains(TEXT("Virtual Camera")));
 		TestFalse(TEXT("and nothing is added to the camera"), URoscOperatingSubsystem::IsShownOnDevice(Camera));
-		AddInfo(TEXT("The Virtual Camera plugin is off in this project: the refusal was checked."));
+		AddInfo(TEXT("The Virtual Camera plugin is off: the refusal was checked. Run with -EnablePlugins=VirtualCamera to check the picture's way out."));
 		return true;
 	}
 

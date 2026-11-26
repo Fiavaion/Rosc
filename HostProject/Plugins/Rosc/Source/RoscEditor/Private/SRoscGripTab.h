@@ -59,9 +59,12 @@ private:
 	TSharedRef<SWidget> BuildEaseRow(int32 MarkIndex, bool bEaseIn);
 	TSharedRef<SWidget> BuildOperatorRows();
 	TSharedRef<SWidget> BuildBakeRows();
+	TSharedRef<SWidget> BuildDeviceRows();
+	TSharedRef<SWidget> BuildTakeRows();
 
 	TSharedRef<SWidget> MakeSupportMenu();
 	TSharedRef<SWidget> MakeOperatorMenu();
+	TSharedRef<SWidget> MakeDeviceMenu();
 
 	/** A spin box showing one number of the rig; drags and typed values are undoable. */
 	TSharedRef<SWidget> MakeRigSpinBox(Rosc::Widgets::FSpinBoxArgs Args, TFunction<float(const ARoscRig&)> GetValue, TFunction<void(ARoscRig&, float)> SetValue);
@@ -75,6 +78,16 @@ private:
 	FText GetBakeStatus() const;
 	FReply OnBakeClicked();
 
+	/** The device chosen in the list, or the first one found while none is chosen. */
+	FName GetChosenDevice() const;
+	bool IsOperatingRig() const;
+	bool HasTakeOfRig() const;
+	FText GetDeviceStatus() const;
+	FText GetDeviceWarning() const;
+	FText GetTakeSummary() const;
+	/** What the support could not do in the processed take, one warning per line. */
+	FText GetTakeWarnings() const;
+
 	TSharedPtr<FRoscCameraTarget> Target;
 	FLayoutKey CurrentLayoutKey;
 
@@ -83,4 +96,5 @@ private:
 	/** Where the keyboard focus goes when a mark is removed. */
 	Rosc::Widgets::FRowFocus MarkRowFocus;
 	TSharedPtr<SWidget> MarkPositionButton;
+	FName ChosenDevice;
 };

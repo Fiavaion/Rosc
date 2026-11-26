@@ -67,6 +67,9 @@ public:
 
 	bool IsRecording() const { return bRecording; }
 	bool HasTake() const { return Take.Poses.Num() > 1 && TakeRig.IsValid(); }
+	ARoscRig* GetTakeRig() const { return TakeRig.Get(); }
+	ULevelSequence* GetTakeSequence() const { return TakeSequence.Get(); }
+	FFrameNumber GetTakeStartFrame() const { return TakeStartFrame; }
 	const FRoscTake& GetTake() const { return Take; }
 	double GetTakeSeconds() const;
 

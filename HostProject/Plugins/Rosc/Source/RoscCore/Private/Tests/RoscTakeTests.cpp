@@ -203,6 +203,11 @@ bool FRoscTakeFindingsTest::RunTest(const FString& Parameters)
 		{
 			TestTrue(*FString::Printf(TEXT("it reports the true speed (%g)"), Findings[0].Value), FMath::Abs(Findings[0].Value - Speed) <= 0.02 * Speed);
 			TestEqual(TEXT("it names the limit"), Findings[0].Limit, PanLimit);
+			// A take has no duration or eases to change: the advice is about operating and processing.
+			const FString Sentence = Rosc::Take::Describe(Findings[0], ERoscRigType::Tripod, ERoscDistanceUnits::Metric).ToString();
+			TestTrue(*FString::Printf(TEXT("the sentence names the pan (%s)"), *Sentence), Sentence.StartsWith(TEXT("Pan peaks at")));
+			TestTrue(TEXT("and says to stabilise more"), Sentence.Contains(TEXT("stabilise more")));
+			TestFalse(TEXT("and does not ask for a longer move"), Sentence.Contains(TEXT("Give the move")));
 		}
 	}
 

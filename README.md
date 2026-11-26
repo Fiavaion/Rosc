@@ -16,7 +16,7 @@ Status: beta, version 0.1.0. Built and tested on Unreal Engine 5.8.3 on Windows.
 | Tab | What you can do |
 |---|---|
 | Camera | Pick a camera body and recording format, a lens kit and a lens; set ISO, shutter angle, ND and T-stop; choose frame lines and a delivery aspect |
-| Grip | Put the camera on a tripod, slider, dolly, jib, telescoping crane, Steadicam, handheld or drone; block a move between marks; see when a move goes past what the gear can do; add operator movement; bake it to Sequencer |
+| Grip | Put the camera on a tripod, slider, dolly, jib, telescoping crane, Steadicam, handheld or drone; block a move between marks; see when a move goes past what the gear can do; add operator movement; operate the head from the viewport or from an iPad or iPhone running Unreal VCam, record a take and smooth and stabilise it; bake it to Sequencer |
 | Focus | Click a subject to focus on it; keep focus on a point as things move; store marks and rack between them; read near, far and hyperfocal distances |
 | Monitor | Frame lines, safe areas, false colour, zebras, waveform, histogram, focus peaking and a camera data readout in the viewport |
 | Shots | A shot list tied to Sequencer shots, storyboard frames, an overhead plan, and a shot list and camera report to export |

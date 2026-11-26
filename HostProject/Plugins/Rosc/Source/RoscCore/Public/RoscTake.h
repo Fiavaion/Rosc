@@ -66,6 +66,12 @@ namespace Rosc::Take
 	/** Everything in the poses that the rig cannot do, in axis order. Empty when the take is within the rig's limits. */
 	ROSCCORE_API TArray<FRoscMoveFinding> Check(const FRoscRigSpec& Spec, TConstArrayView<FRoscRigPose> Poses, double FramesPerSecond);
 
+	/**
+	 * A finding about a take as a sentence that says what is wrong and what the operator can do:
+	 * a take has no duration or eases to change, so the advice is about operating and processing.
+	 */
+	ROSCCORE_API FText Describe(const FRoscMoveFinding& Finding, ERoscRigType RigType, ERoscDistanceUnits Units);
+
 	ROSCCORE_API FText GetSmoothingName(ERoscTakeSmoothing Smoothing);
 
 	/** True for the supports the operator carries, whose position a device drives as well as their head. */

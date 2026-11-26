@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/SWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -73,6 +74,24 @@ namespace Rosc::WidgetTests
 		TArray<TSharedRef<SButton>> Buttons;
 		FindButtonsShowing(Widget, Label, Buttons);
 		return Buttons.IsEmpty() ? nullptr : TSharedPtr<SButton>(Buttons[0]);
+	}
+
+	/** The first toggle button under a widget that shows the label, or none. */
+	inline TSharedPtr<SCheckBox> FindToggleShowing(const TSharedRef<SWidget>& Widget, const TCHAR* Label)
+	{
+		if (Widget->GetType() == FName("SCheckBox") && GetShownText(Widget) == Label)
+		{
+			return StaticCastSharedRef<SCheckBox>(Widget);
+		}
+		FChildren* Children = Widget->GetAllChildren();
+		for (int32 Index = 0; Index < Children->Num(); ++Index)
+		{
+			if (TSharedPtr<SCheckBox> Found = FindToggleShowing(Children->GetChildAt(Index), Label))
+			{
+				return Found;
+			}
+		}
+		return nullptr;
 	}
 }
 
