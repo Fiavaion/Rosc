@@ -241,6 +241,7 @@ bool FRoscFocusPullTest::RunTest(const FString& Parameters)
 		const int32 PlayheadFrame = 144;
 		ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(PlayheadFrame), EUpdatePositionMethod::Scrub));
 		TestTrue(TEXT("Racking to a mark uses the open sequence"), RackToFocusMark(Camera, 1, Error) == Sequence);
+		TestFalse(TEXT("A rack into the open sequence leaves no undo step open"), GEditor->IsTransactionActive());
 		float AtPlayhead = 0.0f;
 		float AfterRack = 0.0f;
 		Channel->Evaluate(ToTime(PlayheadFrame), AtPlayhead);

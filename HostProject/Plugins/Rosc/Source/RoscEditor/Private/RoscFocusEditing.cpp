@@ -455,7 +455,8 @@ bool BakeRackKeys(ACineCameraActor* Camera, const FRackTarget& Target, double Ra
 	}
 	const TRange<FFrameNumber> RackRange = TRange<FFrameNumber>::Inclusive(ToTick(StartFrame), ToTick(LastFrame));
 
-	const FScopedTransaction Transaction(LOCTEXT("BakeRack", "Rack Focus"));
+	// Sequencer is told of the rack after the undo step closes: told inside it, Sequencer keeps the step open.
+	TOptional<FScopedTransaction> Transaction(InPlace, LOCTEXT("BakeRack", "Rack Focus"));
 	Sequence->Modify();
 	MovieScene->Modify();
 
@@ -516,6 +517,7 @@ bool BakeRackKeys(ACineCameraActor* Camera, const FRackTarget& Target, double Ra
 	Section->MarkAsChanged();
 
 	IncludeInPlaybackRange(MovieScene, RackRange);
+	Transaction.Reset();
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;
 }

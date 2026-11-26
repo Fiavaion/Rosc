@@ -222,6 +222,7 @@ bool FRoscGripCraneMoveTest::RunTest(const FString& Parameters)
 		const int32 PlayheadFrame = 48;
 		ULevelSequenceEditorBlueprintLibrary::SetGlobalPosition(FMovieSceneSequencePlaybackParams(FFrameTime(PlayheadFrame), EUpdatePositionMethod::Scrub));
 		TestTrue(TEXT("Baking to Sequencer uses the open sequence"), BakeMoveToSequencer(Rig, Error) == Sequence);
+		TestFalse(TEXT("A bake into the open sequence leaves no undo step open"), GEditor->IsTransactionActive());
 		float SwingOnSecondMark = 0.0f;
 		FindAxisChannel(Sequence, Rig, ERoscRigAxis::Swing)->Evaluate(ConvertFrameTime(FFrameTime(PlayheadFrame + 144), DisplayRate, TickResolution), SwingOnSecondMark);
 		TestEqual(TEXT("Baked at the playhead, the rig reaches the second mark six seconds after it"), static_cast<double>(SwingOnSecondMark), Second.Swing, 0.01);

@@ -353,7 +353,8 @@ bool Rosc::GripEditing::BakeMove(ARoscRig* Rig, ULevelSequence* Sequence, FFrame
 	const FFrameNumber EndTick = StartTick + FMath::RoundToInt32(DurationSeconds * TicksPerSecond);
 	const TRange<FFrameNumber> MoveRange = TRange<FFrameNumber>::Inclusive(StartTick, EndTick);
 
-	const FScopedTransaction Transaction(LOCTEXT("BakeMove", "Bake Move to Sequencer"));
+	// Sequencer is told of the bake after the undo step closes: told inside it, Sequencer keeps the step open.
+	TOptional<FScopedTransaction> Transaction(InPlace, LOCTEXT("BakeMove", "Bake Move to Sequencer"));
 	Sequence->Modify();
 	MovieScene->Modify();
 
@@ -478,6 +479,7 @@ bool Rosc::GripEditing::BakeMove(ARoscRig* Rig, ULevelSequence* Sequence, FFrame
 	Rig->BakedOperator = Rig->Operator;
 
 	IncludeInPlaybackRange(MovieScene, MoveRange);
+	Transaction.Reset();
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;
 }
