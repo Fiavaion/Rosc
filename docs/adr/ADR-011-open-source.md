@@ -30,9 +30,10 @@ beside the Unreal Engine EULA: a user's project combines Rosc with engine code t
    - the working notes are taken out of every commit;
    - the Android file-server token the engine wrote into the first commit's
      `DefaultEngine.ini` is taken out;
-   - the author address becomes the owner's GitHub no-reply address;
-   - commit references in these ADRs are moved to the new commit ids.
-   The history as it was is kept in a git bundle on the owner's machine.
+   - the author address becomes the owner's GitHub no-reply address.
+   The history as it was is kept in a git bundle on the owner's machine, with a map from the old
+   commit ids to the new ones. Commits that touched only the working notes are gone; each maps
+   to the commit before it.
 
 ## Consequences
 - Anyone may use, change and redistribute Rosc, including in paid work, under Apache-2.0.
@@ -42,8 +43,8 @@ beside the Unreal Engine EULA: a user's project combines Rosc with engine code t
 - The rule that an AI model's weights must allow commercial use stands: Rosc's users make paid
   films with it.
 - Pushing to the public repository publishes. It happens when the owner asks, as with any push.
-- Commit ids from before 2026-11-26 changed. Notes written before then name the old ids, and the
-  notes were updated to the new ones in the same change.
+- Commit ids from before 2026-11-26 changed. The ids named in the working notes were moved to
+  the new ones; anything outside the repository that names an old id needs the map.
 
 ## Alternatives considered
 1. MIT. It is shorter and common for Unreal plugins, but has no patent grant and says nothing
