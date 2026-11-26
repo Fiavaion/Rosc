@@ -22,6 +22,26 @@ namespace Rosc::AI
 	ROSCCORE_API const TCHAR* GetTaskId(ERoscAITask Task);
 }
 
+/** Whether a dataset's terms allow commercial use, as its owner states them. */
+enum class ERoscCommercialUse : uint8
+{
+	Yes,
+	No,
+	/** The terms say nothing plain about it, or could not be found. */
+	Unclear
+};
+
+/** One set of data a model was trained on, and the terms its owner publishes it under. */
+struct FRoscAITrainingSet
+{
+	FString Name;
+	FString Owner;
+	FString Terms;
+	/** The page that states the terms. Empty when none could be found. */
+	FString TermsPage;
+	ERoscCommercialUse Commercial = ERoscCommercialUse::Unclear;
+};
+
 /** How a model wants its picture. */
 struct FRoscAIModelInput
 {
@@ -46,9 +66,14 @@ struct FRoscAIModel
 	FString Id;
 	ERoscAITask Task = ERoscAITask::Depth;
 	FString Name;
-	/** The licence of the model's weights, and the page that states it. */
+	/** The licence of the model's weights, who holds it, and the page that states it. */
 	FString Licence;
+	FString LicenceHolder;
 	FString LicencePage;
+	/** What else the user should know of the licence, such as where the file's own page states none. */
+	FString LicenceNote;
+	/** The data the model was trained on (ADR-012). */
+	TArray<FRoscAITrainingSet> TrainingData;
 	/** Where the file is downloaded from, what it is called in the models folder, and how it is checked. */
 	FString Url;
 	FString FileName;
@@ -61,6 +86,12 @@ struct FRoscAIModel
 	/** The names of the model's result, and of the result that says which pixels to trust when it has one. */
 	FString Output;
 	FString MaskOutput;
+
+	/**
+	 * A fingerprint of what the notice before download says: the licence, its holder and note,
+	 * and the training data. An agreement to an older notice is not an agreement to this one.
+	 */
+	ROSCCORE_API FString GetNoticeSignature() const;
 };
 
 /** The models Rosc offers, read from Resources/AI/models.json. */

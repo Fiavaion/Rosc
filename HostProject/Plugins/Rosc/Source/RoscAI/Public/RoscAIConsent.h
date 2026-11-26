@@ -5,6 +5,8 @@
 
 #include "CoreMinimal.h"
 
+struct FRoscAIModel;
+
 /**
  * The consent gate: nothing is sent off this machine to a host until the user has agreed to it,
  * for this project and that host. Every path that sends data checks IsGiven itself, so no
@@ -28,4 +30,13 @@ namespace Rosc::AIConsent
 
 	/** The hosts the user has agreed to, for the AI tab to list. */
 	ROSCAI_API TArray<FString> GetHosts();
+
+	/**
+	 * True when the user has agreed to the notice shown before a model's first download, as it
+	 * reads now (ADR-012). A model is not downloaded until it is.
+	 */
+	ROSCAI_API bool IsModelNoticeAgreed(const FRoscAIModel& Model);
+
+	/** Records that the user agreed to the model's notice, having been shown it. */
+	ROSCAI_API void AgreeToModelNotice(const FRoscAIModel& Model);
 }

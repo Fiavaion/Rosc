@@ -27,7 +27,7 @@ Select-String -Path $log -Pattern "\): (error|warning) |: fatal error |error LNK
 # What a user needs must be in the package, and every source file must say whose it is and its licence.
 if ($code -eq 0) {
 	$needed = @(
-		"Rosc.uplugin", "LICENSE", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
+		"Rosc.uplugin", "LICENSE", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\TrainingData.html", "Docs\guide.css", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
 		"Content\Sample\RoscSampleStage.umap", "Resources\Icon128.png", "Resources\Icons\Panel.svg",
 		"Resources\Database\lenses.json", "Resources\AI\models.json", "Resources\AI\rosc_ai_server.py",
 		"Shaders\Private\RoscMonitor.usf", "Binaries\Win64\UnrealEditor-RoscEditor.dll"

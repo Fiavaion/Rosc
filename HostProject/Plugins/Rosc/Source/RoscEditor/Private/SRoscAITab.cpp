@@ -3,6 +3,7 @@
 
 #include "SRoscAITab.h"
 
+#include "Algo/Count.h"
 #include "Brushes/SlateDynamicImageBrush.h"
 #include "CineCameraActor.h"
 #include "Editor.h"
@@ -17,12 +18,15 @@
 #include "RoscAISettings.h"
 #include "RoscCameraEditing.h"
 #include "RoscCameraTarget.h"
+#include "RoscEditorModule.h"
 #include "RoscShotAssistant.h"
 #include "RoscStyle.h"
 #include "RoscUnits.h"
 #include "RoscWidgets.h"
+#include "Styling/AppStyle.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SWrapBox.h"
@@ -99,6 +103,39 @@ namespace
 	}
 
 	/** A row of buttons that folds onto a second line when the panel is narrow. */
+	/** The datasets a model was trained on whose owners allow only non-commercial use, each with its owner. */
+	FText GetNonCommercialTrainingData(const FRoscAIModel& Model)
+	{
+		TArray<FText> Sets;
+		for (const FRoscAITrainingSet& Set : Model.TrainingData)
+		{
+			if (Set.Commercial == ERoscCommercialUse::No)
+			{
+				Sets.Add(FText::Format(LOCTEXT("NonCommercialSet", "{0} from {1}"), FText::FromString(Set.Name), FText::FromString(Set.Owner)));
+			}
+		}
+		return FText::Join(LOCTEXT("NonCommercialSetSeparator", "; "), Sets);
+	}
+
+	/** What the notice says of a model's training data. */
+	FText DescribeTrainingData(const FRoscAIModel& Model)
+	{
+		const int32 Unclear = Algo::CountIf(Model.TrainingData, [](const FRoscAITrainingSet& Set) { return Set.Commercial == ERoscCommercialUse::Unclear; });
+		const FText NonCommercial = GetNonCommercialTrainingData(Model);
+		const FText Total = FText::AsNumber(Model.TrainingData.Num());
+		if (NonCommercial.IsEmpty() && Unclear == 0)
+		{
+			return FText::Format(LOCTEXT("NoticeDataOpen", "It learnt from {0} sets of data whose owners allow commercial use."), Total);
+		}
+		const FText UnclearText = FText::Format(LOCTEXT("NoticeDataUnclear", "For {0} {0}|plural(one=set,other=sets) the terms do not say, or could not be found."), Unclear);
+		if (NonCommercial.IsEmpty())
+		{
+			return FText::Format(LOCTEXT("NoticeDataOnlyUnclear", "It learnt from {0} sets of data that others own. {1}"), Total, UnclearText);
+		}
+		return FText::Format(LOCTEXT("NoticeDataRestricted", "It learnt from {0} sets of data that others own. Some are published for research or other non-commercial use only: {1}.{2}"),
+			Total, NonCommercial, Unclear > 0 ? FText::Format(LOCTEXT("NoticeDataThenUnclear", " {0}"), UnclearText) : FText::GetEmpty());
+	}
+
 	TSharedRef<SWrapBox> MakeAIButtonRow(TArray<TSharedRef<SWidget>> Buttons = {})
 	{
 		const TSharedRef<SWrapBox> Row = SNew(SWrapBox)
@@ -281,6 +318,7 @@ void SRoscAITab::Tick(const FGeometry& AllottedGeometry, const double InCurrentT
 	{
 		MeasureRebuiltContent(*this, AllottedGeometry);
 	}
+	NoticeFocus.Tick();
 }
 
 void SRoscAITab::ShowPlan(const FRoscShotPlanResult& Result)
@@ -368,6 +406,7 @@ SRoscAITab::FModelsKey SRoscAITab::ReadModelsKey() const
 		Key.DownloadingId = Downloading->Id;
 	}
 	Key.DownloadError = AI->GetDownloadError().ToString();
+	Key.NoticeOpenId = NoticeOpenFor;
 	return Key;
 }
 
@@ -787,6 +826,59 @@ void SRoscAITab::RebuildModels()
 				]);
 		}
 
+		// The notice before the first download (ADR-012): what the licence is and who holds it, and
+		// whose data the model learnt from. Agreeing starts the download; it is not asked again
+		// until the notice changes.
+		if (ModelsKey.NoticeOpenId == Model.Id && !ModelsKey.Installed[Index] && !bDownloading)
+		{
+			const TSharedRef<SVerticalBox> Notice = SNew(SVerticalBox);
+			const auto AddToNotice = [&Notice](const FMargin& Padding, const TSharedRef<SWidget>& Widget)
+			{
+				Notice->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
+			};
+			AddToNotice(FMargin(0.0f), MakeStatusLine(AIInfoIcon, FText::Format(LOCTEXT("NoticeHeading", "Before you download {0}"), ModelName)));
+			AddToNotice(FRoscStyle::RowPadding, MakeNote(FText::Format(LOCTEXT("NoticeLicence", "Its licence is {0}, held by {1}. {2}"),
+				FText::FromString(Model.Licence), FText::FromString(Model.LicenceHolder), FText::FromString(Model.LicenceNote))));
+			AddToNotice(FRoscStyle::RowPadding, MakeNote(DescribeTrainingData(Model)));
+			if (Model.TrainingData.ContainsByPredicate([](const FRoscAITrainingSet& Set) { return Set.Commercial != ERoscCommercialUse::Yes; }))
+			{
+				AddToNotice(FRoscStyle::RowPadding, MakeNote(LOCTEXT("NoticeCaution", "Whether those terms reach what you make with the model is not settled. If paid work depends on it, read the owners' terms first (Training Data lists them all), or ask a lawyer.")));
+			}
+			AddToNotice(FRoscStyle::ButtonRowPadding, MakeAIButtonRow({
+				MakeButton(LOCTEXT("NoticeAgreeButton", "Agree and Download"),
+					FText::Format(LOCTEXT("NoticeAgreeToolTip", "Agree and download: you have read this about {0}, and take it under its licence. Rosc does not ask again unless what it says changes."), ModelName),
+					FOnClicked::CreateSPLambda(this, [this, Model]
+					{
+						Rosc::AIConsent::AgreeToModelNotice(Model);
+						GetAI()->DownloadModel(Model);
+						NoticeOpenFor.Reset();
+						NoticeClosedFor = Model.Id;
+						NoticeFocus.RowRemoved(0);
+						RefreshSoon();
+						return FReply::Handled();
+					}),
+					ModelsKey.DownloadingId.IsEmpty()),
+				MakeButton(LOCTEXT("NoticeNotNowButton", "Not Now"),
+					FText::Format(LOCTEXT("NoticeNotNowToolTip", "Not now: close this without downloading {0}."), ModelName),
+					FOnClicked::CreateSPLambda(this, [this, Id = Model.Id]
+					{
+						NoticeOpenFor.Reset();
+						NoticeClosedFor = Id;
+						NoticeFocus.RowRemoved(0);
+						RefreshSoon();
+						return FReply::Handled();
+					}))
+			}));
+			const TSharedRef<SWidget> NoticeCard = SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+				.Padding(FRoscStyle::RowPadding)
+				[
+					Notice
+				];
+			Add(FRoscStyle::RowPadding, NoticeCard);
+			NoticeFocusTarget = NoticeCard;
+		}
+
 		const TSharedRef<SWrapBox> Buttons = MakeAIButtonRow();
 		if (bDownloading)
 		{
@@ -807,15 +899,23 @@ void SRoscAITab::RebuildModels()
 			Buttons->AddSlot()
 			[
 				MakeButton(LOCTEXT("DownloadModelButton", "Download"),
-					FText::Format(LOCTEXT("DownloadModelToolTip", "Download {0} from {1}. By downloading it you take it under its makers' licence, {2}."),
+					FText::Format(LOCTEXT("DownloadModelToolTip", "Download {0} from {1}. By downloading it you take it under its makers' licence, {2}. The first time, Rosc says first what the licence and the training data are."),
 						ModelName, FText::FromString(Rosc::AIConsent::GetHost(Model.Url)), FText::FromString(Model.Licence)),
 					FOnClicked::CreateSPLambda(this, [this, Model]
 					{
-						GetAI()->DownloadModel(Model);
+						if (Rosc::AIConsent::IsModelNoticeAgreed(Model))
+						{
+							GetAI()->DownloadModel(Model);
+						}
+						else
+						{
+							NoticeOpenFor = Model.Id;
+							NoticeFocus.RowRemoved(0);
+						}
 						RefreshSoon();
 						return FReply::Handled();
 					}),
-					ModelsKey.DownloadingId.IsEmpty())
+					ModelsKey.DownloadingId.IsEmpty() && ModelsKey.NoticeOpenId != Model.Id)
 			];
 		}
 		Buttons->AddSlot()
@@ -828,9 +928,30 @@ void SRoscAITab::RebuildModels()
 					return FReply::Handled();
 				}))
 		];
+		Buttons->AddSlot()
+		[
+			MakeButton(LOCTEXT("ModelTrainingDataButton", "Training Data"),
+				LOCTEXT("ModelTrainingDataToolTip", "Training data: open the page beside the user guide that lists the data each model learnt from, who owns it and on what terms."),
+				FOnClicked::CreateLambda([]
+				{
+					FPlatformProcess::LaunchFileInDefaultExternalApplication(*FRoscEditorModule::GetTrainingDataFile());
+					return FReply::Handled();
+				}))
+		];
 		Add(FRoscStyle::ButtonRowPadding, Buttons);
+		if (NoticeClosedFor == Model.Id)
+		{
+			// Its notice has just closed: the focus goes back to this model's buttons.
+			NoticeFocusTarget = Buttons;
+			NoticeClosedFor.Reset();
+		}
 	}
 
+	if (NoticeFocusTarget.IsValid())
+	{
+		NoticeFocus.RowsRebuilt({ NoticeFocusTarget.ToSharedRef() }, nullptr);
+		NoticeFocusTarget.Reset();
+	}
 	if (!ModelsKey.DownloadError.IsEmpty())
 	{
 		Add(FRoscStyle::SectionPadding, MakeStatusLine(AIStopsIcon, FText::FromString(ModelsKey.DownloadError)));

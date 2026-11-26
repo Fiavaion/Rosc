@@ -23,6 +23,11 @@ FString FRoscEditorModule::GetUserGuideFile()
 	return FPaths::ConvertRelativePathToFull(IPluginManager::Get().FindPlugin(TEXT("Rosc"))->GetBaseDir() / TEXT("Docs/UserGuide.html"));
 }
 
+FString FRoscEditorModule::GetTrainingDataFile()
+{
+	return FPaths::GetPath(GetUserGuideFile()) / TEXT("TrainingData.html");
+}
+
 void FRoscEditorModule::StartupModule()
 {
 	FRoscStyle::Register();

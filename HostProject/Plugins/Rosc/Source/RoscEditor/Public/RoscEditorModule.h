@@ -18,6 +18,9 @@ public:
 	/** The user guide that ships with the plugin: a page a web browser opens. */
 	ROSCEDITOR_API static FString GetUserGuideFile();
 
+	/** The page beside the user guide that lists the data each AI model learnt from, and its owners' terms. */
+	ROSCEDITOR_API static FString GetTrainingDataFile();
+
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 

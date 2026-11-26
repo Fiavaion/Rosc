@@ -101,6 +101,7 @@ Rosc::AITests::FSettingsBefore::FSettingsBefore()
 	AssistantModel = Settings->AssistantModel;
 	AssistantUrl = Settings->AssistantUrl;
 	ConsentedHosts = Settings->ConsentedHosts;
+	AcceptedModelNotices = Settings->AcceptedModelNotices;
 }
 
 void Rosc::AITests::FSettingsBefore::PutBack() const
@@ -114,6 +115,7 @@ void Rosc::AITests::FSettingsBefore::PutBack() const
 	Settings->AssistantModel = AssistantModel;
 	Settings->AssistantUrl = AssistantUrl;
 	Settings->ConsentedHosts = ConsentedHosts;
+	Settings->AcceptedModelNotices = AcceptedModelNotices;
 	// Giving and withdrawing consent saves the settings, so what was there is saved again.
 	Settings->SaveConfig();
 }

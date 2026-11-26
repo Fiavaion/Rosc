@@ -4,6 +4,7 @@
 #include "RoscAIConsent.h"
 
 #include "GenericPlatform/GenericPlatformHttp.h"
+#include "RoscAIModels.h"
 #include "RoscAISettings.h"
 
 FString Rosc::AIConsent::GetHost(const FString& Url)
@@ -36,6 +37,32 @@ void Rosc::AIConsent::Withdraw(const FString& Host)
 	URoscAISettings* Settings = GetMutableDefault<URoscAISettings>();
 	if (Settings->ConsentedHosts.Remove(Host) > 0)
 	{
+		Settings->SaveConfig();
+	}
+}
+
+namespace
+{
+	FString GetModelNoticeEntry(const FRoscAIModel& Model)
+	{
+		return Model.Id + TEXT(":") + Model.GetNoticeSignature();
+	}
+}
+
+bool Rosc::AIConsent::IsModelNoticeAgreed(const FRoscAIModel& Model)
+{
+	return GetDefault<URoscAISettings>()->AcceptedModelNotices.Contains(GetModelNoticeEntry(Model));
+}
+
+void Rosc::AIConsent::AgreeToModelNotice(const FRoscAIModel& Model)
+{
+	URoscAISettings* Settings = GetMutableDefault<URoscAISettings>();
+	const FString Entry = GetModelNoticeEntry(Model);
+	if (!Settings->AcceptedModelNotices.Contains(Entry))
+	{
+		// An agreement to the model's older notice is replaced, not kept beside it.
+		Settings->AcceptedModelNotices.RemoveAll([&Model](const FString& Each) { return Each.StartsWith(Model.Id + TEXT(":")); });
+		Settings->AcceptedModelNotices.Add(Entry);
 		Settings->SaveConfig();
 	}
 }

@@ -604,9 +604,28 @@ bool FRoscAIModelDownloadTest::RunTest(const FString& Parameters)
 	State->Model.SizeBytes = Content.Num();
 	State->Model.Sha256 = Rosc::AIModelStore::HashFile(Reference);
 	State->Model.Url = State->Server.GetUrl() / TEXT("models/tampered.onnx");
+	State->Model.Licence = TEXT("MIT");
+	State->Model.LicenceHolder = TEXT("Test Maker");
+	State->Model.TrainingData.Add({ TEXT("Test Set"), TEXT("Test Owner"), TEXT("Research only"), FString(), ERoscCommercialUse::No });
 
 	URoscAISubsystem* Jobs = GEditor->GetEditorSubsystem<URoscAISubsystem>();
 	TestFalse(TEXT("The model is not there to begin with"), Rosc::AIModelStore::IsInstalled(State->Model));
+
+	// No download without the notice agreed to, as it reads now (ADR-012).
+	GetMutableDefault<URoscAISettings>()->AcceptedModelNotices.Reset();
+	TestFalse(TEXT("A model whose notice has not been agreed to is not downloaded"), Jobs->DownloadModel(State->Model));
+	TestEqual(TEXT("And the reason is given in words"), *Jobs->GetDownloadError().ToString(),
+		TEXT("Test Model is not downloaded: agree to what the AI tab says of its licence and training data first."));
+	FRoscAIModel Older = State->Model;
+	Older.TrainingData[0].Terms = TEXT("Free for any use");
+	Rosc::AIConsent::AgreeToModelNotice(Older);
+	TestTrue(TEXT("Agreeing is recorded"), Rosc::AIConsent::IsModelNoticeAgreed(Older));
+	TestFalse(TEXT("An agreement to an older notice is not an agreement to this one"), Rosc::AIConsent::IsModelNoticeAgreed(State->Model));
+	TestFalse(TEXT("So it is still not downloaded"), Jobs->DownloadModel(State->Model));
+	Rosc::AIConsent::AgreeToModelNotice(State->Model);
+	TestTrue(TEXT("Once agreed to, it is"), Rosc::AIConsent::IsModelNoticeAgreed(State->Model));
+	TestEqual(TEXT("And the older agreement is replaced, not kept beside it"), GetDefault<URoscAISettings>()->AcceptedModelNotices.Num(), 1);
+
 	TestTrue(TEXT("A download starts"), Jobs->DownloadModel(State->Model));
 	TestFalse(TEXT("A second does not start while it runs"), Jobs->DownloadModel(State->Model));
 	TestTrue(TEXT("The model being downloaded is named"), Jobs->GetDownloadingModel() != nullptr && Jobs->GetDownloadingModel()->Id == State->Model.Id);

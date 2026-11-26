@@ -25,6 +25,7 @@
 #include "TextureResource.h"
 #include "Tests/RoscDeliverChoicesBefore.h"
 #include "Tests/RoscRenderedFiles.h"
+#include "Tests/RoscWidgetTestUtils.h"
 #include "UObject/StrongObjectPtr.h"
 #include "RoscAISettings.h"
 #include "RoscAISubsystem.h"
@@ -185,7 +186,9 @@ namespace
 			Backend = Settings->Backend;
 			ServerUrl = Settings->ServerUrl;
 			AssistantKey = Settings->AssistantKey;
+			ModelsFolder = Settings->ModelsFolder.Path;
 			ConsentedHosts = Settings->ConsentedHosts;
+			AcceptedModelNotices = Settings->AcceptedModelNotices;
 		}
 
 		void PutBack() const
@@ -194,7 +197,9 @@ namespace
 			Settings->Backend = Backend;
 			Settings->ServerUrl = ServerUrl;
 			Settings->AssistantKey = AssistantKey;
+			Settings->ModelsFolder.Path = ModelsFolder;
 			Settings->ConsentedHosts = ConsentedHosts;
+			Settings->AcceptedModelNotices = AcceptedModelNotices;
 			// Should anything have saved the settings while the values of the test were in them.
 			Settings->SaveConfig();
 		}
@@ -202,7 +207,9 @@ namespace
 		ERoscAIBackend Backend;
 		FString ServerUrl;
 		FString AssistantKey;
+		FString ModelsFolder;
 		TArray<FString> ConsentedHosts;
+		TArray<FString> AcceptedModelNotices;
 	};
 }
 
@@ -837,6 +844,23 @@ bool FRoscAITabStatesVisualTest::RunTest(const FString& Parameters)
 		NoKeySettings->Backend = ERoscAIBackend::Helper;
 		NoKeySettings->AssistantKey.Reset();
 		QueuePanelCaptures(*this, Rosc::CameraEditing::SpawnCamera(World, FTransform::Identity), TEXT("ai-tab-no-key"), ERoscDepartment::AI, 1100.0f, NarrowOnly);
+
+		// The notice before a model's first download, for the model with the longest one: no model
+		// downloaded yet, in a models folder of the test's own, and no notice agreed to.
+		URoscAISettings* NoticeSettings = GetMutableDefault<URoscAISettings>();
+		NoticeSettings->ModelsFolder.Path = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Rosc") / TEXT("VisualTests") / TEXT("NoModels"));
+		NoticeSettings->AcceptedModelNotices.Reset();
+		QueuePanelCaptures(*this, Rosc::CameraEditing::SpawnCamera(World, FTransform::Identity), TEXT("ai-tab-model-notice"), ERoscDepartment::AI, 2000.0f, AllSizes, [this](SRoscPanel& Panel)
+		{
+			const TSharedRef<SRoscAITab> Tab = Panel.GetAITab();
+			Tab->Tick(FGeometry(), 1.0, 0.0f);
+			TArray<TSharedRef<SButton>> Downloads;
+			Rosc::WidgetTests::FindButtonsShowing(Tab, TEXT("Download"), Downloads);
+			if (TestEqual(TEXT("Each model has a Download button"), Downloads.Num(), 3))
+			{
+				Downloads.Last()->SimulateClick();
+			}
+		});
 		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([SettingsBefore]
 		{
 			SettingsBefore.PutBack();

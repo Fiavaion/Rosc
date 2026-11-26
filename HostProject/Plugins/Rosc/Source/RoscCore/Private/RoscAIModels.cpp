@@ -7,6 +7,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/SecureHash.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "RoscJsonEntry.h"
@@ -71,6 +72,18 @@ const FRoscAIModelList& FRoscAIModelList::Get()
 	return List;
 }
 
+FString FRoscAIModel::GetNoticeSignature() const
+{
+	FString Notice = FString::Join(TArray<FString>{ Licence, LicenceHolder, LicencePage, LicenceNote }, TEXT("\n"));
+	for (const FRoscAITrainingSet& Set : TrainingData)
+	{
+		Notice += FString::Printf(TEXT("\n%s\t%s\t%s\t%s\t%d"), *Set.Name, *Set.Owner, *Set.Terms, *Set.TermsPage, static_cast<int32>(Set.Commercial));
+	}
+	// As UTF-8, so the owners' names are hashed letter for letter.
+	const FTCHARToUTF8 Utf8(*Notice);
+	return FMD5::HashBytes(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
+}
+
 bool FRoscAIModelList::AddFromJson(const FString& JsonText, const FString& SourceName, TArray<FString>& OutErrors)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -93,7 +106,45 @@ bool FRoscAIModelList::AddFromJson(const FString& JsonText, const FString& Sourc
 		Model.Id = ModelReader.RequiredString(TEXT("id"));
 		Model.Name = ModelReader.RequiredString(TEXT("name"));
 		Model.Licence = ModelReader.RequiredString(TEXT("licence"));
+		Model.LicenceHolder = ModelReader.RequiredString(TEXT("licenceHolder"));
 		Model.LicencePage = ModelReader.RequiredString(TEXT("licencePage"));
+		Model.LicenceNote = ModelReader.OptionalString(TEXT("licenceNote"));
+
+		const TArray<TSharedPtr<FJsonObject>> SetObjects = ModelReader.ObjectArray(TEXT("trainingData"), true);
+		for (int32 SetIndex = 0; SetIndex < SetObjects.Num(); ++SetIndex)
+		{
+			FRoscJsonEntryReader SetReader(SetObjects[SetIndex], FString::Printf(TEXT("%s trainingData[%d]"), *ModelPath, SetIndex), OutErrors);
+			FRoscAITrainingSet& Set = Model.TrainingData.AddDefaulted_GetRef();
+			Set.Name = SetReader.RequiredString(TEXT("name"));
+			Set.Owner = SetReader.RequiredString(TEXT("owner"));
+			Set.Terms = SetReader.RequiredString(TEXT("terms"));
+			Set.TermsPage = SetReader.OptionalString(TEXT("termsPage"));
+			if (!Set.TermsPage.IsEmpty() && !Set.TermsPage.StartsWith(TEXT("https://")))
+			{
+				SetReader.Fail(TEXT("termsPage"), TEXT("must start with https://"));
+			}
+			const FString Commercial = SetReader.RequiredString(TEXT("commercial"));
+			if (Commercial == TEXT("yes"))
+			{
+				Set.Commercial = ERoscCommercialUse::Yes;
+			}
+			else if (Commercial == TEXT("no"))
+			{
+				Set.Commercial = ERoscCommercialUse::No;
+			}
+			else if (Commercial == TEXT("unclear"))
+			{
+				Set.Commercial = ERoscCommercialUse::Unclear;
+			}
+			else if (!Commercial.IsEmpty())
+			{
+				SetReader.Fail(TEXT("commercial"), TEXT("must be yes, no or unclear"));
+			}
+			if (!SetReader.IsValid())
+			{
+				ModelReader.MarkInvalid();
+			}
+		}
 		Model.Url = ModelReader.RequiredString(TEXT("url"));
 		Model.FileName = ModelReader.RequiredString(TEXT("file"));
 		Model.SizeBytes = static_cast<int64>(ModelReader.RequiredPositive(TEXT("bytes")));

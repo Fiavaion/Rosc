@@ -179,6 +179,11 @@ bool URoscAISubsystem::DownloadModel(const FRoscAIModel& Model)
 	{
 		return false;
 	}
+	if (!Rosc::AIConsent::IsModelNoticeAgreed(Model))
+	{
+		DownloadError = FText::Format(LOCTEXT("ModelNoticeNotAgreed", "{0} is not downloaded: agree to what the AI tab says of its licence and training data first."), FText::FromString(Model.Name));
+		return false;
+	}
 	DownloadError = FText::GetEmpty();
 	Download = FRoscAIModelDownload::Start(Model, FRoscAIModelDownload::FOnDone::CreateWeakLambda(this, [this](bool bSuccess, const FText& Error)
 	{

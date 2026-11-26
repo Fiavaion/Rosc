@@ -5,6 +5,7 @@
 
 #include "Input/Reply.h"
 #include "RoscAISubsystem.h"
+#include "RoscWidgets.h"
 #include "UObject/WeakObjectPtr.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/SCompoundWidget.h"
@@ -78,6 +79,8 @@ private:
 		TArray<bool> Installed;
 		FString DownloadingId;
 		FString DownloadError;
+		/** The model whose notice before download is open (ADR-012). */
+		FString NoticeOpenId;
 
 		bool operator==(const FModelsKey& Other) const = default;
 	};
@@ -114,6 +117,14 @@ private:
 	FPicturesKey PicturesKey;
 	FModelsKey ModelsKey;
 	double LastRefreshTime = 0.0;
+
+	/** The model whose notice before download is open, by id: one at a time. */
+	FString NoticeOpenFor;
+	/** The model whose notice has just closed, whose buttons take the focus back. */
+	FString NoticeClosedFor;
+	/** Takes the keyboard focus into the notice when it opens, and back to the model's buttons when it closes. */
+	Rosc::Widgets::FRowFocus NoticeFocus;
+	TSharedPtr<SWidget> NoticeFocusTarget;
 
 	/** The shot as the user describes it. */
 	FText Words;

@@ -70,6 +70,13 @@ public:
 	UPROPERTY(config)
 	TArray<FString> ConsentedHosts;
 
+	/**
+	 * The models whose notice before download the user has agreed to, each as its id and the
+	 * notice's fingerprint (ADR-012). Changed from the AI tab (see Rosc::AIConsent), so it is not shown here.
+	 */
+	UPROPERTY(config)
+	TArray<FString> AcceptedModelNotices;
+
 	virtual FName GetContainerName() const override;
 	virtual FName GetCategoryName() const override;
 };

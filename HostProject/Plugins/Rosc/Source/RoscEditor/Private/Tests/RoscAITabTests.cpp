@@ -8,12 +8,18 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "SRoscAITab.h"
+#include "RoscAIConsent.h"
+#include "RoscAIModels.h"
+#include "RoscAISettings.h"
+#include "RoscAISubsystem.h"
 #include "RoscCameraEditing.h"
 #include "RoscCameraTarget.h"
+#include "RoscEditorModule.h"
 #include "RoscGripEditing.h"
 #include "RoscRig.h"
 #include "RoscShotPlan.h"
 #include "RoscWidgets.h"
+#include "Tests/RoscWidgetTestUtils.h"
 #include "Widgets/Text/STextBlock.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -88,6 +94,109 @@ bool FRoscAITabTest::RunTest(const FString& Parameters)
 	const FString OnDolly = ReadAITabText(*Tab, 2.0);
 	TestTrue(TEXT("The plan is still shown"), OnDolly.Contains(TEXT("A slow push forward.")));
 	TestFalse(TEXT("On a dolly the push forward is part of the move, and the warning has gone"), OnDolly.Contains(LeftOut));
+	return true;
+}
+
+/**
+ * The notice before a model's first download (ADR-012): Download opens it in the model's row and
+ * downloads nothing, Not Now closes it, and Agree and Download records the agreement and starts.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscAIModelNoticeTest, "Rosc.Editor.AIModelNotice", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FRoscAIModelNoticeTest::RunTest(const FString& Parameters)
+{
+	using Rosc::WidgetTests::FindButtonShowing;
+
+	// An empty models folder of the test's own, so no model is downloaded yet, and no agreement.
+	URoscAISettings* Settings = GetMutableDefault<URoscAISettings>();
+	const FString FolderBefore = Settings->ModelsFolder.Path;
+	const TArray<FString> NoticesBefore = Settings->AcceptedModelNotices;
+	const FString Folder = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Rosc") / TEXT("AITabTests") / TEXT("Models"));
+	IFileManager::Get().DeleteDirectory(*Folder, false, true);
+	Settings->ModelsFolder.Path = Folder;
+	Settings->AcceptedModelNotices.Reset();
+	URoscAISubsystem* AI = GEditor->GetEditorSubsystem<URoscAISubsystem>();
+	ON_SCOPE_EXIT
+	{
+		AI->CancelDownload();
+		Settings->ModelsFolder.Path = FolderBefore;
+		Settings->AcceptedModelNotices = NoticesBefore;
+		Settings->SaveConfig();
+		IFileManager::Get().DeleteDirectory(*Folder, false, true);
+	};
+
+	const FRoscAIModel* Depth = FRoscAIModelList::Get().FindForTask(ERoscAITask::Depth);
+	if (!TestNotNull(TEXT("The shipped list has a depth model"), Depth))
+	{
+		return false;
+	}
+	const TSharedRef<FRoscCameraTarget> Target = MakeShared<FRoscCameraTarget>();
+	const TSharedRef<SRoscAITab> Tab = SNew(SRoscAITab, Target);
+	const TCHAR* Heading = TEXT("Before you download Depth Anything V2 Small");
+
+	FString Text = ReadAITabText(*Tab, 1.0);
+	TestFalse(TEXT("No notice is open to begin with"), Text.Contains(Heading));
+	TestNotNull(TEXT("Each model has a Training Data button"), FindButtonShowing(Tab, TEXT("Training Data")).Get());
+	TSharedPtr<SButton> Download = FindButtonShowing(Tab, TEXT("Download"));
+	if (!TestNotNull(TEXT("The depth model has a Download button"), Download.Get()))
+	{
+		return false;
+	}
+
+	Download->SimulateClick();
+	Text = ReadAITabText(*Tab, 2.0);
+	TestTrue(TEXT("Download opens the notice in the model's row"), Text.Contains(Heading));
+	TestTrue(TEXT("Which nothing is downloaded before"), AI->GetDownloadingModel() == nullptr);
+	TestTrue(TEXT("It names who holds the licence"), Text.Contains(TEXT("held by The Depth Anything authors")));
+	TestTrue(TEXT("It names the non-commercial data with its owner"), Text.Contains(TEXT("Virtual KITTI 2 from Naver Corporation")));
+	TestTrue(TEXT("And counts the sets whose terms do not say"), Text.Contains(TEXT("For 3 sets the terms do not say")));
+	TestTrue(TEXT("And gives the caution"), Text.Contains(TEXT("Whether those terms reach what you make with the model is not settled.")));
+	TestFalse(TEXT("A set whose owner allows commercial use is not among them"), Text.Contains(TEXT("TartanAir from")));
+	Download = FindButtonShowing(Tab, TEXT("Download"));
+	TestTrue(TEXT("While the notice is open, Download waits for it"), Download.IsValid() && !Download->IsEnabled());
+
+	const TSharedPtr<SButton> NotNow = FindButtonShowing(Tab, TEXT("Not Now"));
+	if (!TestNotNull(TEXT("The notice has Not Now"), NotNow.Get()))
+	{
+		return false;
+	}
+	NotNow->SimulateClick();
+	Text = ReadAITabText(*Tab, 3.0);
+	TestFalse(TEXT("Not Now closes the notice"), Text.Contains(Heading));
+	TestFalse(TEXT("And agrees to nothing"), Rosc::AIConsent::IsModelNoticeAgreed(*Depth));
+	TestTrue(TEXT("And downloads nothing"), AI->GetDownloadingModel() == nullptr);
+
+	FindButtonShowing(Tab, TEXT("Download"))->SimulateClick();
+	ReadAITabText(*Tab, 4.0);
+	const TSharedPtr<SButton> Agree = FindButtonShowing(Tab, TEXT("Agree and Download"));
+	if (!TestNotNull(TEXT("The notice opens again, with Agree and Download"), Agree.Get()))
+	{
+		return false;
+	}
+	Agree->SimulateClick();
+	TestTrue(TEXT("Agree and Download records the agreement"), Rosc::AIConsent::IsModelNoticeAgreed(*Depth));
+	const FRoscAIModel* Downloading = AI->GetDownloadingModel();
+	TestTrue(TEXT("And starts the download"), Downloading != nullptr && Downloading->Id == Depth->Id);
+	// The test downloads nothing in earnest.
+	AI->CancelDownload();
+	Text = ReadAITabText(*Tab, 5.0);
+	TestFalse(TEXT("And the notice has closed"), Text.Contains(Heading));
+
+	// Training Data opens a page beside the user guide, which names every set of every model and its owner.
+	FString Page;
+	TestTrue(TEXT("The page Training Data opens is in the plugin"), FFileHelper::LoadFileToString(Page, *FRoscEditorModule::GetTrainingDataFile()));
+	for (const FRoscAIModel& Model : FRoscAIModelList::Get().GetModels())
+	{
+		TestTrue(*FString::Printf(TEXT("The page says who holds the licence of %s"), *Model.Name), Page.Contains(Model.LicenceHolder));
+		for (const FRoscAITrainingSet& Set : Model.TrainingData)
+		{
+			TestTrue(*FString::Printf(TEXT("The page names %s, which %s learnt from, and its owner"), *Set.Name, *Model.Name),
+				Page.Contains(Set.Name) && Page.Contains(Set.Owner));
+		}
+	}
+	FString Guide;
+	FFileHelper::LoadFileToString(Guide, *FRoscEditorModule::GetUserGuideFile());
+	TestTrue(TEXT("The user guide links to it"), Guide.Contains(TEXT("href=\"TrainingData.html\"")));
 	return true;
 }
 

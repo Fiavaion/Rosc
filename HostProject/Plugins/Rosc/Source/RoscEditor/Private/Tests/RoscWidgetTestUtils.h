@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Widgets/Input/SButton.h"
 #include "Widgets/SWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -32,6 +33,46 @@ namespace Rosc::WidgetTests
 			}
 		}
 		return false;
+	}
+
+	/** The words a widget shows, its lines of text one after the other. */
+	inline FString GetShownText(const TSharedRef<SWidget>& Widget)
+	{
+		FString Text;
+		if (Widget->GetType() == FName("STextBlock"))
+		{
+			Text = StaticCastSharedRef<STextBlock>(Widget)->GetText().ToString();
+		}
+		FChildren* Children = Widget->GetAllChildren();
+		for (int32 Index = 0; Index < Children->Num(); ++Index)
+		{
+			const FString ChildText = GetShownText(Children->GetChildAt(Index));
+			Text += (Text.IsEmpty() || ChildText.IsEmpty()) ? ChildText : TEXT("\n") + ChildText;
+		}
+		return Text;
+	}
+
+	/** Every button under a widget that shows the label, in the order they are laid out. */
+	inline void FindButtonsShowing(const TSharedRef<SWidget>& Widget, const TCHAR* Label, TArray<TSharedRef<SButton>>& OutButtons)
+	{
+		if (Widget->GetType() == FName("SButton") && GetShownText(Widget) == Label)
+		{
+			OutButtons.Add(StaticCastSharedRef<SButton>(Widget));
+			return;
+		}
+		FChildren* Children = Widget->GetAllChildren();
+		for (int32 Index = 0; Index < Children->Num(); ++Index)
+		{
+			FindButtonsShowing(Children->GetChildAt(Index), Label, OutButtons);
+		}
+	}
+
+	/** The first button under a widget that shows the label, or none. */
+	inline TSharedPtr<SButton> FindButtonShowing(const TSharedRef<SWidget>& Widget, const TCHAR* Label)
+	{
+		TArray<TSharedRef<SButton>> Buttons;
+		FindButtonsShowing(Widget, Label, Buttons);
+		return Buttons.IsEmpty() ? nullptr : TSharedPtr<SButton>(Buttons[0]);
 	}
 }
 

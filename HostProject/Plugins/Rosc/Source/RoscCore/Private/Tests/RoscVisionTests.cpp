@@ -109,6 +109,14 @@ bool FRoscAIModelListTest::RunTest(const FString& Parameters)
 		{
 			TestTrue(TEXT("Its licence allows commercial use"), Model->Licence == TEXT("Apache-2.0") || Model->Licence == TEXT("MIT"));
 			TestTrue(TEXT("Its licence page is named"), Model->LicencePage.StartsWith(TEXT("https://")));
+			TestFalse(TEXT("Who holds its licence is named"), Model->LicenceHolder.IsEmpty());
+			TestTrue(TEXT("The data it learnt from is listed"), Model->TrainingData.Num() > 0);
+			for (const FRoscAITrainingSet& Set : Model->TrainingData)
+			{
+				TestFalse(*FString::Printf(TEXT("The owner of %s is named"), *Set.Name), Set.Owner.IsEmpty());
+				TestFalse(*FString::Printf(TEXT("The terms of %s are given"), *Set.Name), Set.Terms.IsEmpty());
+			}
+			TestEqual(TEXT("Its notice has a fingerprint"), Model->GetNoticeSignature().Len(), 32);
 			TestEqual(TEXT("Its hash is a SHA-256"), Model->Sha256.Len(), 64);
 		}
 	}
@@ -135,8 +143,15 @@ bool FRoscAIModelListTest::RunTest(const FString& Parameters)
 		  "url": "https://example.com/b.onnx", "file": "b.onnx", "bytes": 10,
 		  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
 		  "input": { "name": "in", "width": 64, "height": 64, "mean": [0, 0, 0], "std": [1, 1, 1] }, "output": "out" },
-		{ "id": "c", "task": "matte", "name": "C", "licence": "MIT", "licencePage": "https://example.com/c",
+		{ "id": "c", "task": "matte", "name": "C", "licence": "MIT", "licenceHolder": "Maker C", "licencePage": "https://example.com/c",
+		  "trainingData": [ { "name": "Set C", "owner": "Owner C", "terms": "CC BY 4.0", "termsPage": "https://example.com/terms", "commercial": "yes" },
+		                    { "name": "Set D", "owner": "Owner D", "terms": "Research only", "commercial": "no" } ],
 		  "url": "https://example.com/c.onnx", "file": "c.onnx", "bytes": 10,
+		  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+		  "input": { "name": "in", "width": 64, "height": 64, "mean": [0, 0, 0], "std": [1, 1, 1] }, "output": "out" },
+		{ "id": "d", "task": "depth", "name": "D", "licence": "MIT", "licenceHolder": "Maker D", "licencePage": "https://example.com/d",
+		  "trainingData": [ { "name": "Set E", "owner": "", "terms": "CC BY 4.0", "termsPage": "http://example.com/terms", "commercial": "maybe" } ],
+		  "url": "https://example.com/d.onnx", "file": "d.onnx", "bytes": 10,
 		  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
 		  "input": { "name": "in", "width": 64, "height": 64, "mean": [0, 0, 0], "std": [1, 1, 1] }, "output": "out" } ] })");
 	FRoscAIModelList List;
@@ -149,6 +164,30 @@ bool FRoscAIModelListTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("A short hash is refused"), HasError(TEXT("test.json models[0]: \"sha256\" must be 64 hexadecimal digits")));
 	TestTrue(TEXT("A deviation of zero is refused"), HasError(TEXT("test.json models[0] input: \"std\" must be three numbers greater than zero")));
 	TestTrue(TEXT("An unknown task is refused"), HasError(TEXT("test.json models[1]: \"task\" must be depth, matte or focal")));
+	TestTrue(TEXT("A model needs who holds its licence"), HasError(TEXT("test.json models[0]: \"licenceHolder\" is required")));
+	TestTrue(TEXT("A model needs the data it learnt from"), HasError(TEXT("test.json models[0]: \"trainingData\" is required and must contain at least one entry")));
+	TestTrue(TEXT("A dataset needs its owner"), HasError(TEXT("test.json models[3] trainingData[0]: \"owner\" is required")));
+	TestTrue(TEXT("A dataset's terms page is https"), HasError(TEXT("test.json models[3] trainingData[0]: \"termsPage\" must start with https://")));
+	TestTrue(TEXT("Commercial use is yes, no or unclear"), HasError(TEXT("test.json models[3] trainingData[0]: \"commercial\" must be yes, no or unclear")));
+
+	if (List.GetModels().Num() == 1)
+	{
+		const FRoscAIModel& Kept = List.GetModels()[0];
+		TestEqual(TEXT("The holder is read"), *Kept.LicenceHolder, TEXT("Maker C"));
+		TestEqual(TEXT("Each dataset is read"), Kept.TrainingData.Num(), 2);
+		TestTrue(TEXT("With whether its owner allows commercial use"), Kept.TrainingData.Num() == 2
+			&& Kept.TrainingData[0].Commercial == ERoscCommercialUse::Yes && Kept.TrainingData[1].Commercial == ERoscCommercialUse::No);
+
+		// The fingerprint follows what the notice says, and nothing else.
+		FRoscAIModel Changed = Kept;
+		Changed.Url = TEXT("https://example.com/elsewhere.onnx");
+		TestEqual(TEXT("A new address leaves the notice as it was"), Changed.GetNoticeSignature(), Kept.GetNoticeSignature());
+		Changed.TrainingData[1].Terms = TEXT("Non-commercial");
+		TestNotEqual(TEXT("New terms for a dataset change it"), Changed.GetNoticeSignature(), Kept.GetNoticeSignature());
+		Changed = Kept;
+		Changed.LicenceHolder = TEXT("Someone else");
+		TestNotEqual(TEXT("A new holder changes it"), Changed.GetNoticeSignature(), Kept.GetNoticeSignature());
+	}
 	return true;
 }
 

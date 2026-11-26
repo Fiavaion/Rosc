@@ -50,6 +50,7 @@ namespace Rosc::AITests
 		FString AssistantModel;
 		FString AssistantUrl;
 		TArray<FString> ConsentedHosts;
+		TArray<FString> AcceptedModelNotices;
 	};
 
 	/**

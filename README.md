@@ -46,7 +46,9 @@ The sample stage, a shallow-focus shot to try things on, is in the plugin's cont
 The AI tab is optional. Nothing in it runs until you choose to use it.
 
 - Models are not shipped with Rosc. Each one is downloaded from its makers' page when you press
-  Download, under its makers' licence. The models offered are under MIT or Apache-2.0.
+  Download, under its makers' licence. The models offered are under MIT or Apache-2.0. Some of
+  the data they learnt from is published by its owners for non-commercial use only; before the
+  first download the AI tab names it and its owners, and asks you to agree.
 - The shot assistant uses the Claude API with your own key, billed to you. Nothing leaves your
   machine until you have entered a key and agreed in the AI tab.
 

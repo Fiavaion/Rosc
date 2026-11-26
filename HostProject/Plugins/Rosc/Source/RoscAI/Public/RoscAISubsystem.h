@@ -102,8 +102,8 @@ public:
 
 	/**
 	 * Downloads a model's file into the models folder; one download at a time. The user asks
-	 * for this, having seen the model's licence.
-	 * @return false when another download is running.
+	 * for this, having agreed to the model's notice (Rosc::AIConsent::IsModelNoticeAgreed).
+	 * @return false when another download is running, or the notice has not been agreed to.
 	 */
 	bool DownloadModel(const FRoscAIModel& Model);
 	/** The model being downloaded, or null. */
