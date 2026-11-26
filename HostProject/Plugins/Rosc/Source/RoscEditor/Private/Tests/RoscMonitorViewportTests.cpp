@@ -122,22 +122,32 @@ namespace
 			return Total > 0 ? static_cast<float>(Matching) / Total : 0.0f;
 		}
 
-		/** Mean signal, in percent, of the middle of where the histogram is drawn: dark when the scope's panel is there. */
-		float GetHistogramAreaSignal() const
+		/**
+		 * The share of the middle of where the histogram is drawn that looks like the scope: its bars
+		 * (grey 0.85), its quarter lines (grey 0.42) or its panel (the picture at 0.15, so no channel
+		 * above 0.16). The bars' height follows the picture, so a mean would follow it too.
+		 */
+		float GetHistogramPanelShare() const
 		{
 			const FIntRect Area = Rosc::Monitor::GetScopeLayout(Size, true, true).Histogram;
 			const FIntRect Middle(Area.Min + Area.Size() / 4, Area.Max - Area.Size() / 4);
-			double Sum = 0.0;
+			const auto IsGrey = [](const FColor& Pixel, int32 Level)
+			{
+				return FMath::Abs(Pixel.R - Level) <= 6 && FMath::Abs(Pixel.G - Level) <= 6 && FMath::Abs(Pixel.B - Level) <= 6;
+			};
+			int32 Matching = 0;
 			int32 Total = 0;
 			for (int32 Y = Middle.Min.Y; Y < Middle.Max.Y; ++Y)
 			{
 				for (int32 X = Middle.Min.X; X < Middle.Max.X; ++X)
 				{
-					Sum += Rosc::Monitor::GetSignalPercent(At(X, Y));
+					const FColor& Pixel = At(X, Y);
+					const bool bPanel = FMath::Max3(Pixel.R, Pixel.G, Pixel.B) <= 41;
+					Matching += (bPanel || IsGrey(Pixel, 107) || IsGrey(Pixel, 217)) ? 1 : 0;
 					++Total;
 				}
 			}
-			return Total > 0 ? static_cast<float>(Sum / Total) : 0.0f;
+			return Total > 0 ? static_cast<float>(Matching) / Total : 0.0f;
 		}
 	};
 }
@@ -217,11 +227,12 @@ bool FRoscMonitorViewportTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	AddInfo(FString::Printf(TEXT("Level viewport %d x %d: false colour share %.2f plain, %.2f with tools; histogram area signal %.1f %% plain, %.1f %% with tools"),
-		ToolsViewport.Size.X, ToolsViewport.Size.Y, PlainViewport.GetFalseColourShare(), ToolsViewport.GetFalseColourShare(), PlainViewport.GetHistogramAreaSignal(), ToolsViewport.GetHistogramAreaSignal()));
+	AddInfo(FString::Printf(TEXT("Level viewport %d x %d: false colour share %.2f plain, %.2f with tools; histogram area like the scope %.2f plain, %.2f with tools"),
+		ToolsViewport.Size.X, ToolsViewport.Size.Y, PlainViewport.GetFalseColourShare(), ToolsViewport.GetFalseColourShare(), PlainViewport.GetHistogramPanelShare(), ToolsViewport.GetHistogramPanelShare()));
 	TestTrue(TEXT("Plain viewport: the sky is in colour"), PlainViewport.GetFalseColourShare() < 0.5f);
 	TestTrue(TEXT("Viewport with false colour: the picture is all bands and greys"), ToolsViewport.GetFalseColourShare() > 0.95f);
-	TestTrue(TEXT("Viewport with scopes: the histogram's dark panel covers the picture"), ToolsViewport.GetHistogramAreaSignal() < 0.5f * PlainViewport.GetHistogramAreaSignal());
+	TestTrue(TEXT("Plain viewport: the picture where the histogram goes does not look like it"), PlainViewport.GetHistogramPanelShare() < 0.5f);
+	TestTrue(TEXT("Viewport with scopes: the histogram's panel covers the picture"), ToolsViewport.GetHistogramPanelShare() > 0.95f);
 
 	// A scene capture from the same place while the tools are on: the same picture as with the tools off.
 	ASceneCapture2D* CaptureActor = ViewportClient->GetWorld()->SpawnActor<ASceneCapture2D>(ViewportClient->GetViewLocation(), ViewportClient->GetViewRotation());
@@ -255,11 +266,11 @@ bool FRoscMonitorViewportTest::RunTest(const FString& Parameters)
 	};
 	const FMonitorPicture PlainCapture = ShootCapture(FRoscMonitorSettings());
 	const FMonitorPicture ToolsCapture = ShootCapture(AllTools);
-	AddInfo(FString::Printf(TEXT("Scene capture: false colour share %.2f plain, %.2f with tools on; histogram area signal %.1f %% plain, %.1f %% with tools on"),
-		PlainCapture.GetFalseColourShare(), ToolsCapture.GetFalseColourShare(), PlainCapture.GetHistogramAreaSignal(), ToolsCapture.GetHistogramAreaSignal()));
+	AddInfo(FString::Printf(TEXT("Scene capture: false colour share %.2f plain, %.2f with tools on; histogram area like the scope %.2f plain, %.2f with tools on"),
+		PlainCapture.GetFalseColourShare(), ToolsCapture.GetFalseColourShare(), PlainCapture.GetHistogramPanelShare(), ToolsCapture.GetHistogramPanelShare()));
 	TestTrue(TEXT("Scene capture: the sky is in colour"), PlainCapture.GetFalseColourShare() < 0.5f);
 	TestEqual(TEXT("Scene capture with the tools on: no false colour"), ToolsCapture.GetFalseColourShare(), PlainCapture.GetFalseColourShare(), 0.05f);
-	TestEqual(TEXT("Scene capture with the tools on: no histogram panel"), ToolsCapture.GetHistogramAreaSignal(), PlainCapture.GetHistogramAreaSignal(), 0.1f * PlainCapture.GetHistogramAreaSignal());
+	TestEqual(TEXT("Scene capture with the tools on: no histogram panel"), ToolsCapture.GetHistogramPanelShare(), PlainCapture.GetHistogramPanelShare(), 0.05f);
 
 	// Zebras and peaking in the level viewport. A second plain picture shows how much two pictures of the same view differ anyway.
 	const FMonitorPicture PlainAgain = ShootViewport(FRoscMonitorSettings());
