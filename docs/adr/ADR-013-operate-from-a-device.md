@@ -59,6 +59,13 @@ Two findings from the spike:
   this for any VCam component without modifiers. The warning is harmless, and the user guide says so.
 The picture reaching a real iPad or iPhone remains a hand check.
 
+Found at the phase gate: with the plugin on, Movie Render Graph renders log errors from CommonUI
+and Pixel Streaming 2, and a render can lose the shot's camera: the player's view goes back to
+the default pawn, and the frames show the level from there. The delivery test lost the camera in
+both of its runs with the plugin on, the smoke test in one of two. With the plugin off the same tests pass. So the host project keeps the plugin off and
+the Show on Device test runs with it on through `-EnablePlugins=VirtualCamera`, and Deliver's
+preflight tells a user with the plugin on to check the files or turn it off for final renders.
+
 ## Consequences
 - Rosc gains one plugin dependency, Live Link, which is light and release-grade.
 - The VCam picture depends on a Beta engine plugin, behind a choice the user makes, and is never

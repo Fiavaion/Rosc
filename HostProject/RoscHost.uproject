@@ -18,10 +18,6 @@
 		{
 			"Name": "AndroidFileServer",
 			"Enabled": false
-		},
-		{
-			"Name": "VirtualCamera",
-			"Enabled": true
 		}
 	]
 }

@@ -25,6 +25,7 @@
 #include "RoscCameraPackageComponent.h"
 #include "RoscEditorSettings.h"
 #include "RoscHandoff.h"
+#include "RoscOperatingSubsystem.h"
 #include "RoscRenderSubsystem.h"
 #include "RoscSequenceUtils.h"
 #include "RoscShotEditing.h"
@@ -180,6 +181,7 @@ namespace
 		Facts.bSlate = GetDefault<URoscEditorSettings>()->bDeliverSlate;
 		Facts.bWorkingSpaceIsAcesCg = GetPictureColourSpace().Equals(UE::Color::FColorSpace(UE::Color::EColorSpace::ACESAP1));
 		Facts.bAcesCgWaitsForRestart = !Facts.bWorkingSpaceIsAcesCg && GetDefault<URendererSettings>()->WorkingColorSpaceChoice == EWorkingColorSpace::ACESAP1;
+		Facts.bVirtualCameraOn = URoscOperatingSubsystem::IsVirtualCameraOn();
 		for (const FGatheredShot& Shot : Shots)
 		{
 			Facts.Shots.Add(Shot.Preflight);

@@ -212,7 +212,9 @@ enum class ERoscPreflightCheck : uint8
 	/** A review movie's slate falls before the first frame of the sequence, where there is no timecode for it. */
 	SlateBeforeSequenceStart,
 	/** A DCP source is asked for and the sequence does not play at 24 frames a second. */
-	DcpFrameRate
+	DcpFrameRate,
+	/** The engine's Virtual Camera plugin is on, with which a render can lose the shot's camera. */
+	VirtualCameraOn
 };
 
 /** What preflight is told of one shot. */
@@ -242,6 +244,8 @@ struct FRoscPreflightFacts
 	bool bWorkingSpaceIsAcesCg = false;
 	/** ACEScg has been chosen for the project and waits for the editor to be restarted. */
 	bool bAcesCgWaitsForRestart = false;
+	/** The engine's Virtual Camera plugin is on (Show on Device). */
+	bool bVirtualCameraOn = false;
 	TArray<FRoscPreflightShot> Shots;
 };
 

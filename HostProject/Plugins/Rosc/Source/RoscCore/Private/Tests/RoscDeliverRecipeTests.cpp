@@ -354,6 +354,10 @@ bool FRoscDeliverPreflightTest::RunTest(const FString& Parameters)
 		Findings.Num() == 1 && Findings[0].Check == ERoscPreflightCheck::DcpFrameRate && !Findings[0].bStopsRender && Findings[0].Detail.ToString().Contains(TEXT("25")));
 	Cinema.Intent = ERoscDeliverIntent::YouTube;
 	TestTrue(TEXT("The rate does not matter to YouTube"), RunPreflight(Cinema).IsEmpty());
+	Cinema.bVirtualCameraOn = true;
+	Findings = RunPreflight(Cinema);
+	TestTrue(TEXT("With the Virtual Camera plugin on, preflight says to look at the files, and the render can go ahead"),
+		Findings.Num() == 1 && Findings[0].Check == ERoscPreflightCheck::VirtualCameraOn && !Findings[0].bStopsRender && Findings[0].Shot.IsEmpty() && Findings[0].FixLabel.IsEmpty());
 
 	// A second shot with everything wrong that can be wrong with a camera, and a third with none.
 	FRoscPreflightShot& Second = Facts.Shots.AddDefaulted_GetRef();

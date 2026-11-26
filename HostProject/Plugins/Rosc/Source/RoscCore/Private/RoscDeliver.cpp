@@ -633,6 +633,13 @@ TArray<FRoscPreflightFinding> Rosc::Deliver::RunPreflight(const FRoscPreflightFa
 			LOCTEXT("PreflightColourSpaceFix", "Work in ACEScg")));
 	}
 
+	if (Facts.bVirtualCameraOn)
+	{
+		Findings.Add(MakeFinding(ERoscPreflightCheck::VirtualCameraOn, false, FString(),
+			LOCTEXT("PreflightVirtualCamera", "The Virtual Camera plugin is on"),
+			LOCTEXT("PreflightVirtualCameraDetail", "With the engine's Virtual Camera plugin on, a render can lose the shot's camera part of the way through and show the level from somewhere else; Rosc's own render tests have seen it happen. Look at the files when the render is done, or turn the plugin off under Edit > Plugins for final renders. Show on Device needs it only while you operate.")));
+	}
+
 	if (Facts.Intent == ERoscDeliverIntent::DcpSource && Facts.bHasSequence && !FMath::IsNearlyEqual(Facts.SequenceFramesPerSecond, 24.0, 0.001))
 	{
 		Findings.Add(MakeFinding(ERoscPreflightCheck::DcpFrameRate, false, FString(),
