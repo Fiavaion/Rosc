@@ -31,12 +31,17 @@ press the **?** button in the panel.
 
 ## Install
 
-Rosc is source for now; there is no ready-built download yet.
+**Ready-built (Windows, Unreal Engine 5.8), no C++ toolchain needed:**
 
-1. Copy `HostProject/Plugins/Rosc` into your project's `Plugins` folder.
-2. Open the project. The editor offers to build the plugin. This needs a C++ toolchain set up
-   for Unreal Engine 5.8.
-3. Open the panel from **Window > Cinematics > Rosc**.
+1. Download `Rosc-<version>-UE5.8-Win64.zip` from the
+   [Releases page](https://github.com/Fiavaion/Rosc/releases).
+2. Unzip it into your project's `Plugins` folder, so that you have
+   `<YourProject>/Plugins/Rosc/Rosc.uplugin`. Make the `Plugins` folder if there is none.
+3. Open the project, then the panel from **Window > Cinematics > Rosc**.
+
+**From source:** copy `HostProject/Plugins/Rosc` into your project's `Plugins` folder and open
+the project. The editor offers to build the plugin, which needs a C++ toolchain set up for
+Unreal Engine 5.8.
 
 The sample stage, a shallow-focus shot to try things on, is in the plugin's content at
 `/Rosc/Sample/RoscSampleStage`.

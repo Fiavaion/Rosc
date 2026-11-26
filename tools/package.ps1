@@ -1,6 +1,7 @@
 # Packages the plugin the way Fab does (RunUAT BuildPlugin), to catch errors that only show
 # up outside the host project, then installs the package in a new Blueprint-only project and
-# runs the Rosc tests there, as a user who has no C++ toolchain would have it.
+# runs the Rosc tests there, as a user who has no C++ toolchain would have it. What passes is
+# zipped as the ready-built download (Rosc-<version>-UE<major.minor>-Win64.zip).
 # Output goes to .scratch/Packaged and .scratch/InstallCheck (gitignored).
 # Usage: powershell -File tools/package.ps1 [-Rendering]
 #   -Rendering   run the installed copy's tests with a real GPU device, as tools/test.ps1 does.
@@ -11,18 +12,46 @@ param(
 $ueRoot = if ($env:UE_ROOT) { $env:UE_ROOT } else { "D:\Program Files\Epic Games\UE_5.8" }
 $repo = Split-Path -Parent $PSScriptRoot
 $uplugin = Join-Path $repo "HostProject\Plugins\Rosc\Rosc.uplugin"
-$outDir = Join-Path $repo ".scratch\Packaged\Rosc"
+$descriptor = Get-Content $uplugin -Raw | ConvertFrom-Json
+$stage = Join-Path $repo ".scratch\Packaged"
+$outDir = Join-Path $stage "Rosc"
 $logDir = Join-Path $repo ".scratch\logs"
-New-Item -ItemType Directory -Force $logDir | Out-Null
+New-Item -ItemType Directory -Force $logDir, $stage | Out-Null
 if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
 $log = Join-Path $logDir "package.log"
 
+# The compiler writes the path of each source file into the binaries. Building through a drive
+# letter of its own keeps the folders of this machine out of a package that is handed to others.
+$drive = @("R", "S", "T", "U", "W", "X", "Y", "Z") | Where-Object { -not (Test-Path "${_}:\") } | Select-Object -First 1
+if (-not $drive) { Write-Output "no free drive letter to build through"; exit 1 }
+subst "${drive}:" $stage
 $runUat = Join-Path $ueRoot "Engine\Build\BatchFiles\RunUAT.bat"
-cmd /c "`"$runUat`" BuildPlugin -Plugin=`"$uplugin`" -Package=`"$outDir`" -TargetPlatforms=Win64 -Rocket > `"$log`" 2>&1"
-$code = $LASTEXITCODE
+try {
+	cmd /c "`"$runUat`" BuildPlugin -Plugin=`"$uplugin`" -Package=`"${drive}:\Rosc`" -TargetPlatforms=Win64 -Rocket > `"$log`" 2>&1"
+	$code = $LASTEXITCODE
+} finally {
+	subst "${drive}:" /D
+}
 
 Select-String -Path $log -Pattern "\): (error|warning) |: fatal error |error LNK|^ERROR:|BUILD SUCCESSFUL|BUILD FAILED|AutomationTool exiting" |
 	Select-Object -First 80 | ForEach-Object { $_.Line }
+
+# A user needs neither the build's intermediate files nor its debug symbols, and nothing handed
+# out may name a folder of this machine.
+if ($code -eq 0) {
+	Remove-Item -Recurse -Force (Join-Path $outDir "Intermediate") -ErrorAction SilentlyContinue
+	Get-ChildItem -Recurse -File $outDir -Filter *.pdb | Remove-Item -Force
+	$private = @($repo, $env:USERPROFILE) | Where-Object { $_ } | ForEach-Object { $_; $_.Replace("\", "/") }
+	$latin1 = [System.Text.Encoding]::GetEncoding(28591)
+	$named = @(Get-ChildItem -Recurse -File $outDir | Where-Object {
+		$bytes = [System.IO.File]::ReadAllBytes($_.FullName)
+		$texts = @($latin1.GetString($bytes), [System.Text.Encoding]::Unicode.GetString($bytes))
+		if ($bytes.Length -gt 1) { $texts += [System.Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1) }
+		@($texts | Where-Object { $t = $_; @($private | Where-Object { $t.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count -gt 0 }).Count -gt 0
+	})
+	$named | ForEach-Object { Write-Output "NAMES A FOLDER OF THIS MACHINE: $($_.FullName)" }
+	if ($named.Count -gt 0) { $code = 1 }
+}
 
 # What a user needs must be in the package, and every source file must say whose it is and its licence.
 if ($code -eq 0) {
@@ -53,6 +82,16 @@ if ($code -eq 0) {
 	Write-Output "installed in a new project: $checkProject"
 	& (Join-Path $PSScriptRoot "test.ps1") -Project $checkProject -Rendering:$Rendering
 	if ($LASTEXITCODE -ne 0) { $code = 1 }
+}
+
+if ($code -eq 0) {
+	$engine = ($descriptor.EngineVersion -split "\.")[0..1] -join "."
+	$zip = Join-Path $stage ("Rosc-{0}-UE{1}-Win64.zip" -f $descriptor.VersionName, $engine)
+	# Not Compress-Archive: Windows PowerShell's writes "\" into entry names, which other unzip tools misread.
+	Add-Type -AssemblyName System.IO.Compression.FileSystem
+	if (Test-Path $zip) { Remove-Item -Force $zip }
+	[System.IO.Compression.ZipFile]::CreateFromDirectory($outDir, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+	Write-Output ("download: {0} ({1:N1} MB)" -f $zip, ((Get-Item $zip).Length / 1MB))
 }
 
 Write-Output "package exit code: $code   log: $log"
