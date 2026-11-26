@@ -5,21 +5,27 @@
 #include "Editor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "LevelEditor.h"
+#include "LevelSequence.h"
+#include "LevelSequenceEditorBlueprintLibrary.h"
 #include "LevelEditorSubsystem.h"
 #include "LevelEditorViewport.h"
 #include "SLevelViewport.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
+#include "ObjectTools.h"
 #include "SRoscPanel.h"
 #include "Tests/AutomationCommon.h"
 #include "RoscCameraEditing.h"
+#include "RoscCameraPackageComponent.h"
 #include "Tests/RoscDeliverChoicesBefore.h"
 #include "Tests/RoscWidgetTestUtils.h"
 #include "RoscDeliverEditing.h"
 #include "RoscEditorSettings.h"
 #include "RoscFocusEditing.h"
 #include "RoscGripEditing.h"
+#include "RoscMonitorSubsystem.h"
 #include "RoscRig.h"
+#include "RoscShotEditing.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/Text/STextBlock.h"
@@ -78,16 +84,22 @@ namespace
 		return Control.ToString();
 	}
 
-	/** The control a screen reader would call by this name, or null. */
+	/**
+	 * The control a screen reader would call by this name, or null. A drop-down's focus is taken by
+	 * the button inside it, so a stop inside a widget of that name counts too.
+	 */
 	TSharedPtr<SWidget> FindControlCalled(SRoscPanel& Panel, const TCHAR* AccessibleName)
 	{
 		TArray<TSharedRef<SWidget>> Stops;
 		CollectKeyboardStops(Panel.AsShared(), Stops);
 		for (const TSharedRef<SWidget>& Stop : Stops)
 		{
-			if (Stop->GetAccessibleText().ToString() == AccessibleName)
+			for (SWidget* Widget = &Stop.Get(); Widget != nullptr && Widget != &Panel; Widget = Widget->GetParentWidget().Get())
 			{
-				return Stop;
+				if (Widget->GetAccessibleText().ToString() == AccessibleName)
+				{
+					return Stop;
+				}
 			}
 		}
 		return nullptr;
@@ -113,24 +125,32 @@ namespace
 		return Focused->ToString();
 	}
 
-	/** Puts the focus on a control by its name and presses Enter on it, as a keyboard user would. */
-	bool PressControlCalled(SRoscPanel& Panel, const TCHAR* AccessibleName)
+	/** Presses a key and lets it go, on whatever has the keyboard focus. */
+	void PressKey(const FKey& Key)
+	{
+		const FKeyEvent Event(Key, FModifierKeysState(), 0, false, 0, 0);
+		FSlateApplication::Get().ProcessKeyDownEvent(Event);
+		FSlateApplication::Get().ProcessKeyUpEvent(Event);
+	}
+
+	/** Puts the focus on a control by its name and presses a key on it (Enter unless told), as a keyboard user would. */
+	bool PressControlCalled(SRoscPanel& Panel, const TCHAR* AccessibleName, const FKey& Key = EKeys::Enter)
 	{
 		const TSharedPtr<SWidget> Control = FindControlCalled(Panel, AccessibleName);
 		if (!Control.IsValid())
 		{
 			return false;
 		}
-		FSlateApplication& Slate = FSlateApplication::Get();
-		Slate.SetKeyboardFocus(Control, EFocusCause::SetDirectly);
-		const FKeyEvent Enter(EKeys::Enter, FModifierKeysState(), 0, false, 0, 0);
-		Slate.ProcessKeyDownEvent(Enter);
-		Slate.ProcessKeyUpEvent(Enter);
+		FSlateApplication::Get().SetKeyboardFocus(Control, EFocusCause::SetDirectly);
+		PressKey(Key);
 		return true;
 	}
 
-	/** Puts the focus in a text box by its name, types over what is in it and presses Enter, as a keyboard user would. */
-	bool TypeIntoControlCalled(SRoscPanel& Panel, const TCHAR* AccessibleName, const FString& Typed)
+	/**
+	 * Puts the focus in a text box by its name, types over what is in it and presses a key to finish
+	 * (Enter unless told), as a keyboard user would.
+	 */
+	bool TypeIntoControlCalled(SRoscPanel& Panel, const TCHAR* AccessibleName, const FString& Typed, const FKey& Finish = EKeys::Enter)
 	{
 		const TSharedPtr<SWidget> Control = FindControlCalled(Panel, AccessibleName);
 		if (!Control.IsValid())
@@ -146,9 +166,7 @@ namespace
 		{
 			Slate.ProcessKeyCharEvent(FCharacterEvent(Character, FModifierKeysState(), 0, false));
 		}
-		const FKeyEvent Enter(EKeys::Enter, FModifierKeysState(), 0, false, 0, 0);
-		Slate.ProcessKeyDownEvent(Enter);
-		Slate.ProcessKeyUpEvent(Enter);
+		PressKey(Finish);
 		return true;
 	}
 
@@ -397,7 +415,115 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 		}
 	}, 0.3f));
 
-	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]
+	// Space works a button as Enter does: a monitor tool goes on and off, and Add Token opens its
+	// menu, which Escape closes.
+	const TCHAR* const FalseColourName = TEXT("False colour: show the picture in exposure bands, so crushed blacks, middle grey, a stop over grey and clipping stand out. The bands are listed here while it is on.");
+	const TSharedRef<FRoscMonitorSettings> MonitorBefore = MakeShared<FRoscMonitorSettings>(URoscMonitorSubsystem::Get()->GetSettings());
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk]
+	{
+		Walk->Panel->ShowDepartment(ERoscDepartment::Monitor);
+		return true;
+	}));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk, FalseColourName, MonitorBefore]
+	{
+		TestTrue(TEXT("Space is pressed on False colour"), PressControlCalled(*Walk->Panel, FalseColourName, EKeys::SpaceBar));
+		TestEqual(TEXT("Space turns false colour over"), URoscMonitorSubsystem::Get()->GetSettings().bFalseColour, !MonitorBefore->bFalseColour);
+		TestTrue(TEXT("Space is pressed on False colour again"), PressControlCalled(*Walk->Panel, FalseColourName, EKeys::SpaceBar));
+		TestEqual(TEXT("And back"), URoscMonitorSubsystem::Get()->GetSettings().bFalseColour, MonitorBefore->bFalseColour);
+		URoscMonitorSubsystem::Get()->SetSettings(*MonitorBefore);
+	}, 0.3f));
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk]
+	{
+		Walk->Panel->ShowDepartment(ERoscDepartment::Deliver);
+		return true;
+	}));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk]
+	{
+		TestTrue(TEXT("Space is pressed on Add token"), PressControlCalled(*Walk->Panel, TEXT("Add token"), EKeys::SpaceBar));
+		TestTrue(TEXT("Space opens the token menu"), FSlateApplication::Get().AnyMenusVisible());
+		PressKey(EKeys::Escape);
+		TestFalse(TEXT("Escape closes it"), FSlateApplication::Get().AnyMenusVisible());
+		FSlateApplication::Get().DismissAllMenus();
+	}, 0.3f));
+
+	// A drop-down by keyboard: Space opens it and Escape closes it with the choice as it was. The
+	// arrow keys take the focus to the list's search box, which the first Escape leaves; the second
+	// closes the list. (Choosing an entry by keyboard is checked by hand: in a test the engine's
+	// menus do not take arrow keys from the search box.)
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Walk]
+	{
+		Walk->Panel->ShowDepartment(ERoscDepartment::Camera);
+		return true;
+	}));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]
+	{
+		const URoscCameraPackageComponent* Package = WeakCamera.IsValid() ? URoscCameraPackageComponent::Find(WeakCamera.Get()) : nullptr;
+		if (!TestNotNull(TEXT("The camera has its package"), Package))
+		{
+			return;
+		}
+		const FString BodyBefore = Package->Package.BodyId;
+		TestTrue(TEXT("Space is pressed on Body"), PressControlCalled(*Walk->Panel, TEXT("Body"), EKeys::SpaceBar));
+		TestTrue(TEXT("Space opens the list of bodies"), FSlateApplication::Get().AnyMenusVisible());
+		PressKey(EKeys::Down);
+		TestTrue(TEXT("The list stays open under the arrow keys"), FSlateApplication::Get().AnyMenusVisible());
+		PressKey(EKeys::Escape);
+		PressKey(EKeys::Escape);
+		TestFalse(TEXT("Escape closes the list"), FSlateApplication::Get().AnyMenusVisible());
+		TestEqual(TEXT("And leaves the body as it was"), Package->Package.BodyId, BodyBefore);
+		FSlateApplication::Get().DismissAllMenus();
+	}, 0.3f));
+
+	// The shot's Scene, Move and Notes by keyboard: Enter keeps what is typed, Escape gives it up,
+	// one undo takes it back, and Tab leaves the Notes box with what was typed kept.
+	struct FShotSequences
+	{
+		TWeakObjectPtr<ULevelSequence> Open;
+		TWeakObjectPtr<ULevelSequence> Shot;
+		ULevelSequence* Get() const { return Shot.Get(); }
+	};
+	const TSharedRef<FShotSequences> ShotSequence = MakeShared<FShotSequences>();
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Walk, ShotSequence, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]
+	{
+		FText Error;
+		if (TestTrue(TEXT("A shot is added"), WeakCamera.IsValid() && Rosc::ShotEditing::AddShot(WeakCamera.Get(), Error)))
+		{
+			ShotSequence->Open = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
+			const TArray<Rosc::ShotEditing::FShot> Shots = Rosc::ShotEditing::GetShots();
+			ShotSequence->Shot = Shots.Num() == 1 ? Shots[0].Sequence : nullptr;
+		}
+		Walk->Panel->ShowDepartment(ERoscDepartment::Shots);
+		return true;
+	}));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk]
+	{
+		TestTrue(TEXT("12A is typed into Scene and Enter pressed"), TypeIntoControlCalled(*Walk->Panel, TEXT("Scene"), TEXT("12A")));
+		TestTrue(TEXT("Push in is typed into Move and Enter pressed"), TypeIntoControlCalled(*Walk->Panel, TEXT("Move"), TEXT("Push in")));
+		TestTrue(TEXT("Rain is typed into Notes and Tab pressed"), TypeIntoControlCalled(*Walk->Panel, TEXT("Notes"), TEXT("Rain"), EKeys::Tab));
+	}, 0.3f));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, Walk, ShotSequence]
+	{
+		const ULevelSequence* Sequence = ShotSequence->Get();
+		if (!TestNotNull(TEXT("The shot's sequence is open"), Sequence))
+		{
+			return;
+		}
+		TestEqual(TEXT("Enter keeps the scene"), Rosc::ShotEditing::GetScene(Sequence), FString(TEXT("12A")));
+		TestEqual(TEXT("Enter keeps the move"), Rosc::ShotEditing::GetMove(Sequence), FString(TEXT("Push in")));
+		TestEqual(TEXT("Tab leaves the Notes box and keeps the notes, with no tab typed"), Rosc::ShotEditing::GetNotes(Sequence), FString(TEXT("Rain")));
+		TestFalse(TEXT("The focus has left the Notes box"), DescribeFocus(*Walk->Panel).Contains(TEXT("Notes")));
+		TestTrue(TEXT("99 is typed into Scene and Escape pressed"), TypeIntoControlCalled(*Walk->Panel, TEXT("Scene"), TEXT("99"), EKeys::Escape));
+	}, 0.3f));
+	ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand([this, ShotSequence]
+	{
+		const ULevelSequence* Sequence = ShotSequence->Get();
+		TestEqual(TEXT("Escape gives up what was typed"), Sequence != nullptr ? Rosc::ShotEditing::GetScene(Sequence) : FString(), FString(TEXT("12A")));
+		GEditor->UndoTransaction();
+		TestEqual(TEXT("One undo takes back the notes"), Sequence != nullptr ? Rosc::ShotEditing::GetNotes(Sequence) : FString(TEXT("?")), FString());
+		TestEqual(TEXT("And only the notes"), Sequence != nullptr ? Rosc::ShotEditing::GetMove(Sequence) : FString(), FString(TEXT("Push in")));
+	}, 0.3f));
+
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Walk, ShotSequence, WeakCamera = TWeakObjectPtr<ACineCameraActor>(Camera)]
 	{
 		Walk->Window->RequestDestroyWindow();
 		GEditor->SelectNone(false, true, false);
@@ -407,6 +533,14 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 			CameraToRemove->GetWorld()->EditorDestroyActor(CameraToRemove, false);
 		}
 		GEditor->ResetTransaction(FText::FromString(TEXT("Rosc keyboard test")));
+		ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+		for (ULevelSequence* Sequence : { ShotSequence->Open.Get(), ShotSequence->Shot.Get() })
+		{
+			if (Sequence != nullptr)
+			{
+				TestTrue(TEXT("The test's sequence asset is removed"), ObjectTools::DeleteSingleObject(Sequence, false));
+			}
+		}
 		return true;
 	}));
 	return true;

@@ -4,7 +4,12 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Framework/Docking/TabManager.h"
 #include "ImageUtils.h"
+#include "ISettingsCategory.h"
+#include "ISettingsContainer.h"
+#include "ISettingsModule.h"
+#include "ISettingsSection.h"
 #include "Interfaces/IPluginManager.h"
+#include "PluginDescriptor.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -14,9 +19,13 @@
 #include "Slate/WidgetRenderer.h"
 #include "Tests/AutomationCommon.h"
 #include "TextureResource.h"
+#include "RoscAISettings.h"
 #include "RoscEditorModule.h"
+#include "RoscEditorSettings.h"
 #include "RoscStyle.h"
 #include "UObject/StrongObjectPtr.h"
+#include "WorkspaceMenuStructure.h"
+#include "WorkspaceMenuStructureModule.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBox.h"
 
@@ -30,6 +39,36 @@ bool FRoscEditorPanelRegisteredTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("RoscEditor module is loaded"), FModuleManager::Get().IsModuleLoaded(TEXT("RoscEditor")));
 	TestTrue(TEXT("The Rosc panel has a registered tab spawner"), FGlobalTabmanager::Get()->HasTabSpawner(FRoscEditorModule::PanelTabId));
 	TestTrue(TEXT("The user guide the panel opens is in the plugin"), FPaths::FileExists(FRoscEditorModule::GetUserGuideFile()));
+
+	TestEqual(TEXT("The Plugins window calls it Rosc"), IPluginManager::Get().FindPlugin(TEXT("Rosc"))->GetDescriptor().FriendlyName, FString(TEXT("Rosc")));
+
+	// Window > Cinematics > Rosc: the level editor's Window menu lists each group's tabs by name.
+	const TSharedRef<FWorkspaceItem> Cinematics = WorkspaceMenu::GetMenuStructure().GetLevelEditorCinematicsCategory();
+	const TSharedRef<FWorkspaceItem>* PanelEntry = Cinematics->GetChildItems().FindByPredicate([](const TSharedRef<FWorkspaceItem>& Item)
+	{
+		return Item->GetDisplayName().ToString() == TEXT("Rosc");
+	});
+	TestNotNull(TEXT("The Window menu's Cinematics group has the Rosc panel"), PanelEntry);
+	TestEqual(TEXT("The group is called Cinematics"), Cinematics->GetDisplayName().ToString(), FString(TEXT("Cinematics")));
+
+	// The two pages under Edit > Editor Preferences (or Project Settings), by the names they show.
+	ISettingsModule& Settings = FModuleManager::LoadModuleChecked<ISettingsModule>(TEXT("Settings"));
+	const auto FindPage = [&Settings](const UDeveloperSettings* Page) -> TSharedPtr<ISettingsSection>
+	{
+		const TSharedPtr<ISettingsContainer> Container = Settings.GetContainer(Page->GetContainerName());
+		const TSharedPtr<ISettingsCategory> Category = Container.IsValid() ? Container->GetCategory(Page->GetCategoryName()) : nullptr;
+		return Category.IsValid() ? Category->GetSection(Page->GetSectionName()) : nullptr;
+	};
+	const TSharedPtr<ISettingsSection> RoscPage = FindPage(GetDefault<URoscEditorSettings>());
+	const TSharedPtr<ISettingsSection> AIPage = FindPage(GetDefault<URoscAISettings>());
+	if (TestTrue(TEXT("The Rosc settings page is registered"), RoscPage.IsValid()))
+	{
+		TestEqual(TEXT("It is called Rosc"), RoscPage->GetDisplayName().ToString(), FString(TEXT("Rosc")));
+	}
+	if (TestTrue(TEXT("The Rosc AI settings page is registered"), AIPage.IsValid()))
+	{
+		TestEqual(TEXT("It is called Rosc AI"), AIPage->GetDisplayName().ToString(), FString(TEXT("Rosc AI")));
+	}
 	return true;
 }
 
