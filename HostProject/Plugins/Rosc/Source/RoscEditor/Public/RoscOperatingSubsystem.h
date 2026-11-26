@@ -21,6 +21,8 @@ class ULevelSequence;
  * app, or any Live Link source that tracks a transform, can drive the head and, on a free-moving
  * support, its position. Its motion can be recorded as a take, processed, and baked into Sequencer.
  */
+class ILiveLinkClient;
+
 UCLASS()
 class ROSCEDITOR_API URoscOperatingSubsystem : public UEditorSubsystem
 {
@@ -28,6 +30,9 @@ class ROSCEDITOR_API URoscOperatingSubsystem : public UEditorSubsystem
 
 public:
 	static URoscOperatingSubsystem* Get();
+
+	/** Live Link, where devices come in; null when its module is not loaded. */
+	static ILiveLinkClient* GetLiveLinkClient();
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;

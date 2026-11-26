@@ -81,17 +81,9 @@ namespace
 	/** A look in the viewport that has not turned the head for this long is over, also when no end of it was heard. */
 	constexpr double LookEndsAfterSeconds = 0.5;
 
-	ILiveLinkClient* GetLiveLinkClient()
-	{
-		IModularFeatures& Features = IModularFeatures::Get();
-		return Features.IsModularFeatureAvailable(ILiveLinkClient::ModularFeatureName)
-			? &Features.GetModularFeature<ILiveLinkClient>(ILiveLinkClient::ModularFeatureName)
-			: nullptr;
-	}
-
 	bool ReadDevice(FName Device, FTransform& OutTransform)
 	{
-		ILiveLinkClient* Client = GetLiveLinkClient();
+		ILiveLinkClient* Client = URoscOperatingSubsystem::GetLiveLinkClient();
 		FLiveLinkSubjectFrameData Frame;
 		if (Client == nullptr || Device.IsNone() || !Client->EvaluateFrame_AnyThread(Device, ULiveLinkTransformRole::StaticClass(), Frame))
 		{
@@ -142,6 +134,14 @@ namespace
 	}
 }
 
+ILiveLinkClient* URoscOperatingSubsystem::GetLiveLinkClient()
+{
+	IModularFeatures& Features = IModularFeatures::Get();
+	return Features.IsModularFeatureAvailable(ILiveLinkClient::ModularFeatureName)
+		? &Features.GetModularFeature<ILiveLinkClient>(ILiveLinkClient::ModularFeatureName)
+		: nullptr;
+}
+
 URoscOperatingSubsystem* URoscOperatingSubsystem::Get()
 {
 	return GEditor != nullptr ? GEditor->GetEditorSubsystem<URoscOperatingSubsystem>() : nullptr;
@@ -171,7 +171,7 @@ void URoscOperatingSubsystem::Deinitialize()
 TArray<FName> URoscOperatingSubsystem::GetDevices()
 {
 	TArray<FName> Devices;
-	if (ILiveLinkClient* Client = GetLiveLinkClient())
+	if (ILiveLinkClient* Client = URoscOperatingSubsystem::GetLiveLinkClient())
 	{
 		const bool bIncludeDisabled = false;
 		const bool bIncludeVirtual = true;

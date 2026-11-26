@@ -11,6 +11,7 @@
 #include "LevelSequenceEditorBlueprintLibrary.h"
 #include "Math/UnitConversion.h"
 #include "Styling/AppStyle.h"
+#include "RoscCamServer.h"
 #include "RoscCameraTarget.h"
 #include "RoscEditorSettings.h"
 #include "RoscGripEditing.h"
@@ -177,6 +178,9 @@ void SRoscGripTab::RebuildLayout()
 
 			Add(FRoscStyle::SectionPadding, MakeSectionHeader(LOCTEXT("SequencerSection", "Sequencer")));
 			Add(FRoscStyle::RowPadding, BuildBakeRows());
+
+			Add(FRoscStyle::SectionPadding, MakeSectionHeader(LOCTEXT("RoscCamSection", "RoscCam")));
+			Add(FRoscStyle::RowPadding, BuildRoscCamRows());
 
 			Add(FRoscStyle::SectionPadding, MakeSectionHeader(LOCTEXT("DeviceSection", "Device")));
 			Add(FRoscStyle::RowPadding, BuildDeviceRows());
@@ -610,7 +614,59 @@ FName SRoscGripTab::GetChosenDevice() const
 	{
 		return ChosenDevice;
 	}
+	// A device paired through RoscCam is the one meant, unless another was chosen.
+	const URoscCamServer* Server = URoscCamServer::Get();
+	if (Server != nullptr && Devices.Contains(Server->GetSubjectName()))
+	{
+		return Server->GetSubjectName();
+	}
 	return Devices.IsEmpty() ? NAME_None : Devices[0];
+}
+
+bool SRoscGripTab::IsRoscCamServingCamera() const
+{
+	const URoscCamServer* Server = URoscCamServer::Get();
+	return Server != nullptr && Server->IsRunning() && Server->GetCamera() == Target->GetCamera();
+}
+
+FText SRoscGripTab::GetRoscCamStatus() const
+{
+	const URoscCamServer* Server = URoscCamServer::Get();
+	if (Server == nullptr || !Server->IsRunning())
+	{
+		return LOCTEXT("RoscCamOff", "Off. Start it, then open RoscCam on the phone or tablet; both need to be on the same network.");
+	}
+	if (!IsRoscCamServingCamera())
+	{
+		return FText::Format(LOCTEXT("RoscCamOtherCamera", "Running for {0}. Start it here to hand RoscCam this camera instead."),
+			Server->GetCamera() != nullptr ? FText::FromString(Server->GetCamera()->GetActorLabel()) : FText::GetEmpty());
+	}
+	if (Server->IsPaired())
+	{
+		return Server->IsMotionArriving()
+			? FText::Format(LOCTEXT("RoscCamPaired", "Paired with {0}, which gets this camera's picture. Its motion is arriving: it is listed as a device below."), FText::FromString(Server->GetDeviceName()))
+			: FText::Format(LOCTEXT("RoscCamPairedQuiet", "Paired with {0}, which gets this camera's picture."), FText::FromString(Server->GetDeviceName()));
+	}
+	const FString Code = Server->GetPairingCode();
+	if (!Code.IsEmpty())
+	{
+		return FText::Format(LOCTEXT("RoscCamPairing", "{0} asks to pair. Type {1} on the device. Nothing is sent to it until it is paired."),
+			FText::FromString(Server->GetDeviceName()), FText::FromString(Code));
+	}
+	const FString Addresses = URoscCamServer::GetAddresses();
+	return Addresses.IsEmpty()
+		? LOCTEXT("RoscCamNoNetwork", "Waiting for RoscCam, but this computer is on no network a device can reach.")
+		: FText::Format(LOCTEXT("RoscCamWaiting", "Waiting for RoscCam. The app finds this computer on the network, or give it the address {0}."), FText::FromString(Addresses));
+}
+
+FText SRoscGripTab::GetRoscCamWarning() const
+{
+	const URoscCamServer* Server = URoscCamServer::Get();
+	if (IsRoscCamServingCamera() && Server->IsPaired() && !Server->IsMotionArriving())
+	{
+		return FText::Format(LOCTEXT("RoscCamSilent", "No motion is arriving from {0}. Check that RoscCam is open on it and the device is awake."), FText::FromString(Server->GetDeviceName()));
+	}
+	return FText::GetEmpty();
 }
 
 bool SRoscGripTab::IsOperatingRig() const
@@ -708,6 +764,49 @@ TSharedRef<SWidget> SRoscGripTab::MakeDeviceMenu()
 	return MenuBuilder.MakeWidget();
 }
 
+TSharedRef<SWidget> SRoscGripTab::BuildRoscCamRows()
+{
+	const TSharedRef<SVerticalBox> Rows = SNew(SVerticalBox);
+	const auto Add = [&Rows](const FMargin& Padding, const TSharedRef<SWidget>& Widget)
+	{
+		Rows->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
+	};
+
+	Add(FMargin(0.0f), MakeNote(LOCTEXT("RoscCamIntro", "RoscCam, Rosc's own app, makes a phone or tablet the camera: it shows this camera's picture, operates the support as you turn it, and carries the controls for a take.")));
+
+	const TSharedRef<SWrapBox> Controls = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(8.0f, FRoscStyle::RowSpacing));
+	Controls->AddSlot()
+	[
+		MakeToggleButton(LOCTEXT("RoscCamButton", "RoscCam Server"),
+			LOCTEXT("RoscCamToolTip", "Let RoscCam on a phone or tablet connect to this computer, for this camera. It is off until you start it, and stops when the editor closes. A device gets nothing until you pair it with the code shown here."),
+			TAttribute<bool>::CreateSP(this, &SRoscGripTab::IsRoscCamServingCamera),
+			[this](bool bTurnOn)
+			{
+				URoscCamServer* Server = URoscCamServer::Get();
+				FText Error;
+				if (!bTurnOn)
+				{
+					Server->Stop();
+				}
+				else if (!Server->Start(Target->GetCamera(), Error))
+				{
+					Notify(Error, false);
+				}
+			})
+	];
+	Controls->AddSlot()
+	[
+		MakeButton(LOCTEXT("UnpairButton", "Unpair"),
+			LOCTEXT("UnpairToolTip", "Let the device go. It has to be paired again, with a new code, to get the picture or operate the support."),
+			FOnClicked::CreateLambda([] { URoscCamServer::Get()->Unpair(); return FReply::Handled(); }),
+			TAttribute<bool>::CreateSPLambda(this, [this] { return IsRoscCamServingCamera() && URoscCamServer::Get()->HasDevice(); }))
+	];
+	Add(FRoscStyle::ButtonRowPadding, Controls);
+	Add(FRoscStyle::RowPadding, MakeStatusLine("Icons.InfoWithColor", TAttribute<FText>::CreateSP(this, &SRoscGripTab::GetRoscCamStatus)));
+	Add(FRoscStyle::RowPadding, MakeWarning(TAttribute<FText>::CreateSP(this, &SRoscGripTab::GetRoscCamWarning)));
+	return Rows;
+}
+
 TSharedRef<SWidget> SRoscGripTab::BuildDeviceRows()
 {
 	const TSharedRef<SVerticalBox> Rows = SNew(SVerticalBox);
@@ -716,7 +815,7 @@ TSharedRef<SWidget> SRoscGripTab::BuildDeviceRows()
 		Rows->AddSlot().AutoHeight().Padding(Padding)[ Widget ];
 	};
 
-	Add(FMargin(0.0f), MakeNote(LOCTEXT("DeviceIntro", "Operate the support with a phone or tablet held like a camera: the Unreal VCam app on an iPad or iPhone, or a tracker that Live Link brings in.")));
+	Add(FMargin(0.0f), MakeNote(LOCTEXT("DeviceIntro", "Operate the support with a phone or tablet held like a camera: RoscCam once it is paired above, the Unreal VCam app on an iPad or iPhone, or a tracker that Live Link brings in.")));
 
 	// The shot on the device.
 	if (URoscOperatingSubsystem::IsVirtualCameraOn())

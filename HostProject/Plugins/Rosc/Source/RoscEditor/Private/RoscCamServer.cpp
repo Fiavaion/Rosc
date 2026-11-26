@@ -9,7 +9,6 @@
 #include "Common/UdpSocketBuilder.h"
 #include "Dom/JsonObject.h"
 #include "Editor.h"
-#include "Features/IModularFeatures.h"
 #include "HAL/PlatformTime.h"
 #include "ILiveLinkClient.h"
 #include "ILiveLinkSource.h"
@@ -55,14 +54,6 @@ namespace
 	/** Wrong codes a device may type before it is let go and has to connect again for a new one. */
 	constexpr int32 PairingTries = 3;
 	constexpr int32 DeviceNameLength = 40;
-
-	ILiveLinkClient* GetLiveLinkClient()
-	{
-		IModularFeatures& Features = IModularFeatures::Get();
-		return Features.IsModularFeatureAvailable(ILiveLinkClient::ModularFeatureName)
-			? &Features.GetModularFeature<ILiveLinkClient>(ILiveLinkClient::ModularFeatureName)
-			: nullptr;
-	}
 
 	ISocketSubsystem* GetSockets()
 	{
@@ -271,7 +262,7 @@ bool URoscCamServer::Start(ACineCameraActor* InCamera, FText& OutError)
 	// Without the announcement the app can still be given this computer's address.
 	AnnounceSocket = FUdpSocketBuilder(TEXT("RoscCam announcement")).AsNonBlocking().WithBroadcast();
 
-	if (ILiveLinkClient* LiveLink = GetLiveLinkClient())
+	if (ILiveLinkClient* LiveLink = URoscOperatingSubsystem::GetLiveLinkClient())
 	{
 		LiveLinkSource = MakeShared<FRoscCamLiveLinkSource>();
 		LiveLinkSourceGuid = LiveLink->AddSource(LiveLinkSource);
@@ -302,7 +293,7 @@ void URoscCamServer::Stop()
 	DestroySocket(AnnounceSocket);
 	if (LiveLinkSource.IsValid())
 	{
-		if (ILiveLinkClient* LiveLink = GetLiveLinkClient())
+		if (ILiveLinkClient* LiveLink = URoscOperatingSubsystem::GetLiveLinkClient())
 		{
 			LiveLink->RemoveSource(LiveLinkSourceGuid);
 		}

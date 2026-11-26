@@ -21,6 +21,7 @@
 #include "RoscCam.h"
 #include "RoscCamServer.h"
 #include "RoscCameraDatabase.h"
+#include "RoscCameraTarget.h"
 #include "RoscCameraEditing.h"
 #include "RoscCameraPackageComponent.h"
 #include "RoscFocusEditing.h"
@@ -30,10 +31,12 @@
 #include "RoscRig.h"
 #include "RoscShotEditing.h"
 #include "RoscTestDevice.h"
+#include "RoscWidgetTestUtils.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "SocketSubsystem.h"
 #include "Sockets.h"
+#include "SRoscGripTab.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -339,11 +342,29 @@ bool FRoscCamServerTest::RunTest(const FString& Parameters)
 			ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(Squatter);
 		}
 	}
-	if (!TestTrue(TEXT("The server starts for the camera"), Server->Start(Camera, Error)))
+	// From here the server is worked from the Grip tab, as the operator would.
+	const TSharedRef<FRoscCameraTarget> Target = MakeShared<FRoscCameraTarget>();
+	Target->SetCamera(Camera);
+	const TSharedRef<SRoscGripTab> Tab = SNew(SRoscGripTab, Target);
+	const auto Look = [&Tab]
 	{
-		AddError(Error.ToString());
+		Tab->Tick(FGeometry(), FPlatformTime::Seconds(), 0.0f);
+		Tab->SlatePrepass(1.0f);
+	};
+	Look();
+	TestTrue(TEXT("The tab says RoscCam is off"), Rosc::WidgetTests::ShowsText(Tab, TEXT("Off. Start it")));
+	const TSharedPtr<SCheckBox> ServerToggle = Rosc::WidgetTests::FindToggleShowing(Tab, TEXT("RoscCam Server"));
+	if (!TestNotNull(TEXT("The tab has the RoscCam Server toggle"), ServerToggle.Get()))
+	{
 		return false;
 	}
+	ServerToggle->ToggleCheckedState();
+	if (!TestTrue(TEXT("The toggle starts the server for the camera"), Server->IsRunning()))
+	{
+		return false;
+	}
+	Look();
+	TestTrue(TEXT("The tab says it waits for the app"), Rosc::WidgetTests::ShowsText(Tab, TEXT("Waiting for RoscCam")));
 	TestTrue(TEXT("and runs"), Server->IsRunning() && Server->GetCamera() == Camera);
 	AddInfo(FString::Printf(TEXT("This computer's addresses: %s"), *URoscCamServer::GetAddresses()));
 
@@ -379,6 +400,8 @@ bool FRoscCamServerTest::RunTest(const FString& Parameters)
 	const FString Code = Server->GetPairingCode();
 	TestTrue(*FString::Printf(TEXT("The editor shows a four-digit code (%s)"), *Code), Code.Len() == 4 && Code.IsNumeric());
 	TestEqual(TEXT("and the device's name"), Server->GetDeviceName(), FString(TEXT("Test phone")));
+	Look();
+	TestTrue(TEXT("The tab shows the code to type on the device"), Rosc::WidgetTests::ShowsText(Tab, *FString::Printf(TEXT("Type %s on the device"), *Code)));
 	for (int32 Turn = 0; Turn < 10; ++Turn)
 	{
 		Pump(*Server, Phone);
@@ -406,6 +429,11 @@ bool FRoscCamServerTest::RunTest(const FString& Parameters)
 	const FName Subject = Server->GetSubjectName();
 	TestEqual(TEXT("The device's motion comes in as a Live Link subject"), Subject, FName(TEXT("RoscCam: Test phone")));
 	TestTrue(TEXT("which the Grip tab lists among the devices"), URoscOperatingSubsystem::GetDevices().Contains(Subject));
+	Phone.SendMotion(Held(0.0));
+	Pump(*Server, Phone);
+	Look();
+	TestTrue(TEXT("The tab says the device is paired and its motion arriving"), Rosc::WidgetTests::ShowsText(Tab, TEXT("Paired with Test phone")) && Rosc::WidgetTests::ShowsText(Tab, TEXT("Its motion is arriving")));
+	TestTrue(TEXT("and chooses it as the device"), Rosc::WidgetTests::ShowsText(Tab, TEXT("RoscCam: Test phone")));
 
 	if (TestTrue(TEXT("The paired device is sent the state"), WaitFor(*Server, Phone, EMessage::State, Body)))
 	{
@@ -519,14 +547,20 @@ bool FRoscCamServerTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("The paired device stays paired"), Server->IsPaired());
 	}
 
-	Server->Unpair();
+	Look();
+	const TSharedPtr<SButton> Unpair = Rosc::WidgetTests::FindButtonShowing(Tab, TEXT("Unpair"));
+	if (TestNotNull(TEXT("The tab has Unpair"), Unpair.Get()))
+	{
+		Unpair->SimulateClick();
+	}
 	TestFalse(TEXT("Unpair lets the device go"), Server->HasDevice());
 	Pump(*Server, Phone);
 	TestTrue(TEXT("and closes its connection"), Phone.IsClosed());
 	TestFalse(TEXT("Its subject leaves Live Link"), URoscOperatingSubsystem::GetDevices().Contains(Subject));
 
-	Server->Stop();
-	TestFalse(TEXT("The server stops"), Server->IsRunning());
+	Look();
+	ServerToggle->ToggleCheckedState();
+	TestFalse(TEXT("The toggle stops the server"), Server->IsRunning());
 	FTestClient Late;
 	TestFalse(TEXT("and nothing more can connect"), Late.Connect());
 	return true;

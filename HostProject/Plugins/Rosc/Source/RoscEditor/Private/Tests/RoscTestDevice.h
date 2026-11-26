@@ -4,13 +4,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Features/IModularFeatures.h"
 #include "HAL/PlatformTime.h"
 #include "ILiveLinkClient.h"
 #include "ILiveLinkSource.h"
 #include "LiveLinkSourceSettings.h"
 #include "Roles/LiveLinkTransformRole.h"
 #include "Roles/LiveLinkTransformTypes.h"
+#include "RoscOperatingSubsystem.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -21,10 +21,7 @@ namespace Rosc::DeviceTests
 
 	inline ILiveLinkClient* GetLiveLinkClient()
 	{
-		IModularFeatures& Features = IModularFeatures::Get();
-		return Features.IsModularFeatureAvailable(ILiveLinkClient::ModularFeatureName)
-			? &Features.GetModularFeature<ILiveLinkClient>(ILiveLinkClient::ModularFeatureName)
-			: nullptr;
+		return URoscOperatingSubsystem::GetLiveLinkClient();
 	}
 
 	class FTestDeviceSource : public ILiveLinkSource

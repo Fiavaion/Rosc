@@ -59,6 +59,7 @@ private:
 	TSharedRef<SWidget> BuildEaseRow(int32 MarkIndex, bool bEaseIn);
 	TSharedRef<SWidget> BuildOperatorRows();
 	TSharedRef<SWidget> BuildBakeRows();
+	TSharedRef<SWidget> BuildRoscCamRows();
 	TSharedRef<SWidget> BuildDeviceRows();
 	TSharedRef<SWidget> BuildTakeRows();
 
@@ -84,6 +85,9 @@ private:
 	bool HasTakeOfRig() const;
 	FText GetDeviceStatus() const;
 	FText GetDeviceWarning() const;
+	bool IsRoscCamServingCamera() const;
+	FText GetRoscCamStatus() const;
+	FText GetRoscCamWarning() const;
 	FText GetTakeSummary() const;
 	/** What the support could not do in the processed take, one warning per line. */
 	FText GetTakeWarnings() const;
