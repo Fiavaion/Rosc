@@ -148,7 +148,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Recording 3.2 s'), findsOneWidget);
     expect(find.text('Stop'), findsOneWidget);
-    expect(find.textContaining('Pan peaks'), findsOneWidget);
+    expect(find.textContaining('Pan peaks', skipOffstage: false), findsOneWidget, reason: 'further down the rail');
     expect(find.text('Stop recording first.'), findsOneWidget, reason: 'a refused control says why');
     await tester.tap(find.text('Stop'));
     expect(editor.controls.last, {'action': 'stop'});

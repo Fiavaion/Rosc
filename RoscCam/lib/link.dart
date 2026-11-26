@@ -32,6 +32,8 @@ class EditorLink extends ChangeNotifier {
   static Future<EditorLink> connect(String host, {int port = serverPort, required String deviceName, String appVersion = ''}) async {
     final socket = await Socket.connect(host, port, timeout: const Duration(seconds: 5));
     socket.setOption(SocketOption.tcpNoDelay, true);
+    // A write to an editor that has gone fails here too; the read side already ends the link for it.
+    unawaited(socket.done.then<void>((_) {}, onError: (Object _) {}));
     return EditorLink(socket, socket.add, deviceName: deviceName, appVersion: appVersion, onClose: socket.destroy);
   }
 

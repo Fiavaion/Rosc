@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Position from AR tracking, where the device has Google Play Services for AR.
+    implementation("com.google.ar:core:1.57.0")
+}

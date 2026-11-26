@@ -29,6 +29,7 @@ import kotlin.math.sin
  */
 class MainActivity : FlutterActivity() {
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var position: ArPosition? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +42,7 @@ class MainActivity : FlutterActivity() {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         val rotation = RotationStream(getSystemService(Context.SENSOR_SERVICE) as SensorManager)
         EventChannel(messenger, "rosccam/rotation").setStreamHandler(rotation)
+        position = ArPosition(this, rotation).also { EventChannel(messenger, "rosccam/position").setStreamHandler(it) }
         MethodChannel(messenger, "rosccam/device").setMethodCallHandler { call, result ->
             when (call.method) {
                 "name" -> result.success(deviceName())
@@ -55,6 +57,11 @@ class MainActivity : FlutterActivity() {
         if (debuggable) {
             EventChannel(messenger, "rosccam/test").setStreamHandler(TestHooks(this, rotation))
         }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        position?.onPermission(requestCode, grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
     }
 
     override fun onDestroy() {
@@ -90,7 +97,12 @@ class RotationStream(private val sensors: SensorManager) : EventChannel.StreamHa
     private val quaternion = FloatArray(4)
 
     /** A rotation the test script holds the device at, in place of the sensor's. */
-    private var held: DoubleArray? = null
+    @Volatile private var held: DoubleArray? = null
+
+    /** The newest rotation, for the AR position to be turned into its world. */
+    @Volatile private var newest: DoubleArray? = null
+
+    fun latest(): DoubleArray? = held ?: newest
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
         sink = events
@@ -116,7 +128,9 @@ class RotationStream(private val sensors: SensorManager) : EventChannel.StreamHa
         }
         // w, x, y, z of the device's rotation in its world frame.
         SensorManager.getQuaternionFromVector(quaternion, event.values)
-        sink?.success(doubleArrayOf(quaternion[0].toDouble(), quaternion[1].toDouble(), quaternion[2].toDouble(), quaternion[3].toDouble()))
+        val value = doubleArrayOf(quaternion[0].toDouble(), quaternion[1].toDouble(), quaternion[2].toDouble(), quaternion[3].toDouble())
+        newest = value
+        sink?.success(value)
     }
 
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}

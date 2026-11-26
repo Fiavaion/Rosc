@@ -48,8 +48,10 @@ namespace
 
 	constexpr double AnnounceInterval = 1.0;
 	constexpr double StateInterval = 0.5;
-	/** The app sends its motion many times a second; a device silent this long has gone. */
+	/** A paired app sends its motion many times a second; one silent this long has gone. */
 	constexpr double SilenceSeconds = 5.0;
+	/** A device waiting to be paired sends nothing while its user reads and types the code. */
+	constexpr double PairingSilenceSeconds = 120.0;
 	constexpr double MotionArrivingSeconds = 0.5;
 	/** Wrong codes a device may type before it is let go and has to connect again for a new one. */
 	constexpr int32 PairingTries = 3;
@@ -381,7 +383,7 @@ void URoscCamServer::Update()
 	}
 	Accept();
 	Receive();
-	if (Connection.IsValid() && Now - Connection->LastHeardSeconds > SilenceSeconds)
+	if (Connection.IsValid() && Now - Connection->LastHeardSeconds > (Connection->bPaired ? SilenceSeconds : PairingSilenceSeconds))
 	{
 		CloseConnection();
 	}

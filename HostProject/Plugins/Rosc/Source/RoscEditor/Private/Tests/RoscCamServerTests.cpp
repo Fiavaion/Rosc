@@ -427,6 +427,15 @@ bool FRoscCamServerTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("No picture goes to a device not paired"), Phone.Count(EMessage::Picture), 0);
 	TestEqual(TEXT("nor any state"), Phone.Count(EMessage::State), 0);
 
+	// Reading the code off the tab and typing it takes a while, with nothing sent meanwhile.
+	const double Typing = FPlatformTime::Seconds() + 5.5;
+	while (FPlatformTime::Seconds() < Typing)
+	{
+		Pump(*Server, Phone);
+		FPlatformProcess::Sleep(0.05f);
+	}
+	TestTrue(TEXT("A device waiting to be paired is kept while its code is typed"), Server->HasDevice() && !Phone.IsClosed());
+
 	const FString Wrong = Code == TEXT("0000") ? TEXT("0001") : TEXT("0000");
 	Phone.Send(EMessage::Pair, FString::Printf(TEXT("{\"code\":\"%s\"}"), *Wrong));
 	if (TestTrue(TEXT("A wrong code is answered"), WaitFor(*Server, Phone, EMessage::Paired, Body)))

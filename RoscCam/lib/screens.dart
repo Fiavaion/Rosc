@@ -132,6 +132,22 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 ),
                 if (controller.connecting) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Connecting…')),
                 _Problem(controller.problem),
+                const SizedBox(height: 24),
+                // Google's terms for ARCore ask for this on the app's main screen.
+                Text(
+                  'This application runs on Google Play Services for AR (ARCore), which is provided by Google and governed by '
+                  'the Google Privacy Policy (policies.google.com/privacy); its use is subject to the Google Terms of Service '
+                  '(policies.google.com/terms). RoscCam uses it, where the device has it, only to track where the device is carried.',
+                  style: text.bodySmall,
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    style: _targetStyle,
+                    onPressed: () => showLicensePage(context: context, applicationName: 'RoscCam', applicationVersion: appVersion),
+                    child: const Text('Licences'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -391,6 +407,7 @@ class ControlRail extends StatelessWidget {
                 Expanded(child: Text(status)),
               ],
             ),
+            Text(motion.isPositionTracked ? 'Position tracked by AR' : 'Position not tracked: turning only', style: text.bodySmall),
             if (motion.problem.isNotEmpty) _Problem(motion.problem),
             const SizedBox(height: 12),
             GridView.count(
