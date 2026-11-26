@@ -86,6 +86,28 @@ public:
 
 	void DiscardTake();
 
+	/** True when the engine's Virtual Camera plugin is on, which shows the shot on a device. */
+	static bool IsVirtualCameraOn();
+
+	/**
+	 * Turns the engine's Virtual Camera plugin on for the project. It loads when the editor restarts.
+	 * @return false with the reason in OutError.
+	 */
+	static bool TurnOnVirtualCamera(FText& OutError);
+
+	/** True when the camera's picture is streamed to the Unreal VCam app. */
+	static bool IsShownOnDevice(const ACineCameraActor* Camera);
+
+	/**
+	 * Streams the camera's picture to the Unreal VCam app through the engine's Virtual Camera
+	 * plugin, as one undo step. The camera is not moved by the plugin: Rosc drives its support.
+	 * @return false with the reason in OutError.
+	 */
+	static bool ShowOnDevice(ACineCameraActor* Camera, FText& OutError);
+
+	/** Stops streaming the camera's picture, as one undo step. */
+	static void StopShowingOnDevice(ACineCameraActor* Camera);
+
 	/** Reads the device, records the take and ends a look in the viewport that has stopped. Done every editor tick. */
 	void Update();
 

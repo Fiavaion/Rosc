@@ -4,9 +4,11 @@
 #include "RoscOperatingSubsystem.h"
 
 #include "CineCameraActor.h"
+#include "CineCameraComponent.h"
 #include "Editor.h"
 #include "Features/IModularFeatures.h"
 #include "HAL/PlatformTime.h"
+#include "Interfaces/IProjectManager.h"
 #include "ILiveLinkClient.h"
 #include "LevelEditorViewport.h"
 #include "LevelSequence.h"
@@ -23,6 +25,59 @@
 
 namespace
 {
+	/**
+	 * The engine's Virtual Camera plugin, used by class path so that Rosc does not load it for users
+	 * who never show the shot on a device (ADR-013). A VCam component with no modifiers does not move
+	 * its camera; its Pixel Streaming output sends the picture to the Unreal VCam app and the app's
+	 * motion back through Live Link.
+	 */
+	const TCHAR* const VirtualCameraPlugin = TEXT("VirtualCamera");
+	const TCHAR* const VCamComponentClassPath = TEXT("/Script/VCamCore.VCamComponent");
+	const TCHAR* const PixelStreamingOutputClassPath = TEXT("/Script/DecoupledOutputProvider.VCamPixelStreamingSession");
+
+	UClass* FindClassByPath(const TCHAR* Path)
+	{
+		return FindObject<UClass>(FTopLevelAssetPath(Path));
+	}
+
+	/** Calls a function of the object found by name, with the arguments set and read by the caller; false when there is no such function. */
+	bool CallByName(UObject* Object, FName FunctionName, TFunctionRef<void(const UFunction&, uint8*)> SetArguments, TFunctionRef<void(const UFunction&, const uint8*)> ReadResults)
+	{
+		UFunction* Function = Object != nullptr ? Object->FindFunction(FunctionName) : nullptr;
+		if (Function == nullptr)
+		{
+			return false;
+		}
+		uint8* Frame = static_cast<uint8*>(FMemory_Alloca_Aligned(Function->ParmsSize, Function->GetMinAlignment()));
+		FMemory::Memzero(Frame, Function->ParmsSize);
+		Function->InitializeStruct(Frame);
+		SetArguments(*Function, Frame);
+		Object->ProcessEvent(Function, Frame);
+		ReadResults(*Function, Frame);
+		Function->DestroyStruct(Frame);
+		return true;
+	}
+
+	/** Calls a function that takes one true-or-false argument. */
+	bool CallWithBool(UObject* Object, FName FunctionName, bool bValue)
+	{
+		return CallByName(Object, FunctionName,
+			[bValue](const UFunction& Function, uint8* Frame)
+			{
+				if (FBoolProperty* Argument = CastField<FBoolProperty>(Function.ChildProperties))
+				{
+					Argument->SetPropertyValue_InContainer(Frame, bValue);
+				}
+			},
+			[](const UFunction&, const uint8*) {});
+	}
+
+	UActorComponent* FindDeviceView(const ACineCameraActor* Camera)
+	{
+		UClass* VCamClass = FindClassByPath(VCamComponentClassPath);
+		return Camera != nullptr && VCamClass != nullptr ? Camera->FindComponentByClass(VCamClass) : nullptr;
+	}
+
 	/** A look in the viewport that has not turned the head for this long is over, also when no end of it was heard. */
 	constexpr double LookEndsAfterSeconds = 0.5;
 
@@ -253,6 +308,93 @@ void URoscOperatingSubsystem::DiscardTake()
 	Take = FRoscTake();
 	TakeRig.Reset();
 	TakeSequence.Reset();
+}
+
+bool URoscOperatingSubsystem::IsVirtualCameraOn()
+{
+	return FindClassByPath(VCamComponentClassPath) != nullptr && FindClassByPath(PixelStreamingOutputClassPath) != nullptr;
+}
+
+bool URoscOperatingSubsystem::TurnOnVirtualCamera(FText& OutError)
+{
+	IProjectManager& Projects = IProjectManager::Get();
+	return Projects.SetPluginEnabled(VirtualCameraPlugin, true, OutError) && Projects.SaveCurrentProjectToDisk(OutError);
+}
+
+bool URoscOperatingSubsystem::IsShownOnDevice(const ACineCameraActor* Camera)
+{
+	return FindDeviceView(Camera) != nullptr;
+}
+
+bool URoscOperatingSubsystem::ShowOnDevice(ACineCameraActor* Camera, FText& OutError)
+{
+	if (Camera == nullptr)
+	{
+		OutError = LOCTEXT("ShowNoCamera", "There is no camera to show on a device.");
+		return false;
+	}
+	UClass* VCamClass = FindClassByPath(VCamComponentClassPath);
+	UClass* OutputClass = FindClassByPath(PixelStreamingOutputClassPath);
+	if (VCamClass == nullptr || OutputClass == nullptr)
+	{
+		OutError = LOCTEXT("ShowNeedsVirtualCamera", "Showing the shot on a device needs the engine's Virtual Camera plugin. Turn it on, and the editor restarts.");
+		return false;
+	}
+	if (IsShownOnDevice(Camera))
+	{
+		return true;
+	}
+
+	FScopedTransaction Transaction(LOCTEXT("ShowOnDevice", "Show on Device"));
+	Camera->Modify();
+	USceneComponent* View = NewObject<USceneComponent>(Camera, VCamClass, MakeUniqueObjectName(Camera, VCamClass, TEXT("RoscDeviceView")), RF_Transactional);
+	View->SetupAttachment(Camera->GetCineCameraComponent());
+	Camera->AddInstanceComponent(View);
+	View->RegisterComponent();
+
+	UObject* Output = nullptr;
+	CallByName(View, TEXT("AddOutputProvider"),
+		[OutputClass](const UFunction& Function, uint8* Frame)
+		{
+			if (FObjectPropertyBase* ProviderClass = CastField<FObjectPropertyBase>(Function.FindPropertyByName(TEXT("ProviderClass"))))
+			{
+				ProviderClass->SetObjectPropertyValue_InContainer(Frame, OutputClass);
+			}
+		},
+		[&Output](const UFunction& Function, const uint8* Frame)
+		{
+			if (const FObjectPropertyBase* Created = CastField<FObjectPropertyBase>(Function.FindPropertyByName(TEXT("CreatedProvider"))))
+			{
+				Output = Created->GetObjectPropertyValue_InContainer(Frame);
+			}
+		});
+	if (Output == nullptr)
+	{
+		Transaction.Cancel();
+		Camera->RemoveInstanceComponent(View);
+		View->DestroyComponent();
+		OutError = LOCTEXT("ShowNoOutput", "The Virtual Camera plugin did not make its Pixel Streaming output. Check that the plugin is on and up to date.");
+		return false;
+	}
+	CallWithBool(View, TEXT("SetEnabled"), true);
+	CallWithBool(Output, TEXT("SetActive"), true);
+	return true;
+}
+
+void URoscOperatingSubsystem::StopShowingOnDevice(ACineCameraActor* Camera)
+{
+	UActorComponent* View = FindDeviceView(Camera);
+	if (View == nullptr)
+	{
+		return;
+	}
+	const FScopedTransaction Transaction(LOCTEXT("StopShowingOnDevice", "Stop Showing on Device"));
+	Camera->Modify();
+	View->Modify();
+	// Switched off first, so its outputs close in order before it goes.
+	CallWithBool(View, TEXT("SetEnabled"), false);
+	Camera->RemoveInstanceComponent(View);
+	View->DestroyComponent();
 }
 
 bool URoscOperatingSubsystem::Tick(float DeltaSeconds)

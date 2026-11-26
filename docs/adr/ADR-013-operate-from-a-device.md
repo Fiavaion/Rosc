@@ -1,7 +1,7 @@
 # ADR-013: Operating the camera from a device
 
 **Date:** 2026-11-26
-**Status:** Accepted, except point 3, which is Proposed pending Spike #4
+**Status:** Accepted (point 3 after Spike #4, 2026-11-26: the rule held)
 **Deciders:** The owner (asked for the support's head to be driven from the viewport and from the
 VCam app on a device, with stabilise and filter options for the recorded motion)
 
@@ -27,7 +27,7 @@ Pixel Streaming and about twenty other plugins with it.
    Operate takes the way the device is held as the start. From there, the device's turn drives
    pan, tilt and roll. On a Steadicam, handheld rig or drone, its movement drives travel, traverse
    and lift, in the rig's own frame. The limits are reported, not enforced.
-3. **The picture goes out through the engine's VCam** (Proposed, pending Spike #4). Show on Device
+3. **The picture goes out through the engine's VCam.** Show on Device
    adds a VCam component to the camera with a Pixel Streaming output and no modifiers, made by
    class path, so Rosc does not link the Virtual Camera plugin and does not load it for users who
    never use it. If the plugin is off, Rosc asks to turn it on for the project, and the editor
@@ -47,6 +47,17 @@ Pixel Streaming and about twenty other plugins with it.
    against the rig's limits.
 6. **Bake** writes one key per frame on the rig's axes into the open shot, in one undo step, as the
    focus racks do.
+
+## Spike #4 result (2026-11-26)
+The Virtual Camera plugin was turned on in the host project only, and the test
+`Rosc.Editor.Operate.ShowOnDevice` was run headless against it. The component and its Pixel Streaming
+output were both made by class path. The component's target is the Rosc camera, and the camera
+stays where its support holds it. Undo and redo work. The rule held, so the decision is kept.
+Two findings from the spike:
+- The output must be turned on after the component is enabled.
+- The plugin warns that its default input profile names keys for its own lens controls. It does
+  this for any VCam component without modifiers. The warning is harmless, and the user guide says so.
+The picture reaching a real iPad or iPhone remains a hand check.
 
 ## Consequences
 - Rosc gains one plugin dependency, Live Link, which is light and release-grade.

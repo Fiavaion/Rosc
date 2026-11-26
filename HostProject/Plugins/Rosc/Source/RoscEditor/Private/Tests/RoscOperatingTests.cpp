@@ -3,6 +3,7 @@
 
 #include "Channels/MovieSceneFloatChannel.h"
 #include "CineCameraActor.h"
+#include "CineCameraComponent.h"
 #include "Editor.h"
 #include "Features/IModularFeatures.h"
 #include "HAL/PlatformProcess.h"
@@ -339,6 +340,89 @@ bool FRoscOperateViewportTest::RunTest(const FString& Parameters)
 	View->MoveViewportCamera(FVector::ZeroVector, FRotator(TiltMax + 10.0, 0.0, 0.0));
 	GEditor->BroadcastEndCameraMovement(*Camera);
 	TestTrue(TEXT("The head stops at its tilt limit or short of it"), Rig->GetPose().Tilt <= TiltMax + 1.e-3);
+	return true;
+}
+
+/**
+ * Show on Device (ADR-013, Spike #4): the camera's picture goes to the Unreal VCam app through the
+ * engine's Virtual Camera plugin, which does not move the camera. With the plugin off, Rosc says
+ * what to turn on.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRoscOperateShowOnDeviceTest, "Rosc.Editor.Operate.ShowOnDevice", EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FRoscOperateShowOnDeviceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	ACineCameraActor* Camera = nullptr;
+	ARoscRig* Rig = MakeTripod(World, Camera);
+	ON_SCOPE_EXIT
+	{
+		URoscOperatingSubsystem::StopShowingOnDevice(Camera);
+		RemoveTripod(World, Camera);
+		GEditor->ResetTransaction(FText::FromString(TEXT("Rosc show on device test")));
+	};
+	if (!TestNotNull(TEXT("A camera on a tripod"), Rig))
+	{
+		return false;
+	}
+
+	FText Error;
+	if (!URoscOperatingSubsystem::IsVirtualCameraOn())
+	{
+		TestFalse(TEXT("With the Virtual Camera plugin off, the shot is not shown on a device"), URoscOperatingSubsystem::ShowOnDevice(Camera, Error));
+		TestTrue(TEXT("and Rosc says which plugin to turn on"), Error.ToString().Contains(TEXT("Virtual Camera")));
+		TestFalse(TEXT("and nothing is added to the camera"), URoscOperatingSubsystem::IsShownOnDevice(Camera));
+		AddInfo(TEXT("The Virtual Camera plugin is off in this project: the refusal was checked."));
+		return true;
+	}
+
+	// The engine's VCam warns that its default input profile names keys for its own lens and
+	// filmback controls, which a view with no modifiers does not have. The warnings are the
+	// plugin's, for any such view, and change nothing.
+	AddExpectedMessagePlain(TEXT("Failed to map"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 0);
+	// Undoing the view, the plugin tells its output of the change before the view is set up again.
+	AddExpectedMessagePlain(TEXT("Owning VCamComponent is not enabled or initialized"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 0);
+
+	const FTransform Before = Camera->GetActorTransform();
+	TestTrue(TEXT("The shot is shown on a device"), URoscOperatingSubsystem::ShowOnDevice(Camera, Error));
+	TestTrue(TEXT("The camera has the device view"), URoscOperatingSubsystem::IsShownOnDevice(Camera));
+	TestTrue(TEXT("Showing it twice adds nothing"), URoscOperatingSubsystem::ShowOnDevice(Camera, Error));
+
+	TArray<UActorComponent*> Views;
+	Camera->GetComponents(FindObject<UClass>(FTopLevelAssetPath(TEXT("/Script/VCamCore.VCamComponent"))), Views);
+	if (!TestEqual(TEXT("One device view on the camera"), Views.Num(), 1))
+	{
+		return false;
+	}
+	USceneComponent* View = Cast<USceneComponent>(Views[0]);
+	TestTrue(TEXT("It looks through the camera's lens"), View != nullptr && View->GetAttachParent() == Camera->GetCineCameraComponent());
+
+	// What the plugin says of itself: its target camera, and a Pixel Streaming output that is on.
+	UFunction* GetTarget = View->FindFunction(TEXT("GetTargetCamera"));
+	UObject* Target = nullptr;
+	if (TestNotNull(TEXT("The view can name its camera"), GetTarget))
+	{
+		uint8* Frame = static_cast<uint8*>(FMemory_Alloca_Aligned(GetTarget->ParmsSize, GetTarget->GetMinAlignment()));
+		FMemory::Memzero(Frame, GetTarget->ParmsSize);
+		View->ProcessEvent(GetTarget, Frame);
+		Target = CastField<FObjectPropertyBase>(GetTarget->GetReturnProperty())->GetObjectPropertyValue_InContainer(Frame);
+	}
+	TestTrue(TEXT("The view's target is the Rosc camera"), Target == Camera->GetCineCameraComponent());
+	TArray<UObject*> Outputs;
+	GetObjectsWithOuter(View, Outputs, EGetObjectsFlags::None);
+	const UObject* const* Output = Outputs.FindByPredicate([](const UObject* Object) { return Object->GetClass()->GetPathName() == TEXT("/Script/DecoupledOutputProvider.VCamPixelStreamingSession"); });
+	TestNotNull(TEXT("The view streams with Pixel Streaming"), Output);
+
+	// The view does not move the camera: the support does.
+	URoscOperatingSubsystem::Get()->Update();
+	TestTrue(TEXT("The camera stays where its support holds it"), Camera->GetActorTransform().Equals(Before, 0.01));
+
+	TestTrue(TEXT("Showing on a device can be undone"), GEditor->UndoTransaction());
+	TestFalse(TEXT("After undo the camera has no device view"), URoscOperatingSubsystem::IsShownOnDevice(Camera));
+	TestTrue(TEXT("and redone"), GEditor->RedoTransaction());
+	TestTrue(TEXT("After redo it is shown again"), URoscOperatingSubsystem::IsShownOnDevice(Camera));
+	URoscOperatingSubsystem::StopShowingOnDevice(Camera);
+	TestFalse(TEXT("Stop Showing takes the view off"), URoscOperatingSubsystem::IsShownOnDevice(Camera));
 	return true;
 }
 
