@@ -92,4 +92,13 @@ namespace Rosc::GripEditing
 	 * @return the sequence baked into, or null with the reason in OutError.
 	 */
 	ROSCEDITOR_API ULevelSequence* BakeMoveToSequencer(ARoscRig* Rig, FText& OutError);
+
+	/**
+	 * Writes a take, one pose for every frame of the sequence from the start frame, as a key on
+	 * every frame of the axes a device drives: the head's, and on a free-moving support its
+	 * position. Keys already in the take's frames are replaced, the camera's baked imperfection
+	 * among them.
+	 * @return false with the reason in OutError.
+	 */
+	ROSCEDITOR_API bool BakeTake(ARoscRig* Rig, ULevelSequence* Sequence, FFrameNumber StartFrame, TConstArrayView<FRoscRigPose> Poses, FText& OutError);
 }

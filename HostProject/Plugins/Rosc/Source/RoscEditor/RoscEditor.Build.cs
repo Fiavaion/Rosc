@@ -31,6 +31,7 @@ public class RoscEditor : ModuleRules
 			"LevelEditor",
 			"LevelSequence",
 			"LevelSequenceEditor",
+			"LiveLinkInterface",
 			"MovieScene",
 			"MovieSceneTools",
 			"MovieSceneTracks",

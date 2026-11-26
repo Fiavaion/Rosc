@@ -26,6 +26,7 @@
 #include "RoscOptics.h"
 #include "RoscRig.h"
 #include "RoscSequenceUtils.h"
+#include "RoscTake.h"
 
 #define LOCTEXT_NAMESPACE "RoscEditor"
 
@@ -479,6 +480,81 @@ bool Rosc::GripEditing::BakeMove(ARoscRig* Rig, ULevelSequence* Sequence, FFrame
 	Rig->BakedOperator = Rig->Operator;
 
 	IncludeInPlaybackRange(MovieScene, MoveRange);
+	Transaction.Reset();
+	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
+	return true;
+}
+
+bool Rosc::GripEditing::BakeTake(ARoscRig* Rig, ULevelSequence* Sequence, FFrameNumber StartFrame, TConstArrayView<FRoscRigPose> Poses, FText& OutError)
+{
+	if (Rig == nullptr || Poses.Num() < 2)
+	{
+		OutError = LOCTEXT("BakeNoTake", "There is no take to bake. Record one first.");
+		return false;
+	}
+	if (Sequence == nullptr || Sequence->GetMovieScene() == nullptr)
+	{
+		OutError = LOCTEXT("BakeTakeNoSequence", "The sequence the take was recorded against is no longer there.");
+		return false;
+	}
+
+	UMovieScene* MovieScene = Sequence->GetMovieScene();
+	const FFrameRate TickResolution = MovieScene->GetTickResolution();
+	const FFrameRate DisplayRate = MovieScene->GetDisplayRate();
+	const auto TickOf = [&](int32 Frame) { return ConvertFrameTime(FFrameTime(StartFrame + Frame), DisplayRate, TickResolution).RoundToFrame(); };
+	const TRange<FFrameNumber> TakeRange = TRange<FFrameNumber>::Inclusive(TickOf(0), TickOf(Poses.Num() - 1));
+
+	// Sequencer is told of the bake after the undo step closes: told inside it, Sequencer keeps the step open.
+	TOptional<FScopedTransaction> Transaction(InPlace, LOCTEXT("BakeTake", "Bake Take to Sequencer"));
+	Sequence->Modify();
+	MovieScene->Modify();
+
+	// A key on every frame of each axis the device drove.
+	const FRoscRigSpec Spec = Rig->GetSpec();
+	const FGuid RigBinding = FindOrAddBinding(Sequence, Rig);
+	TArray<ERoscRigAxis, TInlineAllocator<6>> Driven = { ERoscRigAxis::Pan, ERoscRigAxis::Tilt, ERoscRigAxis::Roll };
+	if (Rosc::Take::IsFreeMoving(Spec.Type))
+	{
+		Driven.Append({ ERoscRigAxis::Travel, ERoscRigAxis::Traverse, ERoscRigAxis::Lift });
+	}
+	for (const ERoscRigAxis Axis : Driven)
+	{
+		if (!Spec.GetAxis(Axis).bUsed)
+		{
+			continue;
+		}
+		UMovieSceneFloatTrack* Track = FindOrAddFloatTrack(MovieScene, RigBinding, ARoscRig::GetAxisPropertyName(Axis), ARoscRig::GetAxisPropertyName(Axis).ToString(), Rosc::Rig::GetAxisName(Spec.Type, Axis));
+		Track->Modify();
+		UMovieSceneFloatSection* Section = FindOrAddSection<UMovieSceneFloatSection>(Track);
+		Section->Modify();
+		FMovieSceneFloatChannel& Channel = Section->GetChannel();
+		DeleteKeysInRange(Channel, TakeRange);
+		for (int32 Frame = 0; Frame < Poses.Num(); ++Frame)
+		{
+			Channel.AddLinearKey(TickOf(Frame), static_cast<float>(Poses[Frame].Get(Axis)));
+		}
+		Section->MarkAsChanged();
+	}
+
+	// The device was the operator's hand: a baked imperfection in the same frames would shake the camera twice.
+	if (ACineCameraActor* Camera = Rig->GetMountedCamera())
+	{
+		const FGuid CameraBinding = FindBinding(Sequence, Camera);
+		if (UMovieScene3DTransformTrack* Track = CameraBinding.IsValid() ? MovieScene->FindTrack<UMovieScene3DTransformTrack>(CameraBinding) : nullptr)
+		{
+			Track->Modify();
+			UMovieScene3DTransformSection* Section = FindOrAddSection<UMovieScene3DTransformSection>(Track);
+			Section->Modify();
+			const TArrayView<FMovieSceneDoubleChannel*> Channels = Section->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
+			for (int32 ChannelIndex = 0; ChannelIndex < 6; ++ChannelIndex)
+			{
+				DeleteKeysInRange(*Channels[ChannelIndex], TakeRange);
+			}
+			Section->MarkAsChanged();
+		}
+	}
+
+	IncludeInPlaybackRange(MovieScene, TakeRange);
 	Transaction.Reset();
 	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
 	return true;

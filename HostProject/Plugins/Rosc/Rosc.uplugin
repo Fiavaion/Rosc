@@ -76,6 +76,10 @@
 		{
 			"Name": "NNERuntimeORT",
 			"Enabled": true
+		},
+		{
+			"Name": "LiveLink",
+			"Enabled": true
 		}
 	]
 }
