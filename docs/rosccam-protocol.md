@@ -41,6 +41,16 @@ are little-endian.
 A Hello with a protocol version the editor does not speak is answered with a Welcome of its own
 version, and the connection is closed; the app says which side to update.
 
+### Connections and pairing
+- The editor takes one device at a time. While a device is paired, a second one that connects is
+  sent a Paired message with `"paired": false` and the reason, and the connection is closed. A
+  device that has connected but not paired gives way to the next one that connects.
+- The pairing code is new for each connection. After three wrong codes the editor closes the
+  connection; connecting again gives a new code.
+- A paired app sends its motion 60 times a second. The editor closes a paired connection it has
+  heard nothing from for 5 seconds, and one waiting to be paired after 2 minutes.
+- Unpairing closes the connection.
+
 ### Motion (0x20)
 | Offset | Type | What |
 |---|---|---|
@@ -55,6 +65,18 @@ screen's: x to the right of the screen held upright, y to its top, z out of the 
 held in landscape with the top of the device to the left, and the camera looks out of its back.
 The editor turns this into a camera rotation; only changes from the way the device was held when
 Operate began are used, so the world frame's heading does not matter.
+
+### Picture (0x10)
+The camera's view as the camera sees it, without the monitor tools, at 24 frames a second. It has
+the shape of the camera's view: 960 pixels across and taller for a sensor squarer than 16:9 (a 3:2
+sensor gives 960 x 640), 540 pixels high and wider for one wider than that. A frame is sent only
+when the one before it has gone, so a slow network gets fewer frames, never older ones.
+
+### Position
+Where AR tracks it (ARCore, ARKit), the app turns the AR position into the rotation's world frame
+before it sends it: AR's world is y up with a heading of its own, so the app measures the turn
+between the two from the device's two rotations on every frame. Without AR tracking, bit 0 of
+the flags is clear and the position is not used.
 
 ### Controls (0x30)
 | `action` | Other fields | Does what the panel's control does |

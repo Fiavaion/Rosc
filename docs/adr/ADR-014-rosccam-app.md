@@ -71,6 +71,10 @@ broadcast) in place of the sensor's, and the sensor itself is a hand check on a 
   fine on a local network and keeps both ends simple.
 - The protocol is Rosc's own. A change to it raises its version in the hello message; the app
   says when the editor's Rosc is older or newer than it understands.
+- Position on Android comes from ARCore, whose client library is not open source (ARCore
+  Additional Terms of Service). It is fetched from Google's Maven repository when the app is
+  built, not kept in this repository; the app carries the notice ARCore's terms ask for on its
+  first screen, and a device without Google Play Services for AR works without position.
 - Store listings need paid developer accounts: the owner's decision. Until then the Android app
   installs from its APK, and the iOS app from Xcode.
 

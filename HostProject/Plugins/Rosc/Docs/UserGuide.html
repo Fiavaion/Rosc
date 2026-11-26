@@ -127,7 +127,7 @@
 
 <h3 id="grip-operate">Operating the head</h3>
 <p><strong>From the viewport.</strong> Press <b class="ui">Look Through</b> and look around the viewport the way you usually do. On a support, turning the view pans and tilts the support's head, within the head's range, and the camera stays on its mount. Each look is one undo step.</p>
-<p><strong>From a phone or tablet.</strong> The <b class="ui">Device</b> section of the Grip tab hands the head to a device you hold like a camera: Epic's free Unreal VCam app on an iPad or iPhone, or any tracker that Unreal's Live Link brings in.</p>
+<p><strong>From a phone or tablet.</strong> The <b class="ui">Device</b> section of the Grip tab hands the head to a device you hold like a camera: Rosc's own app, RoscCam, on an Android phone or tablet (see <a href="#grip-rosccam">RoscCam</a>); Epic's free Unreal VCam app on an iPad or iPhone; or any tracker that Unreal's Live Link brings in. With Unreal VCam, the steps are these.</p>
 <ol>
 	<li><strong>Turn on the picture once.</strong> Rosc sends the shot to the app through the engine's Virtual Camera plugin, which is off in a new project. Press <b class="ui">Turn On Virtual Camera and Restart</b>; the editor offers to save your work, then restarts. The plugin is a Beta part of the engine and brings Pixel Streaming with it.</li>
 	<li><strong>Show the shot on the device.</strong> Press <b class="ui">Show on Device</b>. Put the device and the computer on the same network, open Unreal VCam and connect it to the computer's IP address. If Windows asks whether to let the editor through its firewall, allow it on private networks. The shot appears on the device.</li>
@@ -138,6 +138,17 @@
 	<li><strong>Bake the take.</strong> <b class="ui">Bake Take</b> writes the take, as set, into the sequence from the frame where recording began: one key on every frame of the support's axes, as one undo step. The take is kept, so you can change the settings and bake it again; <b class="ui">Discard Take</b> throws it away.</li>
 </ol>
 <p>If the take asks for more than the support can do, such as a pan faster than the head turns, the tab says which axis and by how much. Stabilise more or operate the shot again, or bake it all the same.</p>
+
+<h3 id="grip-rosccam">RoscCam</h3>
+<p>RoscCam makes an Android phone or tablet the camera. It shows the camera's picture, with frame lines for the delivery aspect, turns the support's head as you turn the device, and carries the controls for a take, so you can operate a shot away from the desk. It needs no engine plugin. RoscCam for iPhone and iPad is to come; until then, use Unreal VCam on those.</p>
+<ol>
+	<li><strong>Install the app.</strong> Get <code>RoscCam.apk</code> from the Rosc releases page (<code>github.com/Fiavaion/Rosc/releases</code>), or build it from the <code>RoscCam</code> folder of the source. Copy it to the device and open it there; allow installing from that source when Android asks. The app is not in Google Play.</li>
+	<li><strong>Start the server.</strong> Choose the camera in the panel, open the Grip tab and press <b class="ui">RoscCam Server</b> in the RoscCam section. It is off until you start it, and stops when the editor closes. If Windows asks whether to let the editor through its firewall, allow it on private networks only.</li>
+	<li><strong>Connect.</strong> Put the device and the computer on the same network and open RoscCam. The computer is listed under <b class="ui">Editors on this network</b>: tap it. If it is not listed (some networks keep the announcement from the device), type the address the Grip tab shows and tap <b class="ui">Connect</b>.</li>
+	<li><strong>Pair.</strong> The Grip tab shows a four-digit code. Type it on the device and tap <b class="ui">Pair</b>. Nothing is sent to a device, and nothing it sends counts, until it is paired. One device is paired at a time; <b class="ui">Unpair</b> in the Grip tab lets it go, and pairing again needs a new code.</li>
+	<li><strong>Operate.</strong> Hold the device in landscape, its top to the left, like a camera. Once paired, it is chosen under <b class="ui">Device</b>. Tap <b class="ui">Operate</b> on the device, or press it in the tab. Everything in <a href="#grip-operate">Operating the head</a> works the same: <b class="ui">Zero</b>, <b class="ui">Record</b> and <b class="ui">Stop</b>, and <b class="ui">Bake Take</b> are on the device too. <b class="ui">Lens −</b> and <b class="ui">Lens +</b> put on the previous or next lens of the kit, and <b class="ui">Rack to Mark</b> racks the focus to a focus mark, baked at the playhead. Each is one undo step in the editor, as the same control in the panel is. A control that cannot be done says why, at the foot of the picture.</li>
+</ol>
+<p>On a Steadicam, handheld rig or drone, the support also goes where you carry the device, if the device has Google Play Services for AR (ARCore): the app says <b class="ui">Position tracked by AR</b>. It asks to use the camera for that, and uses it for nothing else. Without ARCore, the device turns the head only.</p>
 
 <h2 id="focus">6. Focus</h2>
 <ul>
@@ -267,7 +278,9 @@
 	<li><strong>A take that is not baked is lost when the editor closes.</strong> Bake it into the sequence to keep it.</li>
 	<li><strong>Turn the Virtual Camera plugin off for final renders.</strong> With it on, a render can lose the shot's camera part of the way through and show the level from somewhere else, and the Output Log shows errors from the plugins it brings (CommonUI, Pixel Streaming) at every render. Preflight says so while the plugin is on. Turn it off under <b class="ui">Edit &gt; Plugins</b> and restart before a delivery, or look at the files when the render is done.</li>
 	<li><strong>The Virtual Camera plugin warns once in the Output Log</strong> when the shot is first shown on a device: that it "failed to map" keys for its own lens controls. Rosc does not use those controls, and the warning is harmless.</li>
-	<li><strong>Unreal VCam is for iPad and iPhone.</strong> Android devices and other trackers can still operate the head through any Live Link source; they show no picture.</li>
+	<li><strong>Unreal VCam is for iPad and iPhone; RoscCam, for now, is for Android.</strong> Other trackers can still operate the head through any Live Link source; they show no picture.</li>
+	<li><strong>RoscCam's picture is for framing and focus</strong>: 24 frames a second, as large as the camera's sensor shape allows at 960 pixels or more across, without the monitor tools. On a busy network it gets fewer frames, never older ones.</li>
+	<li><strong>The editor listens on the network while the RoscCam server runs</strong>, on ports 47820 and 47821. Only a device paired with the code is sent the picture.</li>
 	<li><strong>The camera database is a reference, not a specification.</strong> Sensor areas, formats and lens data come from the manufacturers' published figures; check anything a shoot depends on against the manufacturer.</li>
 </ul>
 
@@ -284,6 +297,8 @@
 		<tr><td>The picture goes black or white with Physical exposure on</td><td>The level is not lit at real-world levels. Read <b class="ui">Exposes for</b> in the Camera tab, then change the light or the stop, or turn Physical exposure off.</td></tr>
 		<tr><td>The camera turns in the viewport but will not move</td><td>It is on a support: turning the view turns the head, and the support holds the camera in place. Move the support in the Grip tab, or choose <b class="ui">No support</b> to free it.</td></tr>
 		<tr><td>No device is listed under Device</td><td>Open the Unreal VCam app and connect it to this computer, with both on the same network, or start the tracker's Live Link source.</td></tr>
+		<tr><td>RoscCam does not list the computer</td><td>Check that the RoscCam server is started and both are on the same network, then type the address the Grip tab shows. Some networks, such as guest Wi-Fi, keep devices from reaching each other at all.</td></tr>
+		<tr><td>RoscCam says the editor ended the connection</td><td>The device was unpaired, the server stopped, or the device stopped sending for five seconds (it went to sleep or lost the network). Connect and pair again; under <b class="ui">Device</b> it comes back as the same device, so press <b class="ui">Zero</b> and carry on.</td></tr>
 		<tr><td>The tab says no motion is arriving from the device</td><td>The app has closed or lost the network. Connect it again and press <b class="ui">Zero</b> to carry on from where the head is.</td></tr>
 		<tr><td>Sequencer plays the old move</td><td>The marks changed after the bake. Press <b class="ui">Bake to Sequencer</b> again.</td></tr>
 		<tr><td>Render is greyed out</td><td>A preflight finding stops the render. Put it right under Preflight, then render.</td></tr>
