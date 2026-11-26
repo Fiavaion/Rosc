@@ -28,3 +28,10 @@ CLAUDE.local.md
 
 # Python caches
 __pycache__/
+
+# The project's working notes stay on the owner's machine (ADR-011)
+/CLAUDE.md
+/TECHNICAL_DEBT.md
+/notes/
+/evals/
+/tools/evals.ps1
