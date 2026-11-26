@@ -1,4 +1,5 @@
-// Copyright 2026 Fiavaion. All rights reserved.
+// Copyright 2026 Fiavaion
+// SPDX-License-Identifier: Apache-2.0
 
 #include "RoscOptics.h"
 

@@ -18,21 +18,21 @@ $code = $LASTEXITCODE
 Select-String -Path $log -Pattern "\): (error|warning) |: fatal error |error LNK|^ERROR:|BUILD SUCCESSFUL|BUILD FAILED|AutomationTool exiting" |
 	Select-Object -First 80 | ForEach-Object { $_.Line }
 
-# What a buyer needs must be in the package, and every source file must say whose it is.
+# What a user needs must be in the package, and every source file must say whose it is and its licence.
 if ($code -eq 0) {
 	$needed = @(
-		"Rosc.uplugin", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
+		"Rosc.uplugin", "LICENSE", "THIRD_PARTY_NOTICES.md", "Docs\UserGuide.html", "Docs\images\panel-camera.png", "Docs\images\sample-stage-peaking.png",
 		"Content\Sample\RoscSampleStage.umap", "Resources\Icon128.png", "Resources\Icons\Panel.svg",
 		"Resources\Database\lenses.json", "Resources\AI\models.json", "Resources\AI\rosc_ai_server.py",
 		"Shaders\Private\RoscMonitor.usf", "Binaries\Win64\UnrealEditor-RoscEditor.dll"
 	)
 	$missing = @($needed | Where-Object { -not (Test-Path (Join-Path $outDir $_)) })
 	$unsigned = @(Get-ChildItem -Recurse -File (Join-Path $outDir "Source"), (Join-Path $outDir "Shaders") -Include *.h, *.cpp, *.cs, *.usf |
-		Where-Object { (Get-Content $_.FullName -TotalCount 1) -notmatch "^// Copyright \d{4} " })
+		Where-Object { ((Get-Content $_.FullName -TotalCount 2) -join "`n") -notmatch "^// Copyright \d{4} Fiavaion`n// SPDX-License-Identifier: Apache-2.0$" })
 	$missing | ForEach-Object { Write-Output "MISSING from the package: $_" }
-	$unsigned | ForEach-Object { Write-Output "NO COPYRIGHT NOTICE: $($_.FullName)" }
+	$unsigned | ForEach-Object { Write-Output "NO COPYRIGHT AND LICENCE NOTICE: $($_.FullName)" }
 	$files = @(Get-ChildItem -Recurse -File $outDir).Count
-	Write-Output ("package contents: {0} files, {1} missing, {2} source files without a copyright notice" -f $files, $missing.Count, $unsigned.Count)
+	Write-Output ("package contents: {0} files, {1} missing, {2} source files without a copyright and licence notice" -f $files, $missing.Count, $unsigned.Count)
 	if ($missing.Count -gt 0 -or $unsigned.Count -gt 0) { $code = 1 }
 }
 

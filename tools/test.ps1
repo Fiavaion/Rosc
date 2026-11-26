@@ -1,7 +1,7 @@
 # Runs Rosc automation tests in a headless editor and prints pass/fail counts.
 # Usage: powershell -File tools/test.ps1 [-Filter Rosc.Core.Optics] [-Rendering] [-EditorArgs "..."]
 #   -Rendering   start the editor with a real GPU device (needed by tests that render frames).
-#   -EditorArgs  more arguments for the editor's command line (tools/evals.ps1 uses this).
+#   -EditorArgs  more arguments for the editor's command line.
 param(
 	# LESSON-TOOL-006: with its dot. The engine matches a filter anywhere in a test's name, and "Rosc" alone is
 	# also in "SuperOscillator".

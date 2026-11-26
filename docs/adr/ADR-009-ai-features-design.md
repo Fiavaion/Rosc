@@ -53,7 +53,7 @@ consent means, and how the shot assistant acts on the scene.
    (focal length, MIT). Only models whose weights are published for commercial use are
    listed; RMBG is not, being non-commercial. What was checked is each model's card and
    licence tag, not the licence text or the training data, and MoGe's MIT is a tag only:
-   counsel reviews these before release (`notes/TODOs.md`). Files live in a per-user folder
+   a fuller licence review is owed before a release. Files live in a per-user folder
    shared by all projects (`%LOCALAPPDATA%/Rosc/Models`, or the folder in the settings). The
    AI tab shows the licence and downloads a file only when the user presses Download; a
    download is hashed before it is given its name, and a file is hashed again each time a

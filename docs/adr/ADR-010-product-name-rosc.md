@@ -33,9 +33,10 @@ them after a release.
   and every line of narration that says the name).
 - A file delivered before the rename has `uecine/...` metadata keys; one delivered after has
   `rosc/...`. No tool of ours reads delivered files by key except the tests.
-- Commit messages before 2026-11-25 say UEcine. History is not rewritten.
+- Commit messages before 2026-11-25 say UEcine. History is not rewritten for the name (it was
+  rewritten once for publishing, ADR-011, and those messages still say UEcine).
 - A name search was a quick web search only. A trademark search and a check of the Fab listing
-  name are still owed before release (`notes/TODOs.md`).
+  name are still owed before a Fab listing (ADR-011).
 
 ## Alternatives considered
 1. Keep the code names and change only what the user sees — rejected: two names for one thing

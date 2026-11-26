@@ -1,4 +1,5 @@
-// Copyright 2026 Fiavaion. All rights reserved.
+// Copyright 2026 Fiavaion
+// SPDX-License-Identifier: Apache-2.0
 
 #include "CineCameraActor.h"
 #include "Containers/Ticker.h"
@@ -30,9 +31,8 @@
  * made on the plan as the model wrote it, and the plan is then read against the set as the
  * panel would read it, where a step that cannot be carried out fails the case.
  *
- * The cases are a file outside the plugin (evals/shot-assistant/cases.json in the repository),
- * and asking the model costs money, so the run is asked for on the command line: see
- * tools/evals.ps1.
+ * The cases are a file outside the plugin, and asking the model costs money, so the run is
+ * asked for on the editor's command line (see Rosc.Evals.ShotAssistant below).
  */
 namespace
 {
@@ -847,7 +847,7 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 }
 
 /**
- * The shot assistant's evals. Asked for on the command line (tools/evals.ps1):
+ * The shot assistant's evals. Asked for on the editor's command line:
  *   -RoscEvals=<cases file>   reads the cases and stands up each one's set; nothing is sent.
  *   -RoscEvalsLive            also asks the model in the user's settings for each case's plan.
  * The live run uses the user's own key and what they have agreed to send, and it is billed to
@@ -861,7 +861,7 @@ bool FRoscShotAssistantEvalsTest::RunTest(const FString& Parameters)
 	FString CasesFile;
 	if (!FParse::Value(FCommandLine::Get(), TEXT("RoscEvals="), CasesFile))
 	{
-		AddInfo(TEXT("Skipped: the evals are asked for with tools/evals.ps1."));
+		AddInfo(TEXT("Skipped: the evals are asked for with -RoscEvals=<cases file> on the command line."));
 		return true;
 	}
 	FString CasesText;
@@ -913,7 +913,7 @@ bool FRoscShotAssistantEvalsTest::RunTest(const FString& Parameters)
 	{
 		Run->Ask = [](const FString&, const FString&, FText& OutError, TFunction<void(const FRoscShotPlanResult&)>)
 		{
-			OutError = FText::FromString(TEXT("Not asked: add -Live to tools/evals.ps1 to ask the model."));
+			OutError = FText::FromString(TEXT("Not asked: add -RoscEvalsLive to the command line to ask the model."));
 			return false;
 		};
 	}

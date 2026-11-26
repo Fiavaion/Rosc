@@ -8,7 +8,7 @@ single-image depth
 ## Context
 AI features are optional. Studios under NDA will not send footage off the machine. Most strong
 models are non-commercial; the commercially safe set is listed in
-`notes/claude-project-inventory.md`. The editor already uses the GPU, and in-engine inference
+the project's research notes (kept with the project, not published). The editor already uses the GPU, and in-engine inference
 (NNE with ONNX Runtime) has limits: no models over 2 GB with external data, runtime version
 coupling.
 

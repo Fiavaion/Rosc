@@ -11,8 +11,8 @@ panel, with a slate, burn-ins, named files, camera and lens metadata and a camer
 same path has to run unattended, so the phase's acceptance test can render with each intent and
 read the files back.
 
-What the 5.8 source says (file references are in `notes/claude-project-inventory.md`, "Movie
-Render Graph in 5.8"):
+What the 5.8 source says (file references are in the project's research notes, "Movie
+Render Graph in 5.8", kept with the project and not published):
 - A `UMovieGraphConfig` can be built in C++ at run time (`CreateNodeByClass`,
   `AddLabeledEdge`, `AddInput`, `AddOutput`); none of it is editor-only, and an unsaved graph
   is accepted by a job.

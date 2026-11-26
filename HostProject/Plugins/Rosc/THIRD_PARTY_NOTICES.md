@@ -1,7 +1,7 @@
 # Rosc — third-party notices
 
-This file lists everything in or around Rosc that comes from someone else, and the terms it
-comes under.
+Rosc itself is free and open source under the Apache License 2.0 (`LICENSE`). This file lists
+everything in or around Rosc that comes from someone else, and the terms it comes under.
 
 ## What ships inside the plugin
 
