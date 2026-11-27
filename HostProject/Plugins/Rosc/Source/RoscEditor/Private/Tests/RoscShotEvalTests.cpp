@@ -130,6 +130,7 @@ namespace
 	 *   { "step", "field", "is": true|false }             the last such step's field
 	 *   { "step", "field", "range": { "min"?, "max"? } }  the last such step's field
 	 *   { "step", "field", "sum": { "min"?, "max"? } }    the field added up over all such steps
+	 *   { "step", "field", "largest": { "min"?, "max"? } } of all such steps, the field largest in size, its sign kept
 	 */
 	FString FindShotEvalCheckFault(const FJsonObject& Check)
 	{
@@ -146,7 +147,7 @@ namespace
 		FString Field;
 		if (!Check.TryGetStringField(TEXT("field"), Field))
 		{
-			return bCount ? FString() : FString(TEXT("needs \"count\", or a \"field\" with \"oneOf\", \"is\", \"range\" or \"sum\""));
+			return bCount ? FString() : FString(TEXT("needs \"count\", or a \"field\" with \"oneOf\", \"is\", \"range\", \"sum\" or \"largest\""));
 		}
 		if (bCount)
 		{
@@ -172,11 +173,11 @@ namespace
 		{
 			return *Type == TEXT("boolean") ? FString() : FString::Printf(TEXT("\"is\" is for yes or no, and %s.%s is not"), *StepId, *Field);
 		}
-		if (Check.TryGetObjectField(TEXT("range"), Range) || Check.TryGetObjectField(TEXT("sum"), Range))
+		if (Check.TryGetObjectField(TEXT("range"), Range) || Check.TryGetObjectField(TEXT("sum"), Range) || Check.TryGetObjectField(TEXT("largest"), Range))
 		{
-			return *Type == TEXT("number") || *Type == TEXT("integer") ? FString() : FString::Printf(TEXT("\"range\" and \"sum\" are for numbers, and %s.%s is not one"), *StepId, *Field);
+			return *Type == TEXT("number") || *Type == TEXT("integer") ? FString() : FString::Printf(TEXT("\"range\", \"sum\" and \"largest\" are for numbers, and %s.%s is not one"), *StepId, *Field);
 		}
-		return TEXT("a \"field\" needs \"oneOf\", \"is\", \"range\" or \"sum\"");
+		return TEXT("a \"field\" needs \"oneOf\", \"is\", \"range\", \"sum\" or \"largest\"");
 	}
 
 	/**
@@ -339,6 +340,23 @@ namespace
 				Failures.Add(FString::Printf(TEXT("%s: the plan has no %s step"), *Name, *StepId));
 				continue;
 			}
+			if (Check.TryGetObjectField(TEXT("largest"), RangeObject))
+			{
+				// A move split over marks, such as a settle onto the subject and then the move asked
+				// for, is measured by its biggest mark.
+				double Largest = 0.0;
+				for (const TSharedPtr<FJsonObject>& Step : Matching)
+				{
+					const double Value = Step->GetNumberField(Field);
+					Largest = FMath::Abs(Value) > FMath::Abs(Largest) ? Value : Largest;
+				}
+				const FShotEvalRange Range(**RangeObject);
+				if (!Range.Holds(Largest))
+				{
+					Failures.Add(FString::Printf(TEXT("%s is %s at its largest, expected %s"), *Name, *FormatShotEvalNumber(Largest), *Range.Describe()));
+				}
+				continue;
+			}
 
 			const FJsonObject& Last = *Matching.Last();
 			const TArray<TSharedPtr<FJsonValue>>* OneOf = nullptr;
@@ -390,8 +408,13 @@ namespace
 		TArray<FString> Warnings;
 		FString SetDescription;
 		FString PlanJson;
+		/** InputTokens is the whole request, the kept part too, as FRoscShotPlanResult counts it. */
 		int32 InputTokens = 0;
 		int32 OutputTokens = 0;
+		int32 CacheWriteTokens = 0;
+		int32 CacheReadTokens = 0;
+		/** From the request going out to its answer coming back. */
+		double Seconds = 0.0;
 	};
 
 	/** Asks for a plan as URoscAISubsystem::PlanShot does. */
@@ -402,14 +425,16 @@ namespace
 	{
 		TArray<FShotEvalCase> Cases;
 		FAskForShotPlan Ask;
-		/** The model asked, for the report. */
+		/** The model asked and the effort it was asked at, for the report. */
 		FString Model;
+		FString Effort;
 		FString ReportFile;
 		/** Called once, when every case has been through. */
 		TFunction<void(const FShotEvalRun&)> Then;
 
 		TArray<FShotEvalOutcome> Outcomes;
 		bool bWaiting = false;
+		double AskedAt = 0.0;
 		TOptional<FRoscShotPlanResult> Answer;
 		TWeakObjectPtr<ACineCameraActor> Camera;
 		TArray<TWeakObjectPtr<AActor>> SetActors;
@@ -501,6 +526,8 @@ namespace
 		TArray<TSharedPtr<FJsonValue>> CaseValues;
 		int32 InputTokens = 0;
 		int32 OutputTokens = 0;
+		int32 CacheWriteTokens = 0;
+		int32 CacheReadTokens = 0;
 		for (const FShotEvalOutcome& Outcome : Run.Outcomes)
 		{
 			const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
@@ -515,6 +542,9 @@ namespace
 			Object->SetArrayField(TEXT("warnings"), MakeShotEvalTextValues(Outcome.Warnings));
 			Object->SetNumberField(TEXT("inputTokens"), Outcome.InputTokens);
 			Object->SetNumberField(TEXT("outputTokens"), Outcome.OutputTokens);
+			Object->SetNumberField(TEXT("cacheWriteTokens"), Outcome.CacheWriteTokens);
+			Object->SetNumberField(TEXT("cacheReadTokens"), Outcome.CacheReadTokens);
+			Object->SetNumberField(TEXT("seconds"), FMath::RoundToDouble(Outcome.Seconds * 100.0) / 100.0);
 			TSharedPtr<FJsonObject> Parsed;
 			if (FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Outcome.PlanJson), Parsed) && Parsed.IsValid())
 			{
@@ -527,10 +557,13 @@ namespace
 			CaseValues.Add(MakeShared<FJsonValueObject>(Object));
 			InputTokens += Outcome.InputTokens;
 			OutputTokens += Outcome.OutputTokens;
+			CacheWriteTokens += Outcome.CacheWriteTokens;
+			CacheReadTokens += Outcome.CacheReadTokens;
 		}
 
 		const TSharedRef<FJsonObject> Report = MakeShared<FJsonObject>();
 		Report->SetStringField(TEXT("model"), Run.Model);
+		Report->SetStringField(TEXT("effort"), Run.Effort);
 		Report->SetStringField(TEXT("written"), FDateTime::UtcNow().ToIso8601());
 		Report->SetNumberField(TEXT("cases"), Run.Cases.Num());
 		Report->SetNumberField(TEXT("passed"), Run.Count(TEXT("pass")));
@@ -538,6 +571,8 @@ namespace
 		Report->SetNumberField(TEXT("errors"), Run.Count(TEXT("error")));
 		Report->SetNumberField(TEXT("inputTokens"), InputTokens);
 		Report->SetNumberField(TEXT("outputTokens"), OutputTokens);
+		Report->SetNumberField(TEXT("cacheWriteTokens"), CacheWriteTokens);
+		Report->SetNumberField(TEXT("cacheReadTokens"), CacheReadTokens);
 		Report->SetArrayField(TEXT("results"), CaseValues);
 
 		FString Text;
@@ -551,6 +586,9 @@ namespace
 		FShotEvalOutcome& Outcome = Run.Outcomes.Last();
 		Outcome.InputTokens = Answer.InputTokens;
 		Outcome.OutputTokens = Answer.OutputTokens;
+		Outcome.CacheWriteTokens = Answer.CacheWriteTokens;
+		Outcome.CacheReadTokens = Answer.CacheReadTokens;
+		Outcome.Seconds = FPlatformTime::Seconds() - Run.AskedAt;
 		Outcome.PlanJson = Answer.PlanJson;
 		if (!Answer.bSuccess)
 		{
@@ -613,6 +651,7 @@ namespace
 		Outcome.SetDescription = Rosc::ShotAssistant::DescribeSet(Run->Camera.Get());
 
 		Run->bWaiting = true;
+		Run->AskedAt = FPlatformTime::Seconds();
 		FText Error;
 		const bool bAsked = Run->Ask(Case.Request, Outcome.SetDescription, Error, [WeakRun = Run.ToWeakPtr()](const FRoscShotPlanResult& Result)
 		{
@@ -698,12 +737,12 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 			TEXT("Case \"a\": check 1 no kind of step is called \"teleport\"."),
 			TEXT("Case \"a\": check 2 needs \"count\", or a \"field\""),
 			TEXT("Case \"a\": check 3 a choose_lens step has no field \"aperture\"."),
-			TEXT("Case \"a\": check 4 \"range\" and \"sum\" are for numbers, and choose_lens.lensKitId is not one."),
+			TEXT("Case \"a\": check 4 \"range\", \"sum\" and \"largest\" are for numbers, and choose_lens.lensKitId is not one."),
 			TEXT("Case \"a\": check 5 \"oneOf\" is for text, and choose_lens.focalLengthMm is not text."),
 			TEXT("Case \"a\": check 6 \"is\" is for yes or no, and focus_on.subject is not."),
 			TEXT("Case \"a\": check 7 a \"field\" needs the \"step\" it is a field of."),
 			TEXT("Case \"a\": check 8 has both \"count\" and \"field\"."),
-			TEXT("Case \"a\": check 9 a \"field\" needs \"oneOf\", \"is\", \"range\" or \"sum\"."),
+			TEXT("Case \"a\": check 9 a \"field\" needs \"oneOf\", \"is\", \"range\", \"sum\" or \"largest\"."),
 			TEXT("Case \"b\": it has no \"checks\", so any plan would pass it.") })
 		{
 			TestTrue(Expected, All.Contains(Expected));
@@ -717,6 +756,7 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 			{ "step": "put_on_support", "count": { "min": 1, "max": 1 } },
 			{ "step": "put_on_support", "field": "supportId", "oneOf": [ "crane-22ft", "crane-30ft", "crane-50ft" ] },
 			{ "step": "move_to_mark", "field": "boomDeg", "sum": { "min": 5 } },
+			{ "step": "move_to_mark", "field": "extensionM", "largest": { "min": 0.5, "max": 2 } },
 			{ "step": "move_to_mark", "field": "durationSeconds", "range": { "min": 6, "max": 10 } },
 			{ "step": "focus_on", "field": "subject", "oneOf": [ "anna" ] },
 			{ "step": "focus_on", "field": "follow", "is": true },
@@ -796,7 +836,7 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 
 		const FShotEvalOutcome& Empty = Done.Outcomes[1];
 		TestEqual(TEXT("A plan with nothing in it fails"), *Empty.Status, TEXT("fail"));
-		TestEqual(TEXT("On every check that asks for something"), Empty.Failures.Num(), 7);
+		TestEqual(TEXT("On every check that asks for something"), Empty.Failures.Num(), 8);
 		TestTrue(TEXT("With the count it has"), Empty.Failures.Contains(TEXT("steps: 0 in the plan, expected from 3 to 6")));
 		TestTrue(TEXT("And the step it lacks"), Empty.Failures.Contains(TEXT("focus_on.subject: the plan has no focus_on step")));
 		TestTrue(TEXT("A sum over no steps is zero"), Empty.Failures.Contains(TEXT("move_to_mark.boomDeg adds up to 0 over the plan, expected at least 5")));
@@ -806,6 +846,7 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 		for (const TCHAR* Expected : {
 			TEXT("put_on_support.supportId is \"dolly\", expected one of: crane-22ft, crane-30ft, crane-50ft"),
 			TEXT("move_to_mark.boomDeg adds up to 0 over the plan, expected at least 5"),
+			TEXT("move_to_mark.extensionM is 0 at its largest, expected from 0.5 to 2"),
 			TEXT("move_to_mark.durationSeconds is 2, expected from 6 to 10"),
 			TEXT("focus_on.subject is \"Ben\", expected one of: anna"),
 			TEXT("focus_on.follow is false, expected true"),
@@ -850,6 +891,8 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
  * The shot assistant's evals. Asked for on the editor's command line:
  *   -RoscEvals=<cases file>   reads the cases and stands up each one's set; nothing is sent.
  *   -RoscEvalsLive            also asks the model in the user's settings for each case's plan.
+ *   -RoscEvalsModel=<id>      asks that model instead, for this run only.
+ *   -RoscEvalsEffort=<effort> default, low, medium or high, for this run only.
  * The live run uses the user's own key and what they have agreed to send, and it is billed to
  * them. Its score is a measurement, written to Saved/Rosc/Evals; the test fails only when
  * the run itself cannot be made.
@@ -882,25 +925,61 @@ bool FRoscShotAssistantEvalsTest::RunTest(const FString& Parameters)
 
 	const bool bLive = FParse::Param(FCommandLine::Get(), TEXT("RoscEvalsLive"));
 	URoscAISubsystem* Assistant = GEditor->GetEditorSubsystem<URoscAISubsystem>();
+
+	// A run may ask another model, or at another effort, than the settings name. The settings are put back when it ends, and never saved.
+	URoscAISettings* Settings = GetMutableDefault<URoscAISettings>();
+	const FString ModelBefore = Settings->AssistantModel;
+	const ERoscAssistantEffort EffortBefore = Settings->AssistantEffort;
+	FString Override;
+	if (FParse::Value(FCommandLine::Get(), TEXT("RoscEvalsModel="), Override) && !Override.IsEmpty())
+	{
+		Settings->AssistantModel = Override;
+	}
+	if (FParse::Value(FCommandLine::Get(), TEXT("RoscEvalsEffort="), Override) && !Override.IsEmpty())
+	{
+		const TMap<FString, ERoscAssistantEffort> Efforts = {
+			{ TEXT("default"), ERoscAssistantEffort::ModelDefault }, { TEXT("low"), ERoscAssistantEffort::Low },
+			{ TEXT("medium"), ERoscAssistantEffort::Medium }, { TEXT("high"), ERoscAssistantEffort::High } };
+		const ERoscAssistantEffort* Effort = Efforts.Find(Override.ToLower());
+		if (!Effort)
+		{
+			AddError(FString::Printf(TEXT("-RoscEvalsEffort=%s is not one of default, low, medium or high."), *Override));
+			Settings->AssistantModel = ModelBefore;
+			return false;
+		}
+		Settings->AssistantEffort = *Effort;
+	}
+	const auto PutSettingsBack = [Settings, ModelBefore, EffortBefore]
+	{
+		Settings->AssistantModel = ModelBefore;
+		Settings->AssistantEffort = EffortBefore;
+	};
+
 	if (bLive)
 	{
 		FText WhyNot;
 		if (!Assistant->CanPlanShot(WhyNot))
 		{
 			AddError(FString::Printf(TEXT("The model cannot be asked. %s"), *WhyNot.ToString()));
+			PutSettingsBack();
 			return false;
 		}
 		const FString Host = Assistant->GetAssistantHostNeedingConsent();
 		if (!Host.IsEmpty())
 		{
 			AddError(FString::Printf(TEXT("You have not agreed to send shot descriptions to %s. Agree in the Rosc panel's AI tab first."), *Host));
+			PutSettingsBack();
 			return false;
 		}
 	}
 
 	const TSharedRef<FShotEvalRun> Run = MakeShared<FShotEvalRun>();
 	Run->Cases = Cases;
-	Run->Model = bLive ? GetDefault<URoscAISettings>()->AssistantModel : FString(TEXT("none (the sets were stood up and nothing was sent)"));
+	Run->Model = bLive ? Settings->AssistantModel : FString(TEXT("none (the sets were stood up and nothing was sent)"));
+	Run->Effort = Settings->AssistantEffort == ERoscAssistantEffort::Low ? TEXT("low")
+		: Settings->AssistantEffort == ERoscAssistantEffort::Medium ? TEXT("medium")
+		: Settings->AssistantEffort == ERoscAssistantEffort::High ? TEXT("high")
+		: TEXT("default");
 	Run->ReportFile = GetShotEvalReportFolder() / FString::Printf(TEXT("shot-assistant-%s.json"), bLive ? *FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S")) : TEXT("dry-run"));
 	if (bLive)
 	{
@@ -917,8 +996,9 @@ bool FRoscShotAssistantEvalsTest::RunTest(const FString& Parameters)
 			return false;
 		};
 	}
-	Run->Then = [this, bLive](const FShotEvalRun& Done)
+	Run->Then = [this, bLive, PutSettingsBack](const FShotEvalRun& Done)
 	{
+		PutSettingsBack();
 		for (const FShotEvalOutcome& Outcome : Done.Outcomes)
 		{
 			if (bLive)
