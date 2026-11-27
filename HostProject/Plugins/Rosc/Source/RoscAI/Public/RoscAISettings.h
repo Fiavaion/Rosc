@@ -69,9 +69,9 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Shot Assistant", meta = (DisplayName = "Claude API Key", PasswordField = true))
 	FString AssistantKey;
 
-	/** The Claude model the shot assistant asks. */
+	/** The Claude model the shot assistant asks. Sonnet planned as well as Opus in Rosc's testing, at about half the price. */
 	UPROPERTY(config, EditAnywhere, Category = "Shot Assistant", meta = (DisplayName = "Model"))
-	FString AssistantModel = TEXT("claude-opus-5-5");
+	FString AssistantModel = TEXT("claude-sonnet-5-5");
 
 	/** How long the model thinks before it plans. Less is quicker and cheaper; more can plan harder moves better. */
 	UPROPERTY(config, EditAnywhere, Category = "Shot Assistant", meta = (DisplayName = "Effort"))
