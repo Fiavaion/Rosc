@@ -58,6 +58,13 @@ namespace Rosc::ShotEditing
 	ROSCEDITOR_API bool AddShot(ACineCameraActor* Camera, FText& OutError);
 
 	/**
+	 * The sequence open in Sequencer, or, with none open, a new one made and opened as AddShot does.
+	 * Making and opening a sequence cannot be undone, so it is done outside any undo step.
+	 * @return null, with the reason in OutError, when a new sequence could not be made.
+	 */
+	ROSCEDITOR_API ULevelSequence* FindOrOpenSequence(const ACineCameraActor* Camera, FText& OutError);
+
+	/**
 	 * Moves Sequencer's playhead to the first frame of a shot and opens the shot there, so that its
 	 * own tracks show and moves and racks are baked into it.
 	 */

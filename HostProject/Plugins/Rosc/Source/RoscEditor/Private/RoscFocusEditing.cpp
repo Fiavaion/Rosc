@@ -526,7 +526,7 @@ bool BakeRackKeys(ACineCameraActor* Camera, const FRackTarget& Target, double Ra
 
 	IncludeInPlaybackRange(MovieScene, RackRange);
 	Transaction.Reset();
-	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
+	NotifySequencer();
 	return true;
 }
 }

@@ -25,6 +25,7 @@
 #include "RoscGripEditing.h"
 #include "RoscOptics.h"
 #include "RoscRig.h"
+#include "RoscSequenceUtils.h"
 #include "RoscShotEditing.h"
 
 #define LOCTEXT_NAMESPACE "RoscShotAssistant"
@@ -568,8 +569,40 @@ bool Rosc::ShotAssistant::Apply(const FRoscShotPlan& Plan, ACineCameraActor* Cam
 		}
 	}
 
+	// A shot or a bake with no sequence open makes and opens one, which cannot be undone. Done inside
+	// the plan's undo step it leaves the step open, and once the step closes its undo takes the
+	// sequence away from Sequencer while Sequencer has it open, which brings the editor down. So the
+	// sequence is made first, as the first step to need it would have made it.
+	if (const FRoscShotStep* FirstInSequence = Plan.Steps.FindByPredicate([](const FRoscShotStep& Step) { return Step.Kind == ERoscShotStep::AddShot || Step.Kind == ERoscShotStep::BakeMove; }))
+	{
+		if (FirstInSequence->Kind == ERoscShotStep::AddShot)
+		{
+			if (ShotEditing::FindOrOpenSequence(Camera, OutError) == nullptr)
+			{
+				return false;
+			}
+		}
+		else if (SequenceUtils::FindOrCreateBakeTarget(Camera, GripEditing::MoveSequenceSuffix, Camera).Sequence == nullptr)
+		{
+			OutError = LOCTEXT("NoMoveSequence", "A new sequence could not be made for the move. Check that the project's Content folder can be written to.");
+			return false;
+		}
+	}
+
 	// Each step is an undoable change of its own inside this one, so one undo takes the plan back.
-	const FScopedTransaction Transaction(LOCTEXT("ApplyShotPlan", "Apply Shot Plan"));
+	// Sequencer is told of the steps, and taken into a new shot, once it has closed: Sequencer told
+	// or moved inside an undo step keeps the step from closing.
+	TOptional<FScopedTransaction> Transaction(InPlace, LOCTEXT("ApplyShotPlan", "Apply Shot Plan"));
+	TOptional<ShotEditing::FShot> NewShot;
+	const auto CloseTransaction = [&Transaction, &NewShot]()
+	{
+		Transaction.Reset();
+		SequenceUtils::NotifySequencer(true);
+		if (NewShot.IsSet())
+		{
+			ShotEditing::GoToShot(*NewShot);
+		}
+	};
 	const TArray<FShotSubject> Subjects = FindShotSubjects(Camera);
 	bool bMoved = false;
 	for (int32 Index = 0; Index < Plan.Steps.Num(); ++Index)
@@ -631,12 +664,12 @@ bool Rosc::ShotAssistant::Apply(const FRoscShotPlan& Plan, ACineCameraActor* Cam
 		case ERoscShotStep::AddShot:
 			if (ShotEditing::AddShot(Camera, Problem))
 			{
-				// Straight into the new shot, the last one, so that a move baked next is written into it.
+				// The new shot is the last one. A move baked next is written into it, and the plan ends in it.
 				const TArray<ShotEditing::FShot> Shots = ShotEditing::GetShots();
 				if (!Shots.IsEmpty())
 				{
-					ULevelSequence* ShotSequence = Shots.Last().Sequence;
-					ShotEditing::GoToShot(Shots.Last());
+					NewShot = Shots.Last();
+					ULevelSequence* ShotSequence = NewShot->Sequence;
 					ShotEditing::SetScene(ShotSequence, Step.Scene);
 					ShotEditing::SetSize(ShotSequence, Step.Size);
 					ShotEditing::SetMove(ShotSequence, Step.Move);
@@ -646,7 +679,14 @@ bool Rosc::ShotAssistant::Apply(const FRoscShotPlan& Plan, ACineCameraActor* Cam
 			break;
 
 		case ERoscShotStep::BakeMove:
-			GripEditing::BakeMoveToSequencer(GripEditing::FindRig(Camera), Problem);
+			if (NewShot.IsSet())
+			{
+				GripEditing::BakeMove(GripEditing::FindRig(Camera), NewShot->Sequence, 0, Problem);
+			}
+			else
+			{
+				GripEditing::BakeMoveToSequencer(GripEditing::FindRig(Camera), Problem);
+			}
 			break;
 		}
 
@@ -655,6 +695,7 @@ bool Rosc::ShotAssistant::Apply(const FRoscShotPlan& Plan, ACineCameraActor* Cam
 			OutError = Index == 0
 				? FText::Format(LOCTEXT("FirstStepFailed", "Step 1 could not be carried out. {0}"), Problem)
 				: FText::Format(LOCTEXT("StepFailed", "Step {0} could not be carried out. {1} The steps before it were; Undo takes them back."), FText::AsNumber(Index + 1), Problem);
+			CloseTransaction();
 			return false;
 		}
 	}
@@ -664,6 +705,7 @@ bool Rosc::ShotAssistant::Apply(const FRoscShotPlan& Plan, ACineCameraActor* Cam
 	{
 		GripEditing::GoToMark(GripEditing::FindRig(Camera), 0);
 	}
+	CloseTransaction();
 	return true;
 }
 

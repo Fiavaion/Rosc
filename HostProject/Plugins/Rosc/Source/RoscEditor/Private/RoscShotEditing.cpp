@@ -236,12 +236,10 @@ void Rosc::ShotEditing::SetNotes(ULevelSequence* ShotSequence, const FString& No
 	Data->SetNotes(Notes);
 }
 
-bool Rosc::ShotEditing::AddShot(ACineCameraActor* Camera, FText& OutError)
+ULevelSequence* Rosc::ShotEditing::FindOrOpenSequence(const ACineCameraActor* Camera, FText& OutError)
 {
 	using namespace Rosc::SequenceUtils;
 
-	// Making and opening sequences cannot be undone, so it is done before the undoable step begins:
-	// an asset made inside a transaction leaves the transaction open.
 	ULevelSequence* OpenSequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
 	if (OpenSequence == nullptr)
 	{
@@ -249,8 +247,21 @@ bool Rosc::ShotEditing::AddShot(ACineCameraActor* Camera, FText& OutError)
 		if (OpenSequence == nullptr || !ULevelSequenceEditorBlueprintLibrary::OpenLevelSequence(OpenSequence))
 		{
 			OutError = LOCTEXT("SequenceNotMade", "A sequence for the shots could not be made. Check that the project's Content folder can be written to.");
-			return false;
+			return nullptr;
 		}
+	}
+	return OpenSequence;
+}
+
+bool Rosc::ShotEditing::AddShot(ACineCameraActor* Camera, FText& OutError)
+{
+	using namespace Rosc::SequenceUtils;
+
+	// Before the undoable step begins: an asset made inside a transaction leaves the transaction open.
+	ULevelSequence* OpenSequence = FindOrOpenSequence(Camera, OutError);
+	if (OpenSequence == nullptr)
+	{
+		return false;
 	}
 
 	UMovieScene* MovieScene = OpenSequence->GetMovieScene();
@@ -314,7 +325,7 @@ bool Rosc::ShotEditing::AddShot(ACineCameraActor* Camera, FText& OutError)
 		IncludeInPlaybackRange(MovieScene, TRange<FFrameNumber>(StartTicks, StartTicks + DurationTicks));
 	}
 	// At once, so that the new shot's camera can be found through Sequencer straight away.
-	ULevelSequenceEditorBlueprintLibrary::ForceUpdate();
+	NotifySequencer(true);
 	return true;
 }
 

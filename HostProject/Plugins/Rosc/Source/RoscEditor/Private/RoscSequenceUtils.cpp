@@ -6,6 +6,7 @@
 #include "AssetToolsModule.h"
 #include "CineCameraActor.h"
 #include "Components/ActorComponent.h"
+#include "Editor.h"
 #include "GameFramework/Actor.h"
 #include "LevelSequence.h"
 #include "LevelSequenceEditorBlueprintLibrary.h"
@@ -63,6 +64,22 @@ Rosc::SequenceUtils::FScopedPlayhead::FScopedPlayhead()
 Rosc::SequenceUtils::FScopedPlayhead::~FScopedPlayhead()
 {
 	SetPlayheadTicks(Ticks);
+}
+
+void Rosc::SequenceUtils::NotifySequencer(bool bImmediately)
+{
+	if (GEditor->IsTransactionActive())
+	{
+		return;
+	}
+	if (bImmediately)
+	{
+		ULevelSequenceEditorBlueprintLibrary::ForceUpdate();
+	}
+	else
+	{
+		ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
+	}
 }
 
 void Rosc::SequenceUtils::SetPlayheadTicks(FFrameTime Ticks)

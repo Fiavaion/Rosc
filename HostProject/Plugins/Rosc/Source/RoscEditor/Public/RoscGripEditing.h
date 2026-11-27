@@ -93,6 +93,9 @@ namespace Rosc::GripEditing
 	 */
 	ROSCEDITOR_API ULevelSequence* BakeMoveToSequencer(ARoscRig* Rig, FText& OutError);
 
+	/** Added to the camera's name (the rig's, with no camera) for the sequence BakeMoveToSequencer makes. */
+	inline const TCHAR* const MoveSequenceSuffix = TEXT("_Move");
+
 	/**
 	 * Writes a take, one pose for every frame of the sequence from the start frame, as a key on
 	 * every frame of the axes a device drives: the head's, and on a free-moving support its

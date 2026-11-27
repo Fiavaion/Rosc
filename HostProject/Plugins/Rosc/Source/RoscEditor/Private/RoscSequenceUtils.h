@@ -50,6 +50,13 @@ namespace Rosc::SequenceUtils
 		FFrameTime Ticks;
 	};
 
+	/**
+	 * Tells Sequencer that the open sequence has changed: at once when bImmediately, or else on its
+	 * next tick. Inside an undo step that is still open it does nothing, since Sequencer told then
+	 * keeps the step from closing; whoever opened that step tells Sequencer once it has closed.
+	 */
+	void NotifySequencer(bool bImmediately = false);
+
 	/** Moves Sequencer's playhead to a tick of the open sequence and plays the level to that moment. */
 	void SetPlayheadTicks(FFrameTime Ticks);
 

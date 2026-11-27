@@ -481,7 +481,7 @@ bool Rosc::GripEditing::BakeMove(ARoscRig* Rig, ULevelSequence* Sequence, FFrame
 
 	IncludeInPlaybackRange(MovieScene, MoveRange);
 	Transaction.Reset();
-	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
+	NotifySequencer();
 	return true;
 }
 
@@ -556,7 +556,7 @@ bool Rosc::GripEditing::BakeTake(ARoscRig* Rig, ULevelSequence* Sequence, FFrame
 
 	IncludeInPlaybackRange(MovieScene, TakeRange);
 	Transaction.Reset();
-	ULevelSequenceEditorBlueprintLibrary::RefreshCurrentLevelSequence();
+	NotifySequencer();
 	return true;
 }
 
@@ -569,7 +569,7 @@ ULevelSequence* Rosc::GripEditing::BakeMoveToSequencer(ARoscRig* Rig, FText& Out
 	}
 
 	const ACineCameraActor* Camera = Rig->GetMountedCamera();
-	const FBakeTarget Target = FindOrCreateBakeTarget(Camera != nullptr ? static_cast<const AActor*>(Camera) : Rig, TEXT("_Move"), Camera);
+	const FBakeTarget Target = FindOrCreateBakeTarget(Camera != nullptr ? static_cast<const AActor*>(Camera) : Rig, MoveSequenceSuffix, Camera);
 	if (Target.Sequence == nullptr)
 	{
 		OutError = LOCTEXT("BakeNoNewSequence", "A new sequence could not be made for the move.");

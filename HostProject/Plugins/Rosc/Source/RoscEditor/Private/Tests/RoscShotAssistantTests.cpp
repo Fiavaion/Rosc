@@ -313,6 +313,37 @@ bool FRoscShotAssistantTest::RunTest(const FString& Parameters)
 		}
 		TestEqual(TEXT("The rig is not a subject"), Set->GetArrayField(TEXT("subjects")).Num(), 2);
 	}
+
+	// The plan made the sequence it put the shot in. Its undo takes the shot and the bake back and
+	// leaves that sequence open in Sequencer: made inside the undo step, the undo took the sequence
+	// from Sequencer while it was open, which brought the editor down.
+	ULevelSequence* PlanSequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
+	TestTrue(TEXT("The second plan can be undone"), GEditor->UndoTransaction());
+	TestTrue(TEXT("The sequence the plan made is still open"), PlanSequence != nullptr && ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence() == PlanSequence && PlanSequence->GetMovieScene() != nullptr);
+	const TArray<Rosc::ShotEditing::FShot> ShotsAfterUndo = Rosc::ShotEditing::GetShots();
+	TestTrue(TEXT("Without the shot: the sequence is not cut into shots again"), ShotsAfterUndo.Num() <= 1 && !ShotsAfterUndo.ContainsByPredicate([](const Rosc::ShotEditing::FShot& Shot) { return Shot.Section != nullptr; }));
+
+	// A move baked by a plan with no sequence open, as in "crane down to Anna, six seconds, keep her sharp".
+	ULevelSequenceEditorBlueprintLibrary::CloseLevelSequence();
+	const FRoscShotPlan Down = ReadAssistantTestPlan(*this, TEXT(R"({ "summary": "Down to Anna.", "steps": [
+		{ "step": "move_to_mark", "travelM": 0, "sidewaysM": 0, "liftM": 0, "swingDeg": 0, "boomDeg": -10, "extensionM": 0,
+		  "panDeg": 0, "tiltDeg": 5, "rollDeg": 0, "durationSeconds": 6, "easeIn": 0.25, "easeOut": 0.25 },
+		{ "step": "focus_on", "subject": "Anna", "follow": true },
+		{ "step": "bake_move" } ] })"));
+	const bool bDown = Apply(Down, Camera, Error);
+	ULevelSequence* MoveSequence = ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence();
+	if (MoveSequence != nullptr)
+	{
+		CreatedSequences.AddUnique(MoveSequence);
+	}
+	if (!TestTrue(*FString::Printf(TEXT("The plan with a bake is carried out (%s)"), *Error.ToString()), bDown) || !TestNotNull(TEXT("Into a sequence it made and opened"), MoveSequence))
+	{
+		return false;
+	}
+	TestTrue(TEXT("The move is baked"), Rosc::SequenceUtils::FindBinding(MoveSequence, Rig).IsValid());
+	TestTrue(TEXT("That plan can be undone"), GEditor->UndoTransaction());
+	TestTrue(TEXT("Its sequence is still open"), ULevelSequenceEditorBlueprintLibrary::GetCurrentLevelSequence() == MoveSequence && MoveSequence->GetMovieScene() != nullptr);
+	TestFalse(TEXT("Without the move"), Rosc::SequenceUtils::FindBinding(MoveSequence, Rig).IsValid());
 	return true;
 }
 
