@@ -257,6 +257,11 @@ bool FRoscShotPlanEquipmentTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Its telescope starts at 2.8 m"), Axes->GetObjectField(TEXT("extensionM"))->GetNumberField(TEXT("from")), 2.8);
 		TestEqual(TEXT("And reaches 9.1 m"), Axes->GetObjectField(TEXT("extensionM"))->GetNumberField(TEXT("to")), 9.1);
 		TestEqual(TEXT("At 1.8 m a second"), Axes->GetObjectField(TEXT("extensionM"))->GetNumberField(TEXT("topSpeedPerSecond")), 1.8);
+		TestEqual(TEXT("And stands up halfway out"), Axes->GetObjectField(TEXT("extensionM"))->GetNumberField(TEXT("standsUpAt")), 5.95);
+		TestEqual(TEXT("Its swing gathers speed by 40 degrees a second, each second"), Axes->GetObjectField(TEXT("swingDeg"))->GetNumberField(TEXT("topAccelerationPerSecondSquared")), 40.0);
+		TestEqual(TEXT("And stands up facing ahead"), Axes->GetObjectField(TEXT("swingDeg"))->GetNumberField(TEXT("standsUpAt")), 0.0);
+		TestFalse(TEXT("A fixed axis has no acceleration to tell of"), Axes->GetObjectField(TEXT("liftM"))->HasField(TEXT("topAccelerationPerSecondSquared")));
+		TestFalse(TEXT("Nor a height a crew would set from the camera"), Axes->GetObjectField(TEXT("liftM"))->HasField(TEXT("standsUpAt")));
 		TestEqual(TEXT("Its boom is in degrees"), Axes->GetObjectField(TEXT("boomDeg"))->GetNumberField(TEXT("to")), 50.0);
 		TestTrue(TEXT("Its pivot height is fixed during a shot"), Axes->GetObjectField(TEXT("liftM"))->GetBoolField(TEXT("fixedDuringShot")));
 		TestFalse(TEXT("It has no track"), Axes->HasField(TEXT("travelM")));

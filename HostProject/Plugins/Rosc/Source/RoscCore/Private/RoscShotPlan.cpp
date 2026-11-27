@@ -81,7 +81,7 @@ namespace
 					{ TEXT("panDeg"), Number, TEXT("The head panning right. Degrees; negative is left.") },
 					{ TEXT("tiltDeg"), Number, TEXT("The head tilting up. Degrees; negative is down.") },
 					{ TEXT("rollDeg"), Number, TEXT("The head rolling clockwise. Degrees; negative is anticlockwise.") },
-					{ TEXT("durationSeconds"), Number, TEXT("How long the move takes. Allow enough for the support's top speeds in the equipment list.") },
+					{ TEXT("durationSeconds"), Number, TEXT("How long the move takes. Allow enough for the support's top speeds and accelerations in the equipment list.") },
 					{ TEXT("easeIn"), Number, TEXT("The share of the move spent getting up to speed, from 0 to 1. 0.25 is a feathered start.") },
 					{ TEXT("easeOut"), Number, TEXT("The share of the move spent coming to rest, from 0 to 1. easeIn and easeOut together must not pass 1.") },
 				} },
@@ -596,6 +596,18 @@ FString Rosc::ShotPlan::DescribeEquipment(const FRoscCameraDatabase& Database)
 			else
 			{
 				AxisObject->SetField(TEXT("topSpeedPerSecond"), Round(ToPlanUnits(Axis.Axis, Limits.MaxSpeed)));
+				if (Limits.MaxAcceleration > 0.0)
+				{
+					AxisObject->SetField(TEXT("topAccelerationPerSecondSquared"), Round(ToPlanUnits(Axis.Axis, Limits.MaxAcceleration)));
+				}
+			}
+			// Where a rail, an arm or a telescope is when the support is first stood up; the
+			// height and the head start from the camera itself, so they are not told here.
+			const bool bStartsFromPreset = Axis.Axis == ERoscRigAxis::Travel || Axis.Axis == ERoscRigAxis::Swing
+				|| Axis.Axis == ERoscRigAxis::Boom || Axis.Axis == ERoscRigAxis::Extension;
+			if (bStartsFromPreset && AxisObject->HasField(TEXT("from")))
+			{
+				AxisObject->SetField(TEXT("standsUpAt"), Round(ToPlanUnits(Axis.Axis, Preset.DefaultPose.Get(Axis.Axis))));
 			}
 			Axes->SetObjectField(Axis.Id, AxisObject);
 		}
