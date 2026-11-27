@@ -47,7 +47,10 @@ namespace
 		Answer->SetStringField(TEXT("type"), TEXT("text"));
 		Answer->SetStringField(TEXT("text"), Text);
 		const TSharedRef<FJsonObject> Usage = MakeShared<FJsonObject>();
-		Usage->SetNumberField(TEXT("input_tokens"), 4321);
+		// The equipment was kept from the request before; only the rest is counted as input_tokens.
+		Usage->SetNumberField(TEXT("input_tokens"), 321);
+		Usage->SetNumberField(TEXT("cache_creation_input_tokens"), 0);
+		Usage->SetNumberField(TEXT("cache_read_input_tokens"), 4000);
 		Usage->SetNumberField(TEXT("output_tokens"), 210);
 
 		const TSharedRef<FJsonObject> Message = MakeShared<FJsonObject>();
@@ -126,6 +129,7 @@ bool FRoscAIAssistantTest::RunTest(const FString& Parameters)
 	// What stands in the way of a request, before anything is sent.
 	Settings->AssistantUrl = StandInUrl;
 	Settings->AssistantModel = TEXT("claude-opus-5-5");
+	Settings->AssistantEffort = ERoscAssistantEffort::ModelDefault;
 	Settings->AssistantKey.Reset();
 	TestFalse(TEXT("With no key the assistant cannot be asked"), Jobs->PlanShot(AssistantTestWords, AssistantTestSet, Error, NothingHappens));
 	TestTrue(TEXT("And the reason says where to give one"), Error.ToString().Contains(TEXT("Claude API key")) && Error.ToString().Contains(TEXT("Editor Preferences")));
@@ -171,12 +175,23 @@ bool FRoscAIAssistantTest::RunTest(const FString& Parameters)
 			{
 				const FJsonObject& Message = *Messages[0]->AsObject();
 				TestEqual(TEXT("From the user"), *Message.GetStringField(TEXT("role")), TEXT("user"));
-				const FString Content = Message.GetStringField(TEXT("content"));
-				TestTrue(TEXT("With the user's words"), Content.Contains(FString::Printf(TEXT("<request>\n%s\n</request>"), AssistantTestWords)));
-				TestTrue(TEXT("The set's description"), Content.Contains(FString::Printf(TEXT("<set>\n%s\n</set>"), AssistantTestSet)));
-				TestTrue(TEXT("And the equipment it can choose from"), Content.Contains(TEXT("<equipment>")) && Content.Contains(TEXT("\"crane-30ft\"")) && Content.Contains(TEXT("\"arri-alexa-35\"")));
+				const TArray<TSharedPtr<FJsonValue>>& Blocks = Message.GetArrayField(TEXT("content"));
+				if (TestEqual(TEXT("In two parts"), Blocks.Num(), 2))
+				{
+					const FJsonObject& Equipment = *Blocks[0]->AsObject();
+					const FString Reference = Equipment.GetStringField(TEXT("text"));
+					TestTrue(TEXT("First the equipment it can choose from"), Reference.StartsWith(TEXT("<equipment>")) && Reference.Contains(TEXT("\"crane-30ft\"")) && Reference.Contains(TEXT("\"arri-alexa-35\"")));
+					const TSharedPtr<FJsonObject>* Keep = nullptr;
+					TestTrue(TEXT("Marked to be kept for the next request"), Equipment.TryGetObjectField(TEXT("cache_control"), Keep) && (*Keep)->GetStringField(TEXT("type")) == TEXT("ephemeral"));
+					const FJsonObject& Asked = *Blocks[1]->AsObject();
+					const FString Words = Asked.GetStringField(TEXT("text"));
+					TestTrue(TEXT("Then the set's description"), Words.Contains(FString::Printf(TEXT("<set>\n%s\n</set>"), AssistantTestSet)));
+					TestTrue(TEXT("And the user's words"), Words.Contains(FString::Printf(TEXT("<request>\n%s\n</request>"), AssistantTestWords)));
+					TestFalse(TEXT("Which are not kept, since they change"), Asked.HasField(TEXT("cache_control")));
+				}
 			}
 
+			TestFalse(TEXT("The model's own effort is left to it"), Body.GetObjectField(TEXT("output_config"))->HasField(TEXT("effort")));
 			const TSharedPtr<FJsonObject>* Format = nullptr;
 			if (TestTrue(TEXT("The answer is held to a schema"), Body.GetObjectField(TEXT("output_config"))->TryGetObjectField(TEXT("format"), Format)))
 			{
@@ -188,15 +203,22 @@ bool FRoscAIAssistantTest::RunTest(const FString& Parameters)
 		TestTrue(*FString::Printf(TEXT("The plan is read (%s)"), *Result.Error.ToString()), Result.bSuccess);
 		TestEqual(TEXT("With its steps"), Result.Plan.Steps.Num(), 2);
 		TestTrue(TEXT("And its summary"), Result.Plan.Summary.StartsWith(TEXT("On the 30 ft crane")));
-		TestEqual(TEXT("What the request came to is kept"), Result.InputTokens, 4321);
+		TestEqual(TEXT("What the request came to is kept, the kept part too"), Result.InputTokens, 4321);
+		TestEqual(TEXT("With what was read back from what was kept"), Result.CacheReadTokens, 4000);
+		TestEqual(TEXT("And nothing stored this time"), Result.CacheWriteTokens, 0);
 		TestEqual(TEXT("And what the answer came to"), Result.OutputTokens, 210);
 
 		State->Answer = MakeAssistantTestMessage(TEXT(""), TEXT("refusal"));
+		GetMutableDefault<URoscAISettings>()->AssistantEffort = ERoscAssistantEffort::Low;
 	});
 
 	// Answers that are not plans, each told to the user in words.
 	AskThen(*this, State, TEXT("a request the model declines"), [this, State](const FRoscShotPlanResult& Result)
 	{
+		FString Effort;
+		TestTrue(TEXT("An effort chosen in the settings is sent"), State->SentBody.IsValid()
+			&& State->SentBody->GetObjectField(TEXT("output_config"))->TryGetStringField(TEXT("effort"), Effort) && Effort == TEXT("low"));
+		GetMutableDefault<URoscAISettings>()->AssistantEffort = ERoscAssistantEffort::ModelDefault;
 		TestFalse(TEXT("A declined request gives no plan"), Result.bSuccess);
 		TestEqual(TEXT("And says so"), *Result.Error.ToString(), TEXT("The model declined this request. Describe the shot another way."));
 		State->Answer = MakeAssistantTestMessage(TEXT(R"({"summary": "On the 30 ft cra)"), TEXT("max_tokens"));

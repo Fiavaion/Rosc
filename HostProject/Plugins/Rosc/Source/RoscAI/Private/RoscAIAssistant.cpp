@@ -61,6 +61,18 @@ namespace
 		"\n"
 		"The summary is for the director: one to three sentences in film language, with no ids and no JSON.");
 
+	/** The API's name for an effort, or null to leave it to the model. */
+	const TCHAR* GetEffortName(ERoscAssistantEffort Effort)
+	{
+		switch (Effort)
+		{
+		case ERoscAssistantEffort::Low: return TEXT("low");
+		case ERoscAssistantEffort::Medium: return TEXT("medium");
+		case ERoscAssistantEffort::High: return TEXT("high");
+		default: return nullptr;
+		}
+	}
+
 	FString WriteAssistantJson(const TSharedRef<FJsonObject>& Object)
 	{
 		FString Text;
@@ -133,10 +145,31 @@ void FRoscClaudeModel::Ask(const FRoscAssistantQuestion& Question, TFunction<voi
 	Format->SetObjectField(TEXT("schema"), Schema);
 	const TSharedRef<FJsonObject> OutputConfig = MakeShared<FJsonObject>();
 	OutputConfig->SetObjectField(TEXT("format"), Format);
+	if (const TCHAR* Effort = GetEffortName(Settings->AssistantEffort))
+	{
+		OutputConfig->SetStringField(TEXT("effort"), Effort);
+	}
+
+	// The reference goes first and is marked to be kept, so the next question within minutes reads it back cheaply.
+	TArray<TSharedPtr<FJsonValue>> Content;
+	if (!Question.Reference.IsEmpty())
+	{
+		const TSharedRef<FJsonObject> Keep = MakeShared<FJsonObject>();
+		Keep->SetStringField(TEXT("type"), TEXT("ephemeral"));
+		const TSharedRef<FJsonObject> Reference = MakeShared<FJsonObject>();
+		Reference->SetStringField(TEXT("type"), TEXT("text"));
+		Reference->SetStringField(TEXT("text"), Question.Reference);
+		Reference->SetObjectField(TEXT("cache_control"), Keep);
+		Content.Add(MakeShared<FJsonValueObject>(Reference));
+	}
+	const TSharedRef<FJsonObject> Words = MakeShared<FJsonObject>();
+	Words->SetStringField(TEXT("type"), TEXT("text"));
+	Words->SetStringField(TEXT("text"), Question.User);
+	Content.Add(MakeShared<FJsonValueObject>(Words));
 
 	const TSharedRef<FJsonObject> Message = MakeShared<FJsonObject>();
 	Message->SetStringField(TEXT("role"), TEXT("user"));
-	Message->SetStringField(TEXT("content"), Question.User);
+	Message->SetArrayField(TEXT("content"), Content);
 
 	const TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
 	Body->SetStringField(TEXT("model"), Settings->AssistantModel.TrimStartAndEnd());
@@ -229,8 +262,13 @@ FRoscAssistantAnswer FRoscClaudeModel::ReadResponse(int32 Code, const TArray<uin
 	FRoscAssistantAnswer Result;
 	if (const TSharedPtr<FJsonObject>* Usage = nullptr; Answer->TryGetObjectField(TEXT("usage"), Usage))
 	{
-		(*Usage)->TryGetNumberField(TEXT("input_tokens"), Result.InputTokens);
+		// input_tokens counts only what was neither stored nor read back.
+		int32 Uncached = 0;
+		(*Usage)->TryGetNumberField(TEXT("input_tokens"), Uncached);
+		(*Usage)->TryGetNumberField(TEXT("cache_creation_input_tokens"), Result.CacheWriteTokens);
+		(*Usage)->TryGetNumberField(TEXT("cache_read_input_tokens"), Result.CacheReadTokens);
 		(*Usage)->TryGetNumberField(TEXT("output_tokens"), Result.OutputTokens);
+		Result.InputTokens = Uncached + Result.CacheWriteTokens + Result.CacheReadTokens;
 	}
 
 	// An answer that was declined or cut short is not held to the schema, so it is not read as one.
@@ -270,8 +308,8 @@ FRoscAssistantQuestion Rosc::AIAssistant::MakeShotQuestion(const FString& Words,
 {
 	FRoscAssistantQuestion Question;
 	Question.System = ShotAssistantSystem;
-	Question.User = FString::Printf(TEXT("<equipment>\n%s\n</equipment>\n\n<set>\n%s\n</set>\n\n<request>\n%s\n</request>"),
-		*Rosc::ShotPlan::DescribeEquipment(FRoscCameraDatabase::Get()), *SetDescription, *Words.TrimStartAndEnd());
+	Question.Reference = FString::Printf(TEXT("<equipment>\n%s\n</equipment>"), *Rosc::ShotPlan::DescribeEquipment(FRoscCameraDatabase::Get()));
+	Question.User = FString::Printf(TEXT("<set>\n%s\n</set>\n\n<request>\n%s\n</request>"), *SetDescription, *Words.TrimStartAndEnd());
 	Question.AnswerSchema = Rosc::ShotPlan::GetJsonSchema();
 	return Question;
 }

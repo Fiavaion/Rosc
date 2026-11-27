@@ -48,6 +48,7 @@ namespace Rosc::AITests
 		FString ServerKey;
 		FString AssistantKey;
 		FString AssistantModel;
+		ERoscAssistantEffort AssistantEffort = ERoscAssistantEffort::ModelDefault;
 		FString AssistantUrl;
 		TArray<FString> ConsentedHosts;
 		TArray<FString> AcceptedModelNotices;

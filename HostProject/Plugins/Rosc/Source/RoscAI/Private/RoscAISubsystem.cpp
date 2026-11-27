@@ -262,6 +262,8 @@ bool URoscAISubsystem::PlanShot(const FString& Words, const FString& SetDescript
 		Result.Error = Answer.Error;
 		Result.InputTokens = Answer.InputTokens;
 		Result.OutputTokens = Answer.OutputTokens;
+		Result.CacheWriteTokens = Answer.CacheWriteTokens;
+		Result.CacheReadTokens = Answer.CacheReadTokens;
 		if (Answer.bSuccess)
 		{
 			FString Fault;

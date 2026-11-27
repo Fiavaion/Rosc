@@ -10,6 +10,8 @@
 struct FRoscAssistantQuestion
 {
 	FString System;
+	/** What every question of this kind is told in the same words, sent before User. The model's keeper keeps it, so asking again within minutes costs less. */
+	FString Reference;
 	FString User;
 	FString AnswerSchema;
 };
@@ -22,9 +24,12 @@ struct FRoscAssistantAnswer
 	FText Error;
 	/** The answer, as JSON that fits the question's schema. */
 	FString Json;
-	/** What the question and the answer came to, as the model's keeper counts them. */
+	/** What the question and the answer came to, as the model's keeper counts them. InputTokens is all the question, the kept part too. */
 	int32 InputTokens = 0;
 	int32 OutputTokens = 0;
+	/** Of InputTokens, those the keeper stored to keep (billed a little above the rest) and those it had kept (billed far below). */
+	int32 CacheWriteTokens = 0;
+	int32 CacheReadTokens = 0;
 
 	static FRoscAssistantAnswer Failed(const FText& Why)
 	{

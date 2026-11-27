@@ -46,9 +46,12 @@ struct FRoscShotPlanResult
 	FRoscShotPlan Plan;
 	/** The plan as the model wrote it. */
 	FString PlanJson;
-	/** What the request and the plan came to, as the model's keeper counts and bills them. */
+	/** What the request and the plan came to, as the model's keeper counts and bills them. InputTokens is all the request, the kept part too. */
 	int32 InputTokens = 0;
 	int32 OutputTokens = 0;
+	/** Of InputTokens, those stored to keep for the next request and those read from what was kept. */
+	int32 CacheWriteTokens = 0;
+	int32 CacheReadTokens = 0;
 };
 
 /**

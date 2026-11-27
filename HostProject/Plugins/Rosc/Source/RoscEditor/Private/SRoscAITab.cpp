@@ -547,8 +547,11 @@ void SRoscAITab::AddPlanReview(SVerticalBox& Content, ACineCameraActor* Camera)
 					return FReply::Handled();
 				}))
 		}));
-	Add(FRoscStyle::RowPadding, MakeNote(FText::Format(LOCTEXT("PlanTokens", "This request came to {0} tokens in and {1} out, billed to your Claude API key."),
-		FText::AsNumber(Plan->InputTokens), FText::AsNumber(Plan->OutputTokens))));
+	Add(FRoscStyle::RowPadding, MakeNote(Plan->CacheReadTokens > 0
+		? FText::Format(LOCTEXT("PlanTokensKept", "This request came to {0} tokens in, {1} of them kept from the last request and billed at a small part of the price, and {2} out, billed to your Claude API key."),
+			FText::AsNumber(Plan->InputTokens), FText::AsNumber(Plan->CacheReadTokens), FText::AsNumber(Plan->OutputTokens))
+		: FText::Format(LOCTEXT("PlanTokens", "This request came to {0} tokens in and {1} out, billed to your Claude API key."),
+			FText::AsNumber(Plan->InputTokens), FText::AsNumber(Plan->OutputTokens))));
 }
 
 void SRoscAITab::RebuildPictures()

@@ -219,7 +219,8 @@
 <p>Describe a shot in your own words, such as “Crane up over the table to reveal Anna, about eight seconds, and keep her sharp.” The assistant answers with a plan in the steps Rosc's tabs would take: the support, the marks, the timing, the focus. Read it, then <b class="ui">Apply Plan</b> or <b class="ui">Discard</b>. Applying is one step you can undo.</p>
 <ul>
 	<li>The assistant is a Claude model, asked with your own Claude API key. Put the key in <b class="ui">Open AI Settings</b> (Editor Preferences &gt; Plugins &gt; Rosc AI). It is kept in your own settings, not in the project.</li>
-	<li>Planning a shot sends the words you type and a description of the set: the camera and its support, the names, sizes and positions of the things near the camera, and the names of the shots in the open sequence. No pictures are sent. Each request is billed to your key.</li>
+	<li>Planning a shot sends the words you type and a description of the set: the camera and its support, the names, sizes and positions of the things near the camera, and the names of the shots in the open sequence. No pictures are sent. Each request is billed to your key. The list of cameras, lenses and supports goes with every request in the same words, so Claude keeps it for a few minutes and the next request reads it back at a small part of the price.</li>
+	<li><b class="ui">Model</b> and <b class="ui">Effort</b> in the AI settings choose which Claude model plans and how long it thinks first. Less effort answers sooner and costs less.</li>
 	<li><b class="ui">Withdraw Agreement</b> takes back your agreement at any time.</li>
 </ul>
 

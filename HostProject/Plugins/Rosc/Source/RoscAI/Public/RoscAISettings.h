@@ -20,6 +20,17 @@ enum class ERoscAIBackend : uint8
 	Server UMETA(DisplayName = "Server Elsewhere")
 };
 
+/** How long the shot assistant's model thinks before it plans. */
+UENUM()
+enum class ERoscAssistantEffort : uint8
+{
+	/** As the model is set to think when nothing is asked. */
+	ModelDefault UMETA(DisplayName = "The Model's Own"),
+	Low UMETA(DisplayName = "Low"),
+	Medium UMETA(DisplayName = "Medium"),
+	High UMETA(DisplayName = "High")
+};
+
 /**
  * Per-user preferences for Rosc's AI features, under Editor Preferences > Plugins > Rosc AI.
  * Kept in the user's own settings for this project, never in project files that are shared:
@@ -61,6 +72,10 @@ public:
 	/** The Claude model the shot assistant asks. */
 	UPROPERTY(config, EditAnywhere, Category = "Shot Assistant", meta = (DisplayName = "Model"))
 	FString AssistantModel = TEXT("claude-opus-5-5");
+
+	/** How long the model thinks before it plans. Less is quicker and cheaper; more can plan harder moves better. */
+	UPROPERTY(config, EditAnywhere, Category = "Shot Assistant", meta = (DisplayName = "Effort"))
+	ERoscAssistantEffort AssistantEffort = ERoscAssistantEffort::ModelDefault;
 
 	/** Where the shot assistant's requests go. Change it only when your studio routes the Claude API through a gateway of its own. */
 	UPROPERTY(config, EditAnywhere, Category = "Shot Assistant", AdvancedDisplay, meta = (DisplayName = "Messages API Address"))

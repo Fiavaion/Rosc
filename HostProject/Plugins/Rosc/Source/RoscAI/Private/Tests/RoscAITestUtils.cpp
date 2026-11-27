@@ -99,6 +99,7 @@ Rosc::AITests::FSettingsBefore::FSettingsBefore()
 	ServerKey = Settings->ServerKey;
 	AssistantKey = Settings->AssistantKey;
 	AssistantModel = Settings->AssistantModel;
+	AssistantEffort = Settings->AssistantEffort;
 	AssistantUrl = Settings->AssistantUrl;
 	ConsentedHosts = Settings->ConsentedHosts;
 	AcceptedModelNotices = Settings->AcceptedModelNotices;
@@ -113,6 +114,7 @@ void Rosc::AITests::FSettingsBefore::PutBack() const
 	Settings->ServerKey = ServerKey;
 	Settings->AssistantKey = AssistantKey;
 	Settings->AssistantModel = AssistantModel;
+	Settings->AssistantEffort = AssistantEffort;
 	Settings->AssistantUrl = AssistantUrl;
 	Settings->ConsentedHosts = ConsentedHosts;
 	Settings->AcceptedModelNotices = AcceptedModelNotices;
