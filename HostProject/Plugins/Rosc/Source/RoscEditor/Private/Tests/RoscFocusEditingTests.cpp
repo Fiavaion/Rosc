@@ -8,6 +8,7 @@
 #include "EditorModeManager.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Framework/Application/SlateApplication.h"
 #include "LevelEditor.h"
 #include "LevelEditorViewport.h"
 #include "SLevelViewport.h"
@@ -20,9 +21,11 @@
 #include "ObjectTools.h"
 #include "Channels/MovieSceneDoubleChannel.h"
 #include "Sections/MovieScene3DTransformSection.h"
+#include "Slate/SceneViewport.h"
 #include "Sections/MovieSceneFloatSection.h"
 #include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
+#include "Widgets/SViewport.h"
 #include "RoscCameraEditing.h"
 #include "RoscCameraPackageComponent.h"
 #include "RoscFocus.h"
@@ -99,9 +102,11 @@ bool FRoscFocusPullTest::RunTest(const FString& Parameters)
 	EndPickFocus();
 	TestFalse(TEXT("Picking is called off"), IsPickingFocus(Camera));
 
-	// The first click of a fresh editor, where no viewport is current yet, focuses: the view looks
-	// along the camera at a wall that fills it, wherever the click lands. The picker looks through
-	// the viewport's picture, so this needs a renderer (tools/test.ps1 -Rendering).
+	// The first click of a fresh editor focuses: the view looks along the camera at a wall that
+	// fills it, wherever the click lands. In a fresh editor the mode tools name another of the level
+	// viewports (those of the layouts not shown) as the last in focus, and there may be no current
+	// viewport; the click goes through Slate, as a hand's does. The picker looks through the viewport's
+	// picture, so this needs a renderer (tools/test.ps1 -Rendering).
 	const TSharedPtr<ILevelEditor> LevelEditor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor").GetFirstLevelEditor();
 	const TSharedPtr<SLevelViewport> ActiveViewport = LevelEditor.IsValid() ? LevelEditor->GetActiveViewportInterface() : nullptr;
 	if (!FApp::CanEverRender())
@@ -111,24 +116,44 @@ bool FRoscFocusPullTest::RunTest(const FString& Parameters)
 	else if (TestTrue(TEXT("The level editor has an active viewport"), ActiveViewport.IsValid()))
 	{
 		FLevelEditorViewportClient& View = ActiveViewport->GetLevelViewportClient();
-		const FVector ViewLocationBefore = View.GetViewLocation();
-		const FRotator ViewRotationBefore = View.GetViewRotation();
-		View.SetViewLocation(FVector::ZeroVector);
-		View.SetViewRotation(FRotator::ZeroRotator);
-		AStaticMeshActor* Wall = World->SpawnActor<AStaticMeshActor>(FVector(700.0, 0.0, 0.0), FRotator::ZeroRotator);
-		Wall->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
-		Wall->SetActorScale3D(FVector(0.2, 60.0, 60.0));
+		FEditorViewportClient* const* OtherView = GEditor->GetAllViewportClients().FindByPredicate([&View](const FEditorViewportClient* Client)
 		{
-			TGuardValue<FLevelEditorViewportClient*> FreshEditor(GCurrentLevelEditingViewportClient, nullptr);
-			BeginPickFocus(Camera);
-			TestTrue(TEXT("Picking makes the active viewport the current one"), GCurrentLevelEditingViewportClient == &View);
-			GLevelEditorModeTools().InputKey(&View, View.Viewport, EKeys::LeftMouseButton, IE_Pressed);
+			return Client != &View && Client->IsLevelEditorClient() && Client->Viewport != nullptr;
+		});
+		const TSharedPtr<FSceneViewport> SceneViewport = ActiveViewport->GetSceneViewport();
+		const TSharedPtr<SViewport> ViewWidget = SceneViewport.IsValid() ? SceneViewport->GetViewportWidget().Pin() : nullptr;
+		FWidgetPath ViewPath;
+		FSlateApplication& Slate = FSlateApplication::Get();
+		if (TestNotNull(TEXT("The editor has a level viewport besides the active one"), OtherView)
+			&& TestTrue(TEXT("The viewport is on screen for Slate"), ViewWidget.IsValid() && Slate.FindPathToWidget(ViewWidget.ToSharedRef(), ViewPath)))
+		{
+			const FVector ViewLocationBefore = View.GetViewLocation();
+			const FRotator ViewRotationBefore = View.GetViewRotation();
+			View.SetViewLocation(FVector::ZeroVector);
+			View.SetViewRotation(FRotator::ZeroRotator);
+			AStaticMeshActor* Wall = World->SpawnActor<AStaticMeshActor>(FVector(700.0, 0.0, 0.0), FRotator::ZeroRotator);
+			Wall->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+			Wall->SetActorScale3D(FVector(0.2, 60.0, 60.0));
+			GLevelEditorModeTools().ReceivedFocus(*OtherView, (*OtherView)->Viewport);
+			{
+				TGuardValue<FLevelEditorViewportClient*> FreshEditor(GCurrentLevelEditingViewportClient, nullptr);
+				BeginPickFocus(Camera);
+				TestTrue(TEXT("Picking makes the active viewport the current one"), GCurrentLevelEditingViewportClient == &View);
+				TestTrue(TEXT("Picking gives the active viewport the focus"), GLevelEditorModeTools().GetFocusedViewportClient() == &View);
+				const FGeometry& Geometry = ViewPath.Widgets.Last().Geometry;
+				const FVector2D Centre = Geometry.LocalToAbsolute(Geometry.GetLocalSize() * 0.5f);
+				const FVector2D CursorBefore = Slate.GetCursorPos();
+				Slate.SetCursorPos(Centre);
+				Slate.ProcessMouseButtonDownEvent(nullptr, FPointerEvent(0, Centre, Centre, TSet<FKey>({ EKeys::LeftMouseButton }), EKeys::LeftMouseButton, 0.0f, FModifierKeysState()));
+				Slate.ProcessMouseButtonUpEvent(FPointerEvent(0, Centre, Centre, TSet<FKey>(), EKeys::LeftMouseButton, 0.0f, FModifierKeysState()));
+				Slate.SetCursorPos(CursorBefore);
+			}
+			TestEqual(TEXT("The first click focuses on the wall's face"), GetFocusDistance(Camera), 690.0f, 1.0f);
+			EndPickFocus();
+			World->EditorDestroyActor(Wall, false);
+			View.SetViewLocation(ViewLocationBefore);
+			View.SetViewRotation(ViewRotationBefore);
 		}
-		TestEqual(TEXT("The first click focuses on the wall's face"), GetFocusDistance(Camera), 690.0f, 1.0f);
-		EndPickFocus();
-		World->EditorDestroyActor(Wall, false);
-		View.SetViewLocation(ViewLocationBefore);
-		View.SetViewRotation(ViewRotationBefore);
 	}
 
 	// Follow focus: the focus stays on a subject as it moves.

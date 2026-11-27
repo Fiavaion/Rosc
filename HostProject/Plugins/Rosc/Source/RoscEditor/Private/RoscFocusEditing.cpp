@@ -234,14 +234,22 @@ void Rosc::FocusEditing::BeginPickFocus(ACineCameraActor* Camera, bool bHold)
 	}
 	PickingCamera = Camera;
 	bPickingToHold = bHold;
-	// The engine's picker takes a click from the current level viewport only and calls picking off
-	// at a click anywhere else. In a fresh editor no viewport is current until one has been clicked,
-	// so the active viewport is made current now, as the click would have made it.
+	// The engine's picker takes a click from the current level viewport only, and calls picking off
+	// at a click anywhere else or when that viewport loses focus. In a fresh editor the mode tools
+	// name another level viewport (one of the layouts not shown) as the last in focus, and there may
+	// be no current viewport: a viewport's first click calls focus off that other one, which the
+	// picker takes as its own viewport losing focus, before the click reaches it. So the active
+	// viewport is made current and given the focus now, as that first click would have done.
 	if (const TSharedPtr<ILevelEditor> LevelEditor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor").GetFirstLevelEditor())
 	{
 		if (const TSharedPtr<SLevelViewport> Viewport = LevelEditor->GetActiveViewportInterface())
 		{
-			Viewport->GetLevelViewportClient().SetCurrentViewport();
+			FLevelEditorViewportClient& Client = Viewport->GetLevelViewportClient();
+			Client.SetCurrentViewport();
+			if (Client.GetModeTools()->GetFocusedViewportClient() != &Client)
+			{
+				Client.ReceivedFocus(Client.Viewport);
+			}
 		}
 	}
 	FSceneDepthPickerModeModule& Picker = FModuleManager::LoadModuleChecked<FSceneDepthPickerModeModule>(DepthPickerModuleName);
