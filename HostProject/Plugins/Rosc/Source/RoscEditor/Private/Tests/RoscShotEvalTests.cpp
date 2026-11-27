@@ -590,6 +590,13 @@ namespace
 		Outcome.CacheReadTokens = Answer.CacheReadTokens;
 		Outcome.Seconds = FPlatformTime::Seconds() - Run.AskedAt;
 		Outcome.PlanJson = Answer.PlanJson;
+		if (!Answer.bSuccess && !Answer.PlanJson.IsEmpty())
+		{
+			// The model answered, but with a plan the panel could not apply: the model's fault, so a failure.
+			Outcome.Status = TEXT("fail");
+			Outcome.Failures.Add(Answer.Error.ToString());
+			return;
+		}
 		if (!Answer.bSuccess)
 		{
 			// A request that did not come back with a plan is not a plan that was graded and found wanting.
@@ -749,7 +756,7 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// Four cases that ask the same of a plan, and a stand-in model that answers each differently.
+	// Five cases that ask the same of a plan, and a stand-in model that answers each differently.
 	const FString Checks = TEXT(R"("set": { "cameraHeightM": 1.5, "subjects": [ { "name": "Anna", "aheadM": 6, "rightM": 0.8, "heightM": 1.8, "widthM": 0.5 } ] },
 		"maxWarnings": 0, "checks": [
 			{ "count": { "min": 3, "max": 6 } },
@@ -766,8 +773,9 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 		{ "id": "good", "request": "good", %s },
 		{ "id": "empty", "request": "empty", %s },
 		{ "id": "wrong", "request": "wrong", %s },
-		{ "id": "unanswered", "request": "unanswered", %s } ] })"), *Checks, *Checks, *Checks, *Checks), Faults);
-	if (!TestEqual(*FString::Printf(TEXT("The test's cases are read (%s)"), *FString::Join(Faults, TEXT(" "))), Cases.Num(), 4) || !TestTrue(TEXT("With no faults"), Faults.IsEmpty()))
+		{ "id": "unanswered", "request": "unanswered", %s },
+		{ "id": "unreadable", "request": "unreadable", %s } ] })"), *Checks, *Checks, *Checks, *Checks, *Checks), Faults);
+	if (!TestEqual(*FString::Printf(TEXT("The test's cases are read (%s)"), *FString::Join(Faults, TEXT(" "))), Cases.Num(), 5) || !TestTrue(TEXT("With no faults"), Faults.IsEmpty()))
 	{
 		return false;
 	}
@@ -799,6 +807,11 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 				{ "step": "focus_on", "subject": "Anna", "follow": true } ] })")
 			: Words == TEXT("empty")
 			? TEXT(R"({ "summary": "Nothing can be done.", "steps": [] })")
+			: Words == TEXT("unreadable")
+			? TEXT(R"({ "summary": "Up in no time.", "steps": [
+				{ "step": "put_on_support", "supportId": "crane-30ft" },
+				{ "step": "move_to_mark", "travelM": 0, "sidewaysM": 0, "liftM": 0, "swingDeg": 0, "boomDeg": 12, "extensionM": 1,
+				  "panDeg": 0, "tiltDeg": -5, "rollDeg": 0, "durationSeconds": 0, "easeIn": 0.25, "easeOut": 0.25 } ] })")
 			: TEXT(R"({ "summary": "On the dolly, fast.", "steps": [
 				{ "step": "put_on_support", "supportId": "dolly" },
 				{ "step": "move_to_mark", "travelM": 30, "sidewaysM": 0, "liftM": 0, "swingDeg": 0, "boomDeg": 0, "extensionM": 0,
@@ -807,7 +820,12 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 				{ "step": "bake_move" } ] })");
 		FString Fault;
 		Result.bSuccess = Rosc::ShotPlan::Parse(Result.PlanJson, Result.Plan, Fault);
-		TestTrue(*FString::Printf(TEXT("The stand-in's plan is a plan (%s)"), *Fault), Result.bSuccess);
+		TestEqual(*FString::Printf(TEXT("The stand-in's plan is read as it should be (%s)"), *Fault), Result.bSuccess, Words != TEXT("unreadable"));
+		if (!Result.bSuccess)
+		{
+			// As the subsystem says it.
+			Result.Error = FText::FromString(TEXT("The plan that came back could not be read. ") + Fault);
+		}
 		if (Words == TEXT("good"))
 		{
 			// As the model does: the answer comes in a later frame.
@@ -826,7 +844,7 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 		{
 			AddInfo(FString::Printf(TEXT("%s: %s %s%s"), *Outcome.Id, *Outcome.Status, *Outcome.Error, *FString::Join(Outcome.Failures, TEXT(" | "))));
 		}
-		if (!TestEqual(TEXT("Every case went through"), Done.Outcomes.Num(), 4))
+		if (!TestEqual(TEXT("Every case went through"), Done.Outcomes.Num(), 5))
 		{
 			return;
 		}
@@ -861,7 +879,10 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 		const FShotEvalOutcome& Unanswered = Done.Outcomes[3];
 		TestEqual(TEXT("A request that is not answered is an error, not a failed plan"), *Unanswered.Status, TEXT("error"));
 		TestEqual(TEXT("With the reason"), *Unanswered.Error, TEXT("The stand-in has no key."));
-		TestEqual(TEXT("The score counts each apart"), *Done.DescribeScore(), TEXT("1 of 4 cases passed, 2 failed, 1 came back with no plan. Tokens: 3000 in, 600 out."));
+		const FShotEvalOutcome& Unreadable = Done.Outcomes[4];
+		TestEqual(TEXT("A plan the panel cannot apply is the model's failure, not an error"), *Unreadable.Status, TEXT("fail"));
+		TestTrue(TEXT("Failed on why it cannot be read"), Unreadable.Failures.Num() == 1 && Unreadable.Failures[0].StartsWith(TEXT("The plan that came back could not be read.")));
+		TestEqual(TEXT("The score counts each apart"), *Done.DescribeScore(), TEXT("1 of 5 cases passed, 3 failed, 1 came back with no plan. Tokens: 4000 in, 800 out."));
 
 		FString ReportText;
 		TSharedPtr<FJsonObject> Report;
@@ -870,11 +891,11 @@ bool FRoscShotEvalHarnessTest::RunTest(const FString& Parameters)
 		{
 			TestEqual(TEXT("With the model"), *Report->GetStringField(TEXT("model")), TEXT("stand-in"));
 			TestEqual(TEXT("The passes"), Report->GetIntegerField(TEXT("passed")), 1);
-			TestEqual(TEXT("The failures"), Report->GetIntegerField(TEXT("failed")), 2);
+			TestEqual(TEXT("The failures"), Report->GetIntegerField(TEXT("failed")), 3);
 			TestEqual(TEXT("The errors"), Report->GetIntegerField(TEXT("errors")), 1);
-			TestEqual(TEXT("The tokens"), Report->GetIntegerField(TEXT("inputTokens")), 3000);
+			TestEqual(TEXT("The tokens"), Report->GetIntegerField(TEXT("inputTokens")), 4000);
 			const TArray<TSharedPtr<FJsonValue>>& Results = Report->GetArrayField(TEXT("results"));
-			if (TestEqual(TEXT("And every case"), Results.Num(), 4))
+			if (TestEqual(TEXT("And every case"), Results.Num(), 5))
 			{
 				const FJsonObject& First = *Results[0]->AsObject();
 				TestTrue(TEXT("Each with its plan"), First.GetObjectField(TEXT("plan"))->GetArrayField(TEXT("steps")).Num() == 4);
