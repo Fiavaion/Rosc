@@ -87,10 +87,20 @@ if ($code -eq 0) {
 if ($code -eq 0) {
 	$engine = ($descriptor.EngineVersion -split "\.")[0..1] -join "."
 	$zip = Join-Path $stage ("Rosc-{0}-UE{1}-Win64.zip" -f $descriptor.VersionName, $engine)
-	# Not Compress-Archive: Windows PowerShell's writes "\" into entry names, which other unzip tools misread.
-	Add-Type -AssemblyName System.IO.Compression.FileSystem
+	# Entry names are written by hand with "/": Windows PowerShell's Compress-Archive and
+	# ZipFile.CreateFromDirectory both write "\" into them, which unzip tools off Windows misread.
+	Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 	if (Test-Path $zip) { Remove-Item -Force $zip }
-	[System.IO.Compression.ZipFile]::CreateFromDirectory($outDir, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+	$root = Split-Path -Parent $outDir
+	$archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Create)
+	try {
+		Get-ChildItem -Recurse -File $outDir | ForEach-Object {
+			$name = $_.FullName.Substring($root.Length + 1).Replace("\", "/")
+			[void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $name, [System.IO.Compression.CompressionLevel]::Optimal)
+		}
+	} finally {
+		$archive.Dispose()
+	}
 	Write-Output ("download: {0} ({1:N1} MB)" -f $zip, ((Get-Item $zip).Length / 1MB))
 }
 
