@@ -9,7 +9,7 @@ sensor formats, marks and racks.
 Rosc (said "rusk") is the Irish word for "eye". It is free and open source under the
 [Apache License 2.0](LICENSE).
 
-Status: beta, version 0.2.0. Built and tested on Unreal Engine 5.8.3 on Windows.
+Status: beta, version 0.3.0. Built and tested on Unreal Engine 5.8.3 on Windows.
 
 ## What it does
 
