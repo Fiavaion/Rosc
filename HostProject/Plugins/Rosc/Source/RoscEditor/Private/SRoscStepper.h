@@ -35,7 +35,7 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
-	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply OnPreviewKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	TSharedRef<SWidget> MakeStepButton(int32 Direction, const FName IconName, const FText& ToolTip);

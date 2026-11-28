@@ -87,8 +87,9 @@ bool SRoscStepper::CanStepInDirection(int32 Direction) const
 	return !CanStep.IsBound() || CanStep.Execute(Direction);
 }
 
-FReply SRoscStepper::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+FReply SRoscStepper::OnPreviewKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
+	// Before the focused button sees them: a button takes Up and Down to move the focus.
 	const FKey Key = InKeyEvent.GetKey();
 	const int32 Direction = Key == EKeys::Up ? 1 : (Key == EKeys::Down ? -1 : 0);
 	if (Direction != 0)
@@ -99,5 +100,5 @@ FReply SRoscStepper::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InK
 		}
 		return FReply::Handled();
 	}
-	return SCompoundWidget::OnKeyDown(MyGeometry, InKeyEvent);
+	return SCompoundWidget::OnPreviewKeyDown(MyGeometry, InKeyEvent);
 }

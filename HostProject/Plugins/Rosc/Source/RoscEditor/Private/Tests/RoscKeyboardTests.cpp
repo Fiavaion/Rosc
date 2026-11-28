@@ -472,6 +472,20 @@ bool FRoscKeyboardTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Escape closes the list"), FSlateApplication::Get().AnyMenusVisible());
 		TestEqual(TEXT("And leaves the body as it was"), Package->Package.BodyId, BodyBefore);
 		FSlateApplication::Get().DismissAllMenus();
+
+		// Up and Down step a ladder value with the focus anywhere on it: on either of its buttons, as
+		// a click leaves it, or on the value.
+		const float TStopBefore = Package->Package.TStop;
+		TestTrue(TEXT("Up is pressed on Close the iris"), PressControlCalled(*Walk->Panel, TEXT("Close the iris a third of a stop"), EKeys::Up));
+		TestTrue(TEXT("Up on the T-stop's button closes the iris"), Package->Package.TStop > TStopBefore);
+		TestTrue(TEXT("And leaves the focus on the button"),
+			FSlateApplication::Get().GetKeyboardFocusedWidget() == FindControlCalled(*Walk->Panel, TEXT("Close the iris a third of a stop")));
+		TestTrue(TEXT("Down is pressed on Open the iris"), PressControlCalled(*Walk->Panel, TEXT("Open the iris a third of a stop"), EKeys::Down));
+		TestEqual(TEXT("Down on the other button opens it again"), Package->Package.TStop, TStopBefore);
+		TestTrue(TEXT("Up is pressed on the T-stop's value"), PressControlCalled(*Walk->Panel, TEXT("T-stop"), EKeys::Up));
+		TestTrue(TEXT("Up on the value closes the iris"), Package->Package.TStop > TStopBefore);
+		PressKey(EKeys::Down);
+		TestEqual(TEXT("And Down opens it again"), Package->Package.TStop, TStopBefore);
 	}, 0.3f));
 
 	// The shot's Scene, Move and Notes by keyboard: Enter keeps what is typed, Escape gives it up,
